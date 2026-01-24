@@ -1,1 +1,1 @@
-rootProject.name = "browser-jwt-fetcher"
+rootProject.name = "browser-powered-session-handler"

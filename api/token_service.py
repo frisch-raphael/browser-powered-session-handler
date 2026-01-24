@@ -1,43 +1,29 @@
 import asyncio
 import base64
-import dataclasses
 import hashlib
 import json
-import os
+import re
 import time
-from typing import Optional, Dict, Tuple
+from http.cookies import SimpleCookie
+from typing import Optional, Dict, List, Any
+import os
 
-from fastapi import FastAPI, Response, HTTPException, Query
+from fastapi import FastAPI, Response, HTTPException
+from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 
 # ======================
-# Defaults (env)
+# Defaults
 # ======================
 
-DEFAULT_FORCE_REFRESH = False
-DEFAULT_AUTHENT_URL = os.getenv(
-    "COCKPIT_URL", "")
-DEFAULT_USERNAME = os.getenv(
-    "OIDC_USERNAME", "")
-DEFAULT_PASSWORD = os.getenv("OIDC_PASSWORD", "")
-
-DEFAULT_USERNAME_SELECTOR = os.getenv("USERNAME_SELECTOR", "input#username")
-DEFAULT_PASSWORD_SELECTOR = os.getenv("PASSWORD_SELECTOR", "input#password")
-DEFAULT_SUBMIT_SELECTOR = os.getenv("SUBMIT_SELECTOR", "button#kc-login")
-
-DEFAULT_TOKEN_URL_SUBSTRING = os.getenv(
-    "TOKEN_URL_SUBSTRING", "/protocol/openid-connect/token")
-
-DEFAULT_HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
-DEFAULT_NAV_TIMEOUT_MS = int(os.getenv("NAV_TIMEOUT_MS", "30000"))
-DEFAULT_WAIT_TOKEN_TIMEOUT_MS = int(os.getenv("WAIT_TOKEN_TIMEOUT_MS", "3000"))
-
-# "Skew" means: refresh the token this many seconds BEFORE it expires.
-DEFAULT_REFRESH_SKEW_SECONDS = int(os.getenv("REFRESH_SKEW_SECONDS", "10"))
+DEFAULT_NAV_TIMEOUT_MS = 30000
+DEFAULT_WAIT_TOKEN_TIMEOUT_MS = 3000
+DEFAULT_REFRESH_SKEW_SECONDS = 10
 
 
-app = FastAPI(title="OIDC Playwright Token Service", version="1.1")
+app = FastAPI(
+    title="Browser Powered Session Handler Token Service", version="2.0")
 
 
 # ======================
@@ -62,83 +48,92 @@ def decode_jwt_exp(jwt_token: str) -> Optional[int]:
         return None
 
 
-def parse_bool(value: Optional[str], default: bool) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in ("1", "true", "yes", "y", "on")
+class AuthStep(BaseModel):
+    type: str
+    selector: str
+    value: Optional[str] = None
 
 
-def parse_selectors(selectors_raw: Optional[str]) -> Tuple[str, str, str]:
-    """
-    Accept selectors as either:
-    - JSON string: {"username":"input#username","password":"input#password","submit":"button#kc-login"}
-    - OR compact: username=input#username;password=input#password;submit=button#kc-login
-    If not provided, uses env defaults.
-    """
-    if not selectors_raw or not selectors_raw.strip():
-        return DEFAULT_USERNAME_SELECTOR, DEFAULT_PASSWORD_SELECTOR, DEFAULT_SUBMIT_SELECTOR
+class TokenParsingConfig(BaseModel):
+    mode: str
+    path: Optional[str] = None
+    cookie_name: Optional[str] = None
 
-    raw = selectors_raw.strip()
 
-    if raw.startswith("{"):
-        try:
-            data = json.loads(raw)
-            u = str(data["username"])
-            p = str(data["password"])
-            s = str(data["submit"])
-            return u, p, s
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid selectors JSON: {exc}")
+class TokenConfig(BaseModel):
+    token_url_substring: str
+    refresh_frequency_seconds: Optional[int] = Field(None, ge=5, le=86400)
+    refresh_skew_seconds: int = Field(
+        DEFAULT_REFRESH_SKEW_SECONDS, ge=0, le=86400)
+    nav_timeout_ms: int = Field(
+        DEFAULT_NAV_TIMEOUT_MS, ge=1000, le=180000)
+    wait_token_timeout_ms: int = Field(
+        DEFAULT_WAIT_TOKEN_TIMEOUT_MS, ge=500, le=60000)
+    parsing: TokenParsingConfig
 
-    data: Dict[str, str] = {}
-    try:
-        for pair in raw.split(";"):
-            pair = pair.strip()
-            if not pair:
-                continue
-            if "=" not in pair:
-                raise ValueError(
-                    f"Bad selectors pair '{pair}' (expected key=value)")
-            k, v = pair.split("=", 1)
-            data[k.strip()] = v.strip()
 
-        u = data.get("username", DEFAULT_USERNAME_SELECTOR)
-        p = data.get("password", DEFAULT_PASSWORD_SELECTOR)
-        s = data.get("submit", DEFAULT_SUBMIT_SELECTOR)
-        return u, p, s
-    except Exception as exc:
+class TokenRequest(BaseModel):
+    authentication_url: str
+    headless: bool
+    steps: List[AuthStep]
+    force: bool = False
+
+
+def validate_token_config(cfg: TokenConfig) -> None:
+    if not cfg.token_url_substring:
         raise HTTPException(
-            status_code=400, detail=f"Invalid selectors format: {exc}")
+            status_code=400, detail="token.token_url_substring is required")
+    if cfg.parsing.mode not in ("json_path", "cookie"):
+        raise HTTPException(
+            status_code=400, detail="token.parsing.mode must be json_path or cookie")
+    if cfg.parsing.mode == "json_path" and not cfg.parsing.path:
+        raise HTTPException(
+            status_code=400, detail="token.parsing.path is required for json_path mode")
+    if cfg.parsing.mode == "cookie" and not cfg.parsing.cookie_name:
+        raise HTTPException(
+            status_code=400, detail="token.parsing.cookie_name is required for cookie mode")
+
+
+def validate_token_request(req: TokenRequest) -> None:
+    if not req.authentication_url:
+        raise HTTPException(
+            status_code=400, detail="authentication_url is required")
+    if not req.steps or len(req.steps) < 1:
+        raise HTTPException(
+            status_code=400, detail="At least one authentication step is required")
+    for i, step in enumerate(req.steps):
+        if step.type not in ("click", "input", "wait_load_state"):
+            raise HTTPException(
+                status_code=400, detail=f"Invalid step type at index {i}")
+        if step.type in ("click", "input") and not step.selector:
+            raise HTTPException(
+                status_code=400, detail=f"Missing selector at index {i}")
+        if step.type == "input" and (step.value is None or not str(step.value).strip()):
+            raise HTTPException(
+                status_code=400, detail=f"Missing input value at index {i}")
+        if step.type == "wait_load_state":
+            state = (step.value or "load").strip().lower()
+            if state not in ("load", "domcontentloaded", "networkidle"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid load state at index {i} (load, domcontentloaded, networkidle)",
+                )
 
 
 # ======================
 # Config + caching (per-config)
 # ======================
-@dataclasses.dataclass(frozen=True)
-class TokenConfig:
-    cockpit_url: str
-    username: str
-    password: str
-    headless: bool
-    username_selector: str
-    password_selector: str
-    submit_selector: str
-    token_url_substring: str
-    nav_timeout_ms: int
-    wait_token_timeout_ms: int
-    refresh_skew_seconds: int
-    # if set, force refresh after N seconds even if exp is long
-    refresh_frequency_seconds: Optional[int]
-
-
-def config_cache_key(cfg: TokenConfig) -> str:
+def config_cache_key(token_cfg: TokenConfig, auth_req: TokenRequest) -> str:
     """
-    Stable cache key. Includes password (so different creds don't share tokens).
+    Stable cache key. Includes all config fields (so different configs don't share tokens).
     Not logged, not returned.
     """
-    material = json.dumps(dataclasses.asdict(
-        cfg), sort_keys=True, ensure_ascii=False).encode("utf-8")
+    auth_data = auth_req.dict()
+    auth_data["force"] = False
+    material = json.dumps(
+        {"token": token_cfg.dict(), "auth": auth_data},
+        sort_keys=True, ensure_ascii=False
+    ).encode("utf-8")
     return hashlib.sha256(material).hexdigest()
 
 
@@ -185,30 +180,100 @@ class TokenCacheManager:
 
 cache_mgr = TokenCacheManager()
 
+config_guard = asyncio.Lock()
+active_token_config: Optional[TokenConfig] = None
 
-async def fetch_token_via_playwright(cfg: TokenConfig) -> str:
-    if not cfg.password:
-        raise RuntimeError(
-            "Password is empty (provide password param or OIDC_PASSWORD env var).")
 
+def parse_json_path(path: str) -> List[Any]:
+    tokens: List[Any] = []
+    for match in re.finditer(r"([^\.\[\]]+)|\[(\d+)\]", path):
+        key, idx = match.groups()
+        if key is not None:
+            tokens.append(key)
+        elif idx is not None:
+            tokens.append(int(idx))
+    return tokens
+
+
+def extract_json_path(data: Any, path: str) -> Optional[Any]:
+    tokens = parse_json_path(path)
+    current = data
+    try:
+        for token in tokens:
+            if isinstance(token, int):
+                if not isinstance(current, list) or token >= len(current):
+                    return None
+                current = current[token]
+            else:
+                if not isinstance(current, dict) or token not in current:
+                    return None
+                current = current[token]
+        return current
+    except Exception:
+        return None
+
+
+async def run_auth_steps(page, token_cfg: TokenConfig, auth_req: TokenRequest) -> None:
+    for step in auth_req.steps:
+        if step.type == "wait_load_state":
+            state = (step.value or "load").strip().lower()
+            await page.wait_for_load_state(state=state, timeout=token_cfg.nav_timeout_ms)
+            continue
+
+        try:
+            await page.wait_for_selector(step.selector, timeout=token_cfg.nav_timeout_ms)
+        except PlaywrightTimeoutError as e:
+            current = page.url
+            raise RuntimeError(
+                f"Selector not found for step '{step.type}'. Current URL: {current}") from e
+        if step.type == "input":
+            await page.fill(step.selector, step.value)
+        else:
+            await page.click(step.selector)
+
+
+async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequest) -> str:
     token_json: dict = {}
+    token_raw: Optional[str] = None
     token_event = asyncio.Event()
 
     def maybe_capture_token_response(url: str) -> bool:
-        return cfg.token_url_substring in url
+        return token_cfg.token_url_substring in url
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=cfg.headless)
-        context = await browser.new_context()
-        page = await context.new_page()
+        FIREFOX_EXE = "C:\\Users\\Rapha\\AppData\\Local\\ms-playwright\\firefox-1497\\firefox\\firefox.exe"
+        PROFILE_DIR = "C:\\tmp\\pw-firefox-profile"
+        browser = await p.firefox.launch_persistent_context(
+            headless=auth_req.headless,
+            user_data_dir=PROFILE_DIR,
+            executable_path=FIREFOX_EXE,
+            ignore_https_errors=True,
+            env={
+                **os.environ,
+                "SOFTHSM2_CONF": r"C:\SoftHSM2\etc\softhsm2.conf",
+            },
+        )
+
+        page = await browser.new_page()
 
         async def on_response(resp):
-            nonlocal token_json
+            nonlocal token_json, token_raw
             try:
                 if not maybe_capture_token_response(resp.url):
                     return
+                if token_cfg.parsing.mode == "cookie":
+                    cookie_name = (token_cfg.parsing.cookie_name or "").strip()
+                    header_value = resp.headers.get("set-cookie")
+                    if header_value:
+                        jar = SimpleCookie()
+                        jar.load(header_value)
+                        if cookie_name in jar:
+                            token_raw = jar[cookie_name].value.strip()
+                            if token_raw:
+                                token_event.set()
+                            return
                 data = await resp.json()
-                if isinstance(data, dict) and "access_token" in data:
+                if isinstance(data, dict):
                     token_json = data
                     token_event.set()
             except Exception:
@@ -216,34 +281,11 @@ async def fetch_token_via_playwright(cfg: TokenConfig) -> str:
 
         page.on("response", on_response)
 
-        await page.goto(cfg.cockpit_url, wait_until="domcontentloaded", timeout=cfg.nav_timeout_ms)
+        await page.goto(auth_req.authentication_url, wait_until="domcontentloaded", timeout=token_cfg.nav_timeout_ms)
+        await run_auth_steps(page, token_cfg, auth_req)
 
         try:
-            await page.wait_for_selector(cfg.username_selector, timeout=cfg.nav_timeout_ms)
-        except PlaywrightTimeoutError as e:
-            current = page.url
-            await context.close()
-            await browser.close()
-            raise RuntimeError(
-                f"Username field not found. Current URL: {current}") from e
-
-        await page.fill(cfg.username_selector, cfg.username)
-        await page.click(cfg.submit_selector)
-
-        try:
-            await page.wait_for_selector(cfg.password_selector, timeout=cfg.nav_timeout_ms)
-        except PlaywrightTimeoutError as e:
-            current = page.url
-            await context.close()
-            await browser.close()
-            raise RuntimeError(
-                f"Password field not found. Current URL: {current}") from e
-
-        await page.fill(cfg.password_selector, cfg.password)
-        await page.click(cfg.submit_selector)
-
-        try:
-            await asyncio.wait_for(token_event.wait(), timeout=cfg.wait_token_timeout_ms / 1000)
+            await asyncio.wait_for(token_event.wait(), timeout=token_cfg.wait_token_timeout_ms / 1000)
         except asyncio.TimeoutError as e:
             current = page.url
             await context.close()
@@ -256,11 +298,17 @@ async def fetch_token_via_playwright(cfg: TokenConfig) -> str:
         await context.close()
         await browser.close()
 
-    access_token = token_json.get("access_token")
-    if not isinstance(access_token, str) or not access_token.strip():
-        raise RuntimeError(
-            "Captured token JSON but access_token is missing/empty.")
-    return access_token.strip()
+    if token_cfg.parsing.mode == "cookie":
+        if token_raw:
+            if token_raw.lower().startswith("bearer "):
+                token_raw = token_raw[7:].strip()
+            return token_raw
+        raise RuntimeError("Token cookie was missing or empty.")
+
+    token_value = extract_json_path(token_json, token_cfg.parsing.path or "")
+    if not isinstance(token_value, str) or not token_value.strip():
+        raise RuntimeError("Token not found at configured JSON path.")
+    return token_value.strip()
 
 
 @app.get("/health")
@@ -268,78 +316,46 @@ async def health():
     return {"ok": True}
 
 
-@app.get("/token")
-async def token(
-    url: str = Query(DEFAULT_AUTHENT_URL),
-    username: str = Query(DEFAULT_USERNAME),
-    password: str = Query(DEFAULT_PASSWORD),
-    headless: Optional[str] = Query(
-        None, description="true/false (overrides env HEADLESS)"),
+@app.post("/config")
+async def update_config(cfg: TokenConfig):
+    validate_token_config(cfg)
+    async with config_guard:
+        global active_token_config
+        active_token_config = cfg
+    await cache_mgr.invalidate_all()
+    return {"ok": True}
 
-    # Caching knobs
-    refresh_frequency: Optional[int] = Query(
-        None, ge=5, le=86400,
-        description="Force refresh after N seconds (independent of JWT exp)."
-    ),
-    refresh_skew_seconds: int = Query(
-        DEFAULT_REFRESH_SKEW_SECONDS, ge=0, le=86400,
-        description="Refresh this many seconds before JWT exp."
-    ),
 
-    selectors: Optional[str] = Query(
-        None,
-        description=(
-            "Selectors as JSON or key=value pairs. "
-            "JSON: {\"username\":\"input#username\",\"password\":\"input#password\",\"submit\":\"button#kc-login\"} "
-            "Pairs: username=input#username;password=input#password;submit=button#kc-login"
-        ),
-    ),
-
-    token_url_substring: str = Query(DEFAULT_TOKEN_URL_SUBSTRING),
-    nav_timeout_ms: int = Query(DEFAULT_NAV_TIMEOUT_MS, ge=1000, le=180000),
-    wait_token_timeout_ms: int = Query(
-        DEFAULT_WAIT_TOKEN_TIMEOUT_MS, ge=500, le=60000),
-
-    force: bool = Query(
-        False, description="Force refresh even if cached token is valid."),
-):
+@app.post("/token")
+async def token(req: TokenRequest):
     """
     Returns ONLY the raw JWT as plain text.
     """
     try:
-        u_sel, p_sel, s_sel = parse_selectors(selectors)
-        cfg = TokenConfig(
-            cockpit_url=url,
-            username=username,
-            password=password,
-            headless=parse_bool(headless, DEFAULT_HEADLESS),
-            username_selector=u_sel,
-            password_selector=p_sel,
-            submit_selector=s_sel,
-            token_url_substring=token_url_substring,
-            nav_timeout_ms=nav_timeout_ms,
-            wait_token_timeout_ms=wait_token_timeout_ms,
-            refresh_skew_seconds=refresh_skew_seconds,
-            refresh_frequency_seconds=refresh_frequency,
-        )
-
-        key = config_cache_key(cfg)
+        async with config_guard:
+            token_cfg = active_token_config
+        if token_cfg is None:
+            raise HTTPException(
+                status_code=400, detail="Configuration not set. Update config first.")
+        validate_token_config(token_cfg)
+        validate_token_request(req)
+        key = config_cache_key(token_cfg, req)
         entry = await cache_mgr.get_entry(key)
 
         async with entry.lock:
-            if not force and entry.valid(cfg.refresh_skew_seconds):
+            if not req.force and entry.valid(token_cfg.refresh_skew_seconds):
                 # type: ignore[arg-type]
                 return Response(content=entry.token, media_type="text/plain")
 
-            token_value = await fetch_token_via_playwright(cfg)
+            token_value = await fetch_token_via_playwright(token_cfg, req)
             exp = decode_jwt_exp(token_value) or 0
 
             entry.token = token_value
             entry.exp = exp
 
-            if cfg.refresh_frequency_seconds is not None:
+            if token_cfg.refresh_frequency_seconds is not None:
                 entry.next_forced_refresh = int(
-                    time.time()) + cfg.refresh_frequency_seconds
+                    time.time()) + token_cfg.refresh_frequency_seconds
             else:
                 entry.next_forced_refresh = 0
 
