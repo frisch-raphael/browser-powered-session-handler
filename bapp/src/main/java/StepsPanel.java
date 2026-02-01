@@ -59,7 +59,6 @@ public final class StepsPanel extends JPanel
         JButton addClick = new JButton("Add Click");
         JButton addInput = new JButton("Add Input");
         JButton addWait = new JButton("Add Wait");
-
         addClick.addActionListener(e -> addRow("click", "", ""));
         addInput.addActionListener(e -> addRow("input", "", ""));
         addWait.addActionListener(e -> addRow("wait_load_state", "", "load"));

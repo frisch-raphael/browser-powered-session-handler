@@ -74,6 +74,32 @@ public final class ConfigManager {
         if (cfg.steps == null) {
             cfg.steps = new ArrayList<>();
         }
+        if (!cfg.steps.isEmpty()) {
+            List<AuthStep> filtered = new ArrayList<>();
+            for (AuthStep step : cfg.steps) {
+                if ("mtls".equals(step.type)) {
+                    cfg.mtlsEnabled = true;
+                    if (cfg.mtlsPin == null || cfg.mtlsPin.isBlank()) {
+                        cfg.mtlsPin = step.pin == null ? "" : step.pin;
+                    }
+                    if (cfg.mtlsCertCn == null || cfg.mtlsCertCn.isBlank()) {
+                        cfg.mtlsCertCn = step.certCn == null ? "" : step.certCn;
+                    }
+                    continue;
+                }
+                filtered.add(step);
+            }
+            cfg.steps = filtered;
+        }
+        if (cfg.mtlsHostname == null) {
+            cfg.mtlsHostname = "";
+        }
+        if (cfg.mtlsPin == null) {
+            cfg.mtlsPin = "";
+        }
+        if (cfg.mtlsCertCn == null) {
+            cfg.mtlsCertCn = "";
+        }
         if (cfg.scopeTools == null) {
             cfg.scopeTools = new ArrayList<>();
         }

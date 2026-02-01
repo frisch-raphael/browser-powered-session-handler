@@ -30,6 +30,11 @@ public final class UiController {
     private JCheckBox headlessCheckbox;
     private JLabel authenticationUrlLabel;
     private JLabel headlessLabel;
+    private JCheckBox mtlsEnabledCheckbox;
+    private JTextField mtlsHostnameField;
+    private PlaceholderPasswordField mtlsPinField;
+    private JTextField mtlsCertCnField;
+    private JPanel mtlsPanel;
 
     private StepsPanel stepsPanel;
 
@@ -97,6 +102,19 @@ public final class UiController {
         headlessCheckbox.setSelected(cfg.headless);
 
         stepsPanel.setSteps(cfg.steps);
+        if (mtlsEnabledCheckbox != null) {
+            mtlsEnabledCheckbox.setSelected(cfg.mtlsEnabled);
+            if (mtlsHostnameField != null) {
+                mtlsHostnameField.setText(cfg.mtlsHostname);
+            }
+            if (mtlsPinField != null) {
+                mtlsPinField.setText(cfg.mtlsPin);
+            }
+            if (mtlsCertCnField != null) {
+                mtlsCertCnField.setText(cfg.mtlsCertCn);
+            }
+            updateMtlsPanelVisibility();
+        }
 
         authenticationServerSubstringField.setText(cfg.authenticationServerUrlSubstring);
         if ("cookie".equals(cfg.tokenParsingMode)) {
@@ -143,6 +161,32 @@ public final class UiController {
         addRow(form, gbc, 1, headlessLabel, headlessCheckbox);
 
         stepsPanel = new StepsPanel();
+        mtlsEnabledCheckbox = new JCheckBox("Enable mTLS");
+        mtlsEnabledCheckbox.setToolTipText("Enable client certificate authentication before the page fully loads.");
+
+        mtlsHostnameField = new PlaceholderTextField("example.com", 28);
+        mtlsPinField = new PlaceholderPasswordField("PIN (optional)", 14);
+        mtlsCertCnField = new PlaceholderTextField("Certificate CN (optional)", 20);
+
+        mtlsPanel = new JPanel(new GridBagLayout());
+        mtlsPanel.setBorder(BorderFactory.createTitledBorder("mTLS configuration"));
+        GridBagConstraints mtlsGbc = baseConstraints();
+        JLabel hostLabel = new JLabel("Hostname");
+        JLabel pinLabel = new JLabel("PIN");
+        JLabel cnLabel = new JLabel("Certificate CN");
+        hostLabel.setToolTipText("Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
+        mtlsHostnameField.setToolTipText("Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
+        pinLabel.setToolTipText("Optional PIN. Leave empty to skip PIN entry.");
+        mtlsPinField.setToolTipText("Optional PIN. Leave empty to skip PIN entry.");
+        cnLabel.setToolTipText("Optional certificate CN. Leave empty to select the first certificate.");
+        mtlsCertCnField.setToolTipText("Optional certificate CN. Leave empty to select the first certificate.");
+
+        addRow(mtlsPanel, mtlsGbc, 0, hostLabel, mtlsHostnameField);
+        addRow(mtlsPanel, mtlsGbc, 1, pinLabel, mtlsPinField);
+        addRow(mtlsPanel, mtlsGbc, 2, cnLabel, mtlsCertCnField);
+        mtlsPanel.setVisible(false);
+        mtlsEnabledCheckbox.addActionListener(e -> updateMtlsPanelVisibility());
+
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton testAuth = new JButton("Test authentication steps");
         testAuth.addActionListener(e -> testAuthSteps());
@@ -152,6 +196,8 @@ public final class UiController {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.add(wrapLeft(form));
         content.add(stepsPanel);
+        content.add(wrapLeft(mtlsEnabledCheckbox));
+        content.add(mtlsPanel);
         content.add(actions);
 
         panel.add(content, BorderLayout.CENTER);
@@ -353,6 +399,10 @@ public final class UiController {
                         "    {\"type\": \"click\", \"selector\": \"button#login\", \"value\": \"\"},\n" +
                         "    {\"type\": \"wait_load_state\", \"selector\": \"\", \"value\": \"networkidle\"}\n" +
                         "  ],\n" +
+                        "  \"mtls_enabled\": true,\n" +
+                        "  \"mtls_hostname\": \"example.com\",\n" +
+                        "  \"mtls_pin\": \"1234\",\n" +
+                        "  \"mtls_cert_cn\": \"My Cert\",\n" +
                         "  \"force\": false\n" +
                         "}"
         );
@@ -711,6 +761,10 @@ public final class UiController {
         cfg.headless = headlessCheckbox.isSelected();
 
         cfg.steps = new ArrayList<>(stepsPanel.getSteps());
+        cfg.mtlsEnabled = mtlsEnabledCheckbox != null && mtlsEnabledCheckbox.isSelected();
+        cfg.mtlsHostname = mtlsHostnameField == null ? "" : mtlsHostnameField.getText().trim();
+        cfg.mtlsPin = mtlsPinField == null ? "" : new String(mtlsPinField.getPassword()).trim();
+        cfg.mtlsCertCn = mtlsCertCnField == null ? "" : mtlsCertCnField.getText().trim();
 
         cfg.authenticationServerUrlSubstring = authenticationServerSubstringField.getText().trim();
         cfg.tokenParsingMode = parsingTabs.getSelectedIndex() == 1 ? "cookie" : "json_path";
@@ -740,6 +794,15 @@ public final class UiController {
         boolean regexMode = sessionRegexRadio.isSelected();
         sessionRegexField.setEnabled(regexMode);
         sessionStatusSpinner.setEnabled(!regexMode);
+    }
+
+    private void updateMtlsPanelVisibility() {
+        if (mtlsPanel == null || mtlsEnabledCheckbox == null) {
+            return;
+        }
+        mtlsPanel.setVisible(mtlsEnabledCheckbox.isSelected());
+        mtlsPanel.revalidate();
+        mtlsPanel.repaint();
     }
 
     private JPanel buildJsonParsingPanel() {

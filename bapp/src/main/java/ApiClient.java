@@ -97,6 +97,10 @@ public final class ApiClient {
         payload.put("authentication_url", cfg.authenticationUrl);
         payload.put("headless", cfg.headless);
         payload.put("steps", cfg.steps);
+        payload.put("mtls_enabled", cfg.mtlsEnabled);
+        payload.put("mtls_hostname", cfg.mtlsHostname);
+        payload.put("mtls_pin", cfg.mtlsPin);
+        payload.put("mtls_cert_cn", cfg.mtlsCertCn);
         payload.put("force", force);
         String body = mapper.writeValueAsString(payload);
 

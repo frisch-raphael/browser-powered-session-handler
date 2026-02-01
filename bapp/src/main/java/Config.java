@@ -1,6 +1,7 @@
 import burp.api.montoya.core.ToolType;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -13,6 +14,11 @@ public final class Config {
     public String authenticationUrl;
     public boolean headless;
     public List<AuthStep> steps;
+    public boolean mtlsEnabled;
+    public String mtlsHostname;
+    public String mtlsPin;
+    @JsonProperty("mtls_cert_cn")
+    public String mtlsCertCn;
     public String pythonExecutable;
 
     public String authenticationServerUrlSubstring;
@@ -43,6 +49,10 @@ public final class Config {
         cfg.headless = true;
         cfg.steps = new ArrayList<>();
         cfg.steps.add(new AuthStep("click", "", ""));
+        cfg.mtlsEnabled = false;
+        cfg.mtlsHostname = "";
+        cfg.mtlsPin = "";
+        cfg.mtlsCertCn = "";
         cfg.pythonExecutable = "";
 
         cfg.authenticationServerUrlSubstring = "/protocol/openid-connect/token";
@@ -77,6 +87,9 @@ final class AuthStep {
     public String type;
     public String selector;
     public String value;
+    public String pin;
+    @JsonProperty("cert_cn")
+    public String certCn;
 
     AuthStep() {
     }
@@ -85,5 +98,15 @@ final class AuthStep {
         this.type = type;
         this.selector = selector;
         this.value = value;
+        this.pin = "";
+        this.certCn = "";
+    }
+
+    AuthStep(String type, String selector, String value, String pin, String certCn) {
+        this.type = type;
+        this.selector = selector;
+        this.value = value;
+        this.pin = pin;
+        this.certCn = certCn;
     }
 }

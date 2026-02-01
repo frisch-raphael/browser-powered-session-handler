@@ -22,7 +22,10 @@ class Handler(SimpleHTTPRequestHandler):
         print("Client cert:", cert)
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"ok\n")
+        # return mock json jwt
+        mock_json = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.aeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        self.wfile.write(
+            b"{\"access_token\": \"" + mock_json.encode('utf-8') + b"\"}")
 
 
 httpd = MTLSHTTPServer(('0.0.0.0', 7576), Handler)

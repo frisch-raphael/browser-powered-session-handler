@@ -7,6 +7,7 @@ import time
 from http.cookies import SimpleCookie
 from typing import Optional, Dict, List, Any
 import os
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Response, HTTPException
 from pydantic import BaseModel, Field
@@ -52,6 +53,8 @@ class AuthStep(BaseModel):
     type: str
     selector: str
     value: Optional[str] = None
+    pin: Optional[str] = None
+    cert_cn: Optional[str] = None
 
 
 class TokenParsingConfig(BaseModel):
@@ -77,6 +80,10 @@ class TokenRequest(BaseModel):
     headless: bool
     steps: List[AuthStep]
     force: bool = False
+    mtls_enabled: bool = False
+    mtls_hostname: Optional[str] = None
+    mtls_pin: Optional[str] = None
+    mtls_cert_cn: Optional[str] = None
 
 
 def validate_token_config(cfg: TokenConfig) -> None:
@@ -232,6 +239,42 @@ async def run_auth_steps(page, token_cfg: TokenConfig, auth_req: TokenRequest) -
             await page.click(step.selector)
 
 
+def should_run_mtls(req: TokenRequest, url: str) -> bool:
+    if not req.mtls_enabled:
+        return False
+    hostname = (req.mtls_hostname or "").strip().lower()
+    if not hostname:
+        return True
+    target_host = (urlparse(url).hostname or "").lower()
+    return hostname in target_host
+
+
+async def goto_with_optional_mtls(page, token_cfg: TokenConfig, auth_req: TokenRequest) -> None:
+    goto_task = asyncio.create_task(
+        page.goto(
+            auth_req.authentication_url,
+            wait_until="load",
+            timeout=token_cfg.nav_timeout_ms,
+        )
+    )
+
+    if should_run_mtls(auth_req, auth_req.authentication_url):
+        try:
+            from mtls_authent_service import run_mtls_auth
+        except Exception as exc:
+            raise RuntimeError(
+                "mTLS is enabled but mtls_authent_service is unavailable"
+            ) from exc
+        time.sleep(3)
+        loop = asyncio.get_running_loop()
+        pin = (auth_req.mtls_pin or "").strip() or None
+        cert_cn = (auth_req.mtls_cert_cn or "").strip() or None
+        hostname = (auth_req.mtls_hostname or "").strip() or None
+        await loop.run_in_executor(None, run_mtls_auth, pin, cert_cn, hostname)
+
+    await goto_task
+
+
 async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequest) -> str:
     token_json: dict = {}
     token_raw: Optional[str] = None
@@ -281,21 +324,21 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
 
         page.on("response", on_response)
 
-        await page.goto(auth_req.authentication_url, wait_until="domcontentloaded", timeout=token_cfg.nav_timeout_ms)
+        await goto_with_optional_mtls(page, token_cfg, auth_req)
         await run_auth_steps(page, token_cfg, auth_req)
 
         try:
             await asyncio.wait_for(token_event.wait(), timeout=token_cfg.wait_token_timeout_ms / 1000)
         except asyncio.TimeoutError as e:
             current = page.url
-            await context.close()
+            # await context.close()
             await browser.close()
             raise RuntimeError(
                 f"Timed out waiting for token JSON response. Still at URL: {current}. "
                 f"Check token_url_substring or whether tokens are fetched differently."
             ) from e
 
-        await context.close()
+        # await context.close()
         await browser.close()
 
     if token_cfg.parsing.mode == "cookie":
