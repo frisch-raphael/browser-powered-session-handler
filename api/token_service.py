@@ -78,6 +78,7 @@ class TokenConfig(BaseModel):
 class TokenRequest(BaseModel):
     authentication_url: str
     headless: bool
+    proxy: Optional[str] = None
     steps: List[AuthStep]
     force: bool = False
     mtls_enabled: bool = False
@@ -118,6 +119,12 @@ def validate_token_request(req: TokenRequest) -> None:
     if not req.authentication_url:
         raise HTTPException(
             status_code=400, detail="authentication_url is required")
+    proxy = (req.proxy or "").strip()
+    if proxy and not re.match(r"^https?://.+", proxy):
+        raise HTTPException(
+            status_code=400,
+            detail="proxy must start with http:// or https://",
+        )
     if not req.steps or len(req.steps) < 1:
         raise HTTPException(
             status_code=400, detail="At least one authentication step is required")
@@ -336,11 +343,13 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
     async with async_playwright() as p:
         FIREFOX_EXE = r"C:\Users\Rapha\Documents\Pentest\Tools\browser-powered-session-handler\api\firefox\firefox.exe"
         PROFILE_DIR = r"C:\tmp\pw-firefox-profile"
+        proxy = (auth_req.proxy or "").strip() or None
         browser = await p.firefox.launch_persistent_context(
             headless=auth_req.headless,
             user_data_dir=PROFILE_DIR,
             executable_path=FIREFOX_EXE,
             ignore_https_errors=True,
+            proxy={"server": proxy} if proxy else None,
             env={
                 **os.environ,
                 "SOFTHSM2_CONF": r"C:\SoftHSM2\etc\softhsm2.conf",
