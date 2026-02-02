@@ -97,6 +97,7 @@ public final class ApiClient {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("authentication_url", cfg.authenticationUrl);
         payload.put("headless", cfg.headless);
+        payload.put("proxy", cfg.browserProxy);
         payload.put("steps", cfg.steps);
         payload.put("mtls_enabled", cfg.mtlsEnabled);
         payload.put("mtls_hostname", cfg.mtlsHostname);

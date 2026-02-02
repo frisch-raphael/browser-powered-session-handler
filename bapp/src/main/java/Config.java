@@ -13,6 +13,7 @@ public final class Config {
     public String apiBaseUrl;
     public String authenticationUrl;
     public boolean headless;
+    public String browserProxy;
     public List<AuthStep> steps;
     public boolean mtlsEnabled;
     public String mtlsHostname;
@@ -46,7 +47,8 @@ public final class Config {
         Config cfg = new Config();
         cfg.apiBaseUrl = "http://127.0.0.1:7575";
         cfg.authenticationUrl = "";
-        cfg.headless = true;
+        cfg.headless = false;
+        cfg.browserProxy = "";
         cfg.steps = new ArrayList<>();
         cfg.steps.add(new AuthStep("click", "", ""));
         cfg.mtlsEnabled = false;

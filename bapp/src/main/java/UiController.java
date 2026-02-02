@@ -28,8 +28,10 @@ public final class UiController {
     private JTextField pythonPathField;
     private JTextField authenticationUrlField;
     private JCheckBox headlessCheckbox;
+    private JTextField browserProxyField;
     private JLabel authenticationUrlLabel;
     private JLabel headlessLabel;
+    private JLabel browserProxyLabel;
     private JCheckBox mtlsEnabledCheckbox;
     private JTextField mtlsHostnameField;
     private PlaceholderPasswordField mtlsPinField;
@@ -80,7 +82,7 @@ public final class UiController {
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Authentication configuration", buildAuthTab());
+        tabs.addTab("Browser orchestration", buildAuthTab());
         tabs.addTab("Token configuration", buildTokenTab());
         tabs.addTab("Session lost detection", buildSessionLostTab());
         tabs.addTab("Scope", buildScopeTab());
@@ -100,6 +102,9 @@ public final class UiController {
         }
         authenticationUrlField.setText(cfg.authenticationUrl);
         headlessCheckbox.setSelected(cfg.headless);
+        if (browserProxyField != null) {
+            browserProxyField.setText(cfg.browserProxy);
+        }
 
         stepsPanel.setSteps(cfg.steps);
         if (mtlsEnabledCheckbox != null) {
@@ -151,14 +156,19 @@ public final class UiController {
         headlessCheckbox = new JCheckBox("Run browser headless");
         authenticationUrlLabel = new JLabel("Authentication URL");
         headlessLabel = new JLabel("Headless");
+        browserProxyLabel = new JLabel("Browser proxy");
 
         authenticationUrlLabel.setToolTipText("URL where the login flow starts.");
         authenticationUrlField.setToolTipText("URL where the login flow starts.");
         headlessLabel.setToolTipText("Run the browser without a visible window.");
         headlessCheckbox.setToolTipText("Run the browser without a visible window.");
+        browserProxyLabel.setToolTipText("Proxy URL for the orchestrated browser (http(s)://host:port).");
 
         addRow(form, gbc, 0, authenticationUrlLabel, authenticationUrlField);
         addRow(form, gbc, 1, headlessLabel, headlessCheckbox);
+        browserProxyField = new PlaceholderTextField("http://127.0.0.1:8080", 32);
+        browserProxyField.setToolTipText("Proxy URL for the orchestrated browser (http(s)://host:port).");
+        addRow(form, gbc, 2, browserProxyLabel, browserProxyField);
 
         stepsPanel = new StepsPanel();
         mtlsEnabledCheckbox = new JCheckBox("Enable mTLS");
@@ -293,7 +303,7 @@ public final class UiController {
         area.setWrapStyleWord(true);
         area.setText(
                 "Workflow:\n" +
-                        "1) Authentication configuration: enter the login URL and record the steps.\n" +
+                        "1) Browser orchestration: enter the login URL and record the steps.\n" +
                         "2) Token configuration: choose where the token appears (JSON or cookie).\n" +
                         "3) Session lost detection: set how a logout is detected.\n" +
                         "4) Scope: select which Burp tools use this session handler.\n" +
@@ -393,6 +403,7 @@ public final class UiController {
                         "{\n" +
                         "  \"authentication_url\": \"https://example.com/login\",\n" +
                         "  \"headless\": true,\n" +
+                        "  \"proxy\": \"http://127.0.0.1:8080\",\n" +
                         "  \"steps\": [\n" +
                         "    {\"type\": \"wait_url\", \"selector\": \"\", \"value\": \"**/login\"},\n" +
                         "    {\"type\": \"wait_selector\", \"selector\": \"input#user\", \"value\": \"\"},\n" +
@@ -762,6 +773,7 @@ public final class UiController {
         cfg.pythonExecutable = pythonPathField == null ? "" : pythonPathField.getText().trim();
         cfg.authenticationUrl = authenticationUrlField.getText().trim();
         cfg.headless = headlessCheckbox.isSelected();
+        cfg.browserProxy = browserProxyField == null ? "" : browserProxyField.getText().trim();
 
         cfg.steps = new ArrayList<>(stepsPanel.getSteps());
         cfg.mtlsEnabled = mtlsEnabledCheckbox != null && mtlsEnabledCheckbox.isSelected();

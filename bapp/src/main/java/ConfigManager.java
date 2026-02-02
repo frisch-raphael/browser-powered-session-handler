@@ -94,6 +94,9 @@ public final class ConfigManager {
         if (cfg.mtlsHostname == null) {
             cfg.mtlsHostname = "";
         }
+        if (cfg.browserProxy == null) {
+            cfg.browserProxy = "";
+        }
         if (cfg.mtlsPin == null) {
             cfg.mtlsPin = "";
         }
@@ -139,6 +142,12 @@ public final class ConfigManager {
     public void validate(Config cfg) {
         if (cfg.authenticationUrl == null || cfg.authenticationUrl.isBlank()) {
             throw new IllegalArgumentException("Authentication URL is required");
+        }
+        if (cfg.browserProxy != null && !cfg.browserProxy.isBlank()) {
+            String proxy = cfg.browserProxy.trim().toLowerCase(Locale.ROOT);
+            if (!proxy.startsWith("http://") && !proxy.startsWith("https://")) {
+                throw new IllegalArgumentException("Browser proxy must start with http:// or https://");
+            }
         }
         if (cfg.steps == null || cfg.steps.isEmpty()) {
             throw new IllegalArgumentException("At least one authentication step is required");
