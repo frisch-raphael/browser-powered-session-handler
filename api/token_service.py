@@ -18,9 +18,9 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 # Defaults
 # ======================
 
-DEFAULT_NAV_TIMEOUT_MS = 30000
+DEFAULT_NAV_TIMEOUT_MS = 8000
 DEFAULT_WAIT_TOKEN_TIMEOUT_MS = 3000
-DEFAULT_REFRESH_SKEW_SECONDS = 10
+DEFAULT_REFRESH_SKEW_SECONDS = 1
 
 
 app = FastAPI(
@@ -101,6 +101,19 @@ def validate_token_config(cfg: TokenConfig) -> None:
             status_code=400, detail="token.parsing.cookie_name is required for cookie mode")
 
 
+def _parse_wait_time_ms(raw_value: str) -> int:
+    value = (raw_value or "").strip().lower()
+    if not value:
+        raise ValueError("wait_time value is required")
+    if value.endswith("ms"):
+        number = value[:-2].strip()
+        return int(number)
+    if value.endswith("s"):
+        number = value[:-1].strip()
+        return int(float(number) * 1000)
+    return int(value)
+
+
 def validate_token_request(req: TokenRequest) -> None:
     if not req.authentication_url:
         raise HTTPException(
@@ -109,15 +122,35 @@ def validate_token_request(req: TokenRequest) -> None:
         raise HTTPException(
             status_code=400, detail="At least one authentication step is required")
     for i, step in enumerate(req.steps):
-        if step.type not in ("click", "input", "wait_load_state"):
+        if step.type not in (
+            "click",
+            "input",
+            "secure_input",
+            "wait_load_state",
+            "wait_url",
+            "wait_time",
+            "wait_selector",
+        ):
             raise HTTPException(
                 status_code=400, detail=f"Invalid step type at index {i}")
-        if step.type in ("click", "input") and not step.selector:
+        if step.type in ("click", "input", "secure_input", "wait_selector") and not step.selector:
             raise HTTPException(
                 status_code=400, detail=f"Missing selector at index {i}")
-        if step.type == "input" and (step.value is None or not str(step.value).strip()):
+        if step.type in ("input", "secure_input") and (step.value is None or not str(step.value).strip()):
             raise HTTPException(
                 status_code=400, detail=f"Missing input value at index {i}")
+        if step.type == "wait_url" and (step.value is None or not str(step.value).strip()):
+            raise HTTPException(
+                status_code=400, detail=f"Missing wait_url value at index {i}")
+        if step.type == "wait_time":
+            try:
+                wait_ms = _parse_wait_time_ms(step.value or "")
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid wait_time value at index {i}") from None
+            if wait_ms < 1:
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid wait_time value at index {i}")
         if step.type == "wait_load_state":
             state = (step.value or "load").strip().lower()
             if state not in ("load", "domcontentloaded", "networkidle"):
@@ -226,6 +259,23 @@ async def run_auth_steps(page, token_cfg: TokenConfig, auth_req: TokenRequest) -
             state = (step.value or "load").strip().lower()
             await page.wait_for_load_state(state=state, timeout=token_cfg.nav_timeout_ms)
             continue
+        if step.type == "wait_url":            
+            url_pattern = (step.value or "").strip()
+            await page.wait_for_url(url_pattern, timeout=token_cfg.nav_timeout_ms)
+            continue
+        if step.type == "wait_time":
+            wait_ms = _parse_wait_time_ms(step.value or "")
+            await asyncio.sleep(wait_ms / 1000)
+            continue
+        if step.type == "wait_selector":
+            try:
+                await page.wait_for_selector(step.selector, timeout=token_cfg.nav_timeout_ms)
+            except PlaywrightTimeoutError as e:
+                current = page.url
+                raise RuntimeError(
+                    f"Selector not found for step '{step.type}'. Current URL: {current}"
+                ) from e
+            continue
 
         try:
             await page.wait_for_selector(step.selector, timeout=token_cfg.nav_timeout_ms)
@@ -233,7 +283,7 @@ async def run_auth_steps(page, token_cfg: TokenConfig, auth_req: TokenRequest) -
             current = page.url
             raise RuntimeError(
                 f"Selector not found for step '{step.type}'. Current URL: {current}") from e
-        if step.type == "input":
+        if step.type in ("input", "secure_input"):
             await page.fill(step.selector, step.value)
         else:
             await page.click(step.selector)
@@ -284,8 +334,8 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
         return token_cfg.token_url_substring in url
 
     async with async_playwright() as p:
-        FIREFOX_EXE = "C:\\Users\\Rapha\\AppData\\Local\\ms-playwright\\firefox-1497\\firefox\\firefox.exe"
-        PROFILE_DIR = "C:\\tmp\\pw-firefox-profile"
+        FIREFOX_EXE = r"C:\Users\Rapha\Documents\Pentest\Tools\browser-powered-session-handler\api\firefox\firefox.exe"
+        PROFILE_DIR = r"C:\tmp\pw-firefox-profile"
         browser = await p.firefox.launch_persistent_context(
             headless=auth_req.headless,
             user_data_dir=PROFILE_DIR,

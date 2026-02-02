@@ -58,14 +58,26 @@ public final class StepsPanel extends JPanel
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton addClick = new JButton("Add Click");
         JButton addInput = new JButton("Add Input");
-        JButton addWait = new JButton("Add Wait");
+        JButton addWait = new JButton("Add Wait (load)");
+        JButton addWaitUrl = new JButton("Add Wait URL");
+        JButton addWaitTime = new JButton("Add Wait Time");
+        JButton addWaitSelector = new JButton("Add Wait Selector");
+        JButton addSecureInput = new JButton("Add Secure Input");
         addClick.addActionListener(e -> addRow("click", "", ""));
         addInput.addActionListener(e -> addRow("input", "", ""));
         addWait.addActionListener(e -> addRow("wait_load_state", "", "load"));
+        addWaitUrl.addActionListener(e -> addRow("wait_url", "", ""));
+        addWaitTime.addActionListener(e -> addRow("wait_time", "", "1000"));
+        addWaitSelector.addActionListener(e -> addRow("wait_selector", "", ""));
+        addSecureInput.addActionListener(e -> addRow("secure_input", "", ""));
 
         panel.add(addClick);
         panel.add(addInput);
+        panel.add(addSecureInput);
         panel.add(addWait);
+        panel.add(addWaitUrl);
+        panel.add(addWaitTime);
+        panel.add(addWaitSelector);
         return panel;
     }
 
@@ -115,6 +127,7 @@ public final class StepsPanel extends JPanel
         private final JComboBox<String> typeCombo;
         private final JTextField selectorField;
         private final JTextField valueField;
+        private final PlaceholderPasswordField secureValueField;
         private final JComboBox<String> loadStateCombo;
         private final JPanel fieldsPanel;
 
@@ -122,19 +135,30 @@ public final class StepsPanel extends JPanel
         {
             super(new FlowLayout(FlowLayout.LEFT, 6, 0));
 
-            typeCombo = new JComboBox<>(new String[] {"click", "input", "wait_load_state"});
+            typeCombo = new JComboBox<>(new String[] {
+                    "click",
+                    "input",
+                    "secure_input",
+                    "wait_load_state",
+                    "wait_url",
+                    "wait_time",
+                    "wait_selector"
+            });
             selectorField = new PlaceholderTextField("CSS selector", 18);
             valueField = new PlaceholderTextField("Value", 18);
+            secureValueField = new PlaceholderPasswordField("Value", 18);
             loadStateCombo = new JComboBox<>(new String[] {"load", "domcontentloaded", "networkidle"});
 
             fieldsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
             fieldsPanel.add(selectorField);
             fieldsPanel.add(valueField);
+            fieldsPanel.add(secureValueField);
             fieldsPanel.add(loadStateCombo);
 
             typeCombo.setSelectedItem(type);
             selectorField.setText(selector == null ? "" : selector);
             valueField.setText(value == null ? "" : value);
+            secureValueField.setText(value == null ? "" : value);
             loadStateCombo.setSelectedItem(value == null || value.isBlank() ? "load" : value);
 
             typeCombo.addActionListener(e -> applyTypeRules());
@@ -168,16 +192,39 @@ public final class StepsPanel extends JPanel
             if ("click".equals(type)) {
                 selectorField.setVisible(true);
                 valueField.setVisible(false);
+                secureValueField.setVisible(false);
                 loadStateCombo.setVisible(false);
                 valueField.setText("");
+                secureValueField.setText("");
             } else if ("wait_load_state".equals(type)) {
                 selectorField.setVisible(false);
                 valueField.setVisible(false);
+                secureValueField.setVisible(false);
                 loadStateCombo.setVisible(true);
                 selectorField.setText("");
+            } else if ("wait_url".equals(type) || "wait_time".equals(type)) {
+                selectorField.setVisible(false);
+                valueField.setVisible(true);
+                secureValueField.setVisible(false);
+                loadStateCombo.setVisible(false);
+                selectorField.setText("");
+            } else if ("wait_selector".equals(type)) {
+                selectorField.setVisible(true);
+                valueField.setVisible(false);
+                secureValueField.setVisible(false);
+                loadStateCombo.setVisible(false);
+                valueField.setText("");
+                secureValueField.setText("");
+            } else if ("secure_input".equals(type)) {
+                selectorField.setVisible(true);
+                valueField.setVisible(false);
+                secureValueField.setVisible(true);
+                loadStateCombo.setVisible(false);
+                valueField.setText("");
             } else {
                 selectorField.setVisible(true);
                 valueField.setVisible(true);
+                secureValueField.setVisible(false);
                 loadStateCombo.setVisible(false);
             }
             fieldsPanel.revalidate();
@@ -191,6 +238,8 @@ public final class StepsPanel extends JPanel
             String value;
             if ("wait_load_state".equals(type)) {
                 value = (String) loadStateCombo.getSelectedItem();
+            } else if ("secure_input".equals(type)) {
+                value = new String(secureValueField.getPassword()).trim();
             } else {
                 value = valueField.getText().trim();
             }

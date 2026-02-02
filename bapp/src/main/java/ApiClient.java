@@ -93,6 +93,7 @@ public final class ApiClient {
     public String fetchToken(boolean force) throws IOException, InterruptedException {
         Config cfg = configRef.get();
         URI uri = URI.create(cfg.apiBaseUrl + "/token");
+        long timeoutMs = Math.max(5000L, (long) cfg.navTimeoutMs + (long) cfg.waitTokenTimeoutMs + 5000L);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("authentication_url", cfg.authenticationUrl);
         payload.put("headless", cfg.headless);
@@ -107,7 +108,7 @@ public final class ApiClient {
         var req = java.net.http.HttpRequest.newBuilder(uri)
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofMillis(timeoutMs))
                 .build();
 
         HttpResponse<String> resp;

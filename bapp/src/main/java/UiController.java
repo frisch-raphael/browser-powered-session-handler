@@ -394,9 +394,12 @@ public final class UiController {
                         "  \"authentication_url\": \"https://example.com/login\",\n" +
                         "  \"headless\": true,\n" +
                         "  \"steps\": [\n" +
+                        "    {\"type\": \"wait_url\", \"selector\": \"\", \"value\": \"**/login\"},\n" +
+                        "    {\"type\": \"wait_selector\", \"selector\": \"input#user\", \"value\": \"\"},\n" +
                         "    {\"type\": \"input\", \"selector\": \"input#user\", \"value\": \"alice\"},\n" +
-                        "    {\"type\": \"input\", \"selector\": \"input#pass\", \"value\": \"secret\"},\n" +
+                        "    {\"type\": \"secure_input\", \"selector\": \"input#pass\", \"value\": \"secret\"},\n" +
                         "    {\"type\": \"click\", \"selector\": \"button#login\", \"value\": \"\"},\n" +
+                        "    {\"type\": \"wait_time\", \"selector\": \"\", \"value\": \"1500\"},\n" +
                         "    {\"type\": \"wait_load_state\", \"selector\": \"\", \"value\": \"networkidle\"}\n" +
                         "  ],\n" +
                         "  \"mtls_enabled\": true,\n" +

@@ -147,15 +147,32 @@ public final class ConfigManager {
             AuthStep step = cfg.steps.get(i);
             if (!"click".equals(step.type)
                     && !"input".equals(step.type)
-                    && !"wait_load_state".equals(step.type)) {
+                    && !"secure_input".equals(step.type)
+                    && !"wait_load_state".equals(step.type)
+                    && !"wait_url".equals(step.type)
+                    && !"wait_time".equals(step.type)
+                    && !"wait_selector".equals(step.type)) {
                 throw new IllegalArgumentException("Invalid step type at index " + i);
             }
-            if (("click".equals(step.type) || "input".equals(step.type))
+            if (("click".equals(step.type) || "input".equals(step.type) || "secure_input".equals(step.type)
+                    || "wait_selector".equals(step.type))
                     && (step.selector == null || step.selector.isBlank())) {
                 throw new IllegalArgumentException("Missing selector at index " + i);
             }
-            if ("input".equals(step.type) && (step.value == null || step.value.isBlank())) {
+            if (("input".equals(step.type) || "secure_input".equals(step.type))
+                    && (step.value == null || step.value.isBlank())) {
                 throw new IllegalArgumentException("Missing input value at index " + i);
+            }
+            if ("wait_url".equals(step.type) && (step.value == null || step.value.isBlank())) {
+                throw new IllegalArgumentException("Missing wait_url value at index " + i);
+            }
+            if ("wait_time".equals(step.type)) {
+                if (step.value == null || step.value.isBlank()) {
+                    throw new IllegalArgumentException("Missing wait_time value at index " + i);
+                }
+                if (parseWaitTimeMs(step.value) < 1) {
+                    throw new IllegalArgumentException("Invalid wait_time value at index " + i);
+                }
             }
             if ("wait_load_state".equals(step.type)
                     && step.value != null
@@ -187,5 +204,18 @@ public final class ConfigManager {
                 && (cfg.sessionLostRegex == null || cfg.sessionLostRegex.isBlank())) {
             throw new IllegalArgumentException("Regex is required for regex session detection");
         }
+    }
+
+    private int parseWaitTimeMs(String rawValue) {
+        String value = rawValue.trim().toLowerCase(Locale.ROOT);
+        if (value.endsWith("ms")) {
+            String number = value.substring(0, value.length() - 2).trim();
+            return Integer.parseInt(number);
+        }
+        if (value.endsWith("s")) {
+            String number = value.substring(0, value.length() - 1).trim();
+            return (int) (Double.parseDouble(number) * 1000);
+        }
+        return Integer.parseInt(value);
     }
 }
