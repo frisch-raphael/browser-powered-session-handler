@@ -63,7 +63,13 @@ public final class ApiServiceManager
         } else if (!canImport(venvPython, "fastapi", "uvicorn", "playwright")) {
             issues.add("Missing required Python packages in venv");
             commands.add(venvPython + " -m pip install fastapi uvicorn playwright");
-            commands.add(venvPython + " -m playwright install");
+            commands.add("PLAYWRIGHT_BROWSERS_PATH=api/browsers " + venvPython + " -m playwright install firefox");
+        }
+        if (!browserInstalled(apiDir.resolve("browsers"))) {
+            issues.add("Playwright Firefox not found under " + apiDir.resolve("browsers"));
+            if (venvPython != null) {
+                commands.add("PLAYWRIGHT_BROWSERS_PATH=api/browsers " + venvPython + " -m playwright install firefox");
+            }
         }
 
         if (issues.isEmpty()) {
@@ -92,7 +98,9 @@ public final class ApiServiceManager
         runCommand(venvPython.toString(), "-m", "pip", "install", "--upgrade", "pip");
         runCommand(venvPython.toString(), "-m", "pip", "install", "fastapi", "uvicorn", "playwright");
         logging.logToOutput("Installing Playwright browsers...");
-        runCommand(venvPython.toString(), "-m", "playwright", "install");
+        String browsersPath = apiDir.resolve("browsers").toString();
+        runCommandWithEnv(Map.of("PLAYWRIGHT_BROWSERS_PATH", browsersPath),
+                venvPython.toString(), "-m", "playwright", "install", "firefox");
         logging.logToOutput("API install complete");
     }
 
@@ -124,6 +132,7 @@ public final class ApiServiceManager
         );
         pb.directory(apiDir.toFile());
         pb.environment().put("PYTHONUNBUFFERED", "1");
+        pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", apiDir.resolve("browsers").toString());
         pb.redirectErrorStream(true);
         process = pb.start();
 
@@ -227,6 +236,22 @@ public final class ApiServiceManager
         }
     }
 
+    private void runCommandWithEnv(Map<String, String> env, String... command) throws IOException, InterruptedException
+    {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.directory(apiDir.toFile());
+        if (env != null && !env.isEmpty()) {
+            pb.environment().putAll(env);
+        }
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        streamToLog(p.getInputStream());
+        int exit = p.waitFor();
+        if (exit != 0) {
+            logging.logToError("Command failed: " + String.join(" ", command));
+            throw new IOException("Command failed: " + String.join(" ", command));
+        }
+    }
     private void streamToLog(java.io.InputStream stream)
     {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
@@ -246,6 +271,21 @@ public final class ApiServiceManager
             return apiDir.resolve("venv").resolve("Scripts").resolve("python.exe");
         }
         return apiDir.resolve("venv").resolve("bin").resolve("python");
+    }
+
+    private boolean browserInstalled(Path browsersDir)
+    {
+        try {
+            if (!Files.isDirectory(browsersDir)) {
+                return false;
+            }
+            return Files.list(browsersDir)
+                    .filter(path -> path.getFileName().toString().startsWith("firefox-"))
+                    .map(path -> path.resolve("firefox").resolve("firefox.exe"))
+                    .anyMatch(Files::exists);
+        } catch (IOException ex) {
+            return false;
+        }
     }
 
     public static final class VerificationResult

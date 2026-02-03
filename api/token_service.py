@@ -260,13 +260,39 @@ def extract_json_path(data: Any, path: str) -> Optional[Any]:
         return None
 
 
+def _resolve_firefox_executable(api_dir: str) -> Optional[str]:
+    browsers_root = os.environ.get(
+        "PLAYWRIGHT_BROWSERS_PATH") or os.path.join(api_dir, "browsers")
+    candidates: List[str] = []
+    if browsers_root and os.path.isdir(browsers_root):
+        for name in os.listdir(browsers_root):
+            if not name.startswith("firefox-"):
+                continue
+            base = os.path.join(browsers_root, name, "firefox")
+            exe = os.path.join(base, "firefox.exe")
+            if os.path.exists(exe):
+                candidates.append(exe)
+                continue
+            exe = os.path.join(base, "firefox")
+            if os.path.exists(exe):
+                candidates.append(exe)
+    if candidates:
+        try:
+            return max(candidates, key=os.path.getmtime)
+        except Exception:
+            return sorted(candidates)[-1]
+
+    bundled = os.path.join(api_dir, "firefox", "firefox.exe")
+    return bundled if os.path.exists(bundled) else None
+
+
 async def run_auth_steps(page, token_cfg: TokenConfig, auth_req: TokenRequest) -> None:
     for step in auth_req.steps:
         if step.type == "wait_load_state":
             state = (step.value or "load").strip().lower()
             await page.wait_for_load_state(state=state, timeout=token_cfg.nav_timeout_ms)
             continue
-        if step.type == "wait_url":            
+        if step.type == "wait_url":
             url_pattern = (step.value or "").strip()
             await page.wait_for_url(url_pattern, timeout=token_cfg.nav_timeout_ms)
             continue
@@ -341,20 +367,23 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
         return token_cfg.token_url_substring in url
 
     async with async_playwright() as p:
-        FIREFOX_EXE = r"C:\Users\Rapha\Documents\Pentest\Tools\browser-powered-session-handler\api\firefox\firefox.exe"
-        PROFILE_DIR = r"C:\tmp\pw-firefox-profile"
+        api_dir = os.path.dirname(__file__)
+        firefox_exe = _resolve_firefox_executable(api_dir)
+        profile_dir = os.path.join(api_dir, "firefox-profile")
         proxy = (auth_req.proxy or "").strip() or None
-        browser = await p.firefox.launch_persistent_context(
-            headless=auth_req.headless,
-            user_data_dir=PROFILE_DIR,
-            executable_path=FIREFOX_EXE,
-            ignore_https_errors=True,
-            proxy={"server": proxy} if proxy else None,
-            env={
+        launch_args = {
+            "headless": auth_req.headless,
+            "user_data_dir": profile_dir,
+            "ignore_https_errors": True,
+            "proxy": {"server": proxy} if proxy else None,
+            "env": {
                 **os.environ,
                 "SOFTHSM2_CONF": r"C:\SoftHSM2\etc\softhsm2.conf",
             },
-        )
+        }
+        if firefox_exe:
+            launch_args["executable_path"] = firefox_exe
+        browser = await p.firefox.launch_persistent_context(**launch_args)
 
         page = await browser.new_page()
 

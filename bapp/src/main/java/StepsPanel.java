@@ -5,8 +5,14 @@ import java.util.List;
 
 public final class StepsPanel extends JPanel
 {
+    public interface StepsChangeListener
+    {
+        void onStepsChanged();
+    }
+
     private final JPanel rowsPanel;
     private final List<StepRow> rows;
+    private StepsChangeListener changeListener;
 
 
     public StepsPanel()
@@ -42,6 +48,11 @@ public final class StepsPanel extends JPanel
 
         revalidate();
         repaint();
+    }
+
+    public void setChangeListener(StepsChangeListener listener)
+    {
+        this.changeListener = listener;
     }
 
     public List<AuthStep> getSteps()
@@ -88,6 +99,7 @@ public final class StepsPanel extends JPanel
         rowsPanel.add(row);
         revalidate();
         repaint();
+        notifyChange();
     }
 
     private void removeRow(StepRow row)
@@ -99,6 +111,7 @@ public final class StepsPanel extends JPanel
         }
         revalidate();
         repaint();
+        notifyChange();
     }
 
     private void moveRow(StepRow row, int direction)
@@ -120,6 +133,14 @@ public final class StepsPanel extends JPanel
         }
         revalidate();
         repaint();
+        notifyChange();
+    }
+
+    private void notifyChange()
+    {
+        if (changeListener != null) {
+            changeListener.onStepsChanged();
+        }
     }
 
     private final class StepRow extends JPanel
@@ -163,6 +184,7 @@ public final class StepsPanel extends JPanel
 
             typeCombo.addActionListener(e -> applyTypeRules());
             applyTypeRules();
+            attachChangeListeners();
 
             add(buildRowButtons());
             add(typeCombo);
@@ -231,6 +253,15 @@ public final class StepsPanel extends JPanel
             fieldsPanel.repaint();
         }
 
+        private void attachChangeListeners()
+        {
+            typeCombo.addActionListener(e -> notifyChange());
+            loadStateCombo.addActionListener(e -> notifyChange());
+            selectorField.getDocument().addDocumentListener(new SimpleDocumentListener(StepsPanel.this::notifyChange));
+            valueField.getDocument().addDocumentListener(new SimpleDocumentListener(StepsPanel.this::notifyChange));
+            secureValueField.getDocument().addDocumentListener(new SimpleDocumentListener(StepsPanel.this::notifyChange));
+        }
+
         AuthStep toAuthStep()
         {
             String type = (String) typeCombo.getSelectedItem();
@@ -246,5 +277,33 @@ public final class StepsPanel extends JPanel
             return new AuthStep(type, selector, value);
         }
 
+    }
+
+    private static final class SimpleDocumentListener implements javax.swing.event.DocumentListener
+    {
+        private final Runnable onChange;
+
+        private SimpleDocumentListener(Runnable onChange)
+        {
+            this.onChange = onChange;
+        }
+
+        @Override
+        public void insertUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
+
+        @Override
+        public void removeUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
+
+        @Override
+        public void changedUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
     }
 }

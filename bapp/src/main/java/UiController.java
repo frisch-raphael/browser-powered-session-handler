@@ -1,6 +1,9 @@
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ToolType;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
@@ -59,6 +62,8 @@ public final class UiController {
 
     private JToggleButton enableToggle;
     private JLabel statusLabel;
+    private Timer autoUpdateTimer;
+    private boolean suppressAutoUpdate;
 
     public UiController(
             MontoyaApi api,
@@ -91,11 +96,13 @@ public final class UiController {
 
         panel.add(tabs, BorderLayout.CENTER);
         panel.add(buildBottomBar(), BorderLayout.SOUTH);
+        initAutoUpdate();
 
         return panel;
     }
 
     public void applyConfigToUi(Config cfg) {
+        suppressAutoUpdate = true;
         apiBaseUrlField.setText(cfg.apiBaseUrl);
         if (pythonPathField != null) {
             pythonPathField.setText(cfg.pythonExecutable);
@@ -144,6 +151,7 @@ public final class UiController {
         for (Map.Entry<ToolType, JCheckBox> entry : toolCheckboxes.entrySet()) {
             entry.getValue().setSelected(toolSet.contains(entry.getKey()));
         }
+        suppressAutoUpdate = false;
     }
 
     private JPanel buildAuthTab() {
@@ -171,6 +179,7 @@ public final class UiController {
         addRow(form, gbc, 2, browserProxyLabel, browserProxyField);
 
         stepsPanel = new StepsPanel();
+        stepsPanel.setChangeListener(this::scheduleAutoUpdate);
         mtlsEnabledCheckbox = new JCheckBox("Enable mTLS");
         mtlsEnabledCheckbox.setToolTipText("Enable client certificate authentication before the page fully loads.");
 
@@ -454,6 +463,7 @@ public final class UiController {
         JButton load = new JButton("Load");
         JButton save = new JButton("Save");
         JButton emptyLocalCache = new JButton("Empty local token cache");
+        JButton copyHackvertor = new JButton("Copy hackvertor tag");
         enableToggle = new JToggleButton("Enabled", enabled.get());
         statusLabel = new JLabel("Ready");
 
@@ -461,6 +471,9 @@ public final class UiController {
         load.addActionListener(e -> loadFromFile());
         save.addActionListener(e -> saveToFile());
         emptyLocalCache.addActionListener(e -> emptyLocalCache());
+        copyHackvertor.addActionListener(e -> copyHackvertorTag());
+        copyHackvertor.setToolTipText(
+                "Create a hackvertor custom tag based on the current configuration. See wiki for more informations");
 
         enableToggle.addActionListener(e -> {
             enabled.set(enableToggle.isSelected());
@@ -472,6 +485,7 @@ public final class UiController {
         controls.add(load);
         controls.add(save);
         controls.add(emptyLocalCache);
+        controls.add(copyHackvertor);
         controls.add(enableToggle);
 
         JScrollPane controlsScroll = new JScrollPane(
@@ -580,6 +594,21 @@ public final class UiController {
             String msg = errorMessage(ex);
             api.logging().logToError("Test failed: " + msg);
             statusLabel.setText("Test failed: " + msg);
+        }
+    }
+
+    private void copyHackvertorTag() {
+        try {
+            Config cfg = configFromUi(false);
+            String tag = buildHackvertoTag(cfg);
+            Toolkit.getDefaultToolkit()
+                    .getSystemClipboard()
+                    .setContents(new StringSelection(tag), null);
+            statusLabel.setText("Hackvertor tag copied");
+        } catch (Exception ex) {
+            String msg = errorMessage(ex);
+            api.logging().logToError("Copy hackvertor tag failed: " + msg);
+            statusLabel.setText("Copy hackvertor tag failed: " + msg);
         }
     }
 
@@ -863,4 +892,155 @@ public final class UiController {
         t.start();
     }
 
+    private String buildHackvertoTag(Config cfg) throws Exception {
+        Map<String, Object> tokenRequest = new LinkedHashMap<>();
+        tokenRequest.put("authentication_url", cfg.authenticationUrl);
+        tokenRequest.put("headless", cfg.headless);
+        if (cfg.browserProxy != null && !cfg.browserProxy.isBlank()) {
+            tokenRequest.put("proxy", cfg.browserProxy);
+        }
+        List<Map<String, Object>> steps = new ArrayList<>();
+        for (AuthStep step : cfg.steps) {
+            Map<String, Object> stepMap = new LinkedHashMap<>();
+            stepMap.put("type", step.type);
+            stepMap.put("selector", step.selector);
+            stepMap.put("value", step.value);
+            if (step.pin != null && !step.pin.isBlank()) {
+                stepMap.put("pin", step.pin);
+            }
+            if (step.certCn != null && !step.certCn.isBlank()) {
+                stepMap.put("cert_cn", step.certCn);
+            }
+            steps.add(stepMap);
+        }
+        tokenRequest.put("steps", steps);
+        tokenRequest.put("mtls_enabled", cfg.mtlsEnabled);
+        if (cfg.mtlsHostname != null && !cfg.mtlsHostname.isBlank()) {
+            tokenRequest.put("mtls_hostname", cfg.mtlsHostname);
+        }
+        if (cfg.mtlsPin != null && !cfg.mtlsPin.isBlank()) {
+            tokenRequest.put("mtls_pin", cfg.mtlsPin);
+        }
+        if (cfg.mtlsCertCn != null && !cfg.mtlsCertCn.isBlank()) {
+            tokenRequest.put("mtls_cert_cn", cfg.mtlsCertCn);
+        }
+        tokenRequest.put("force", false);
+
+        ObjectMapper mapper = new ObjectMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT);
+        String tokenJson = mapper.writeValueAsString(tokenRequest);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("import re\n");
+        sb.append("import json\n");
+        sb.append("import urllib2\n\n");
+        sb.append("jwt_re = re.compile(r'^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$')\n\n");
+        sb.append("base_url = \"").append(cfg.apiBaseUrl).append("\"\n\n");
+        sb.append("token_request = json.loads(r'''").append(tokenJson).append("''')\n\n");
+        sb.append("token_url = base_url + \"/token\"\n");
+        sb.append("token_body = json.dumps(token_request)\n");
+        sb.append("req = urllib2.Request(token_url, token_body)\n");
+        sb.append("req.add_header(\"Content-Type\", \"application/json\")\n");
+        sb.append("req.add_header(\"Accept\", \"text/plain\")\n");
+        sb.append("resp = urllib2.urlopen(req, timeout=20)\n");
+        sb.append("body = resp.read().strip()\n");
+        sb.append("resp.close()\n\n");
+        sb.append("token = body\n");
+        sb.append("output = token\n");
+        return sb.toString();
+    }
+
+    private void initAutoUpdate()
+    {
+        autoUpdateTimer = new Timer(1000, e -> {
+            if (suppressAutoUpdate) {
+                return;
+            }
+            updateConfiguration();
+        });
+        autoUpdateTimer.setRepeats(false);
+
+        addAutoUpdateListeners();
+    }
+
+    private void scheduleAutoUpdate()
+    {
+        if (suppressAutoUpdate) {
+            return;
+        }
+        autoUpdateTimer.restart();
+    }
+
+    private void addAutoUpdateListeners()
+    {
+        addAutoUpdateListener(authenticationUrlField);
+        addAutoUpdateListener(apiBaseUrlField);
+        if (pythonPathField != null) {
+            addAutoUpdateListener(pythonPathField);
+        }
+        addAutoUpdateListener(jsonPathField);
+        addAutoUpdateListener(cookieNameField);
+        addAutoUpdateListener(authenticationServerSubstringField);
+        addAutoUpdateListener(sessionRegexField);
+        if (browserProxyField != null) {
+            addAutoUpdateListener(browserProxyField);
+        }
+
+        headlessCheckbox.addActionListener(e -> scheduleAutoUpdate());
+        if (mtlsEnabledCheckbox != null) {
+            mtlsEnabledCheckbox.addActionListener(e -> scheduleAutoUpdate());
+        }
+        if (mtlsHostnameField != null) {
+            addAutoUpdateListener(mtlsHostnameField);
+        }
+        if (mtlsPinField != null) {
+            mtlsPinField.getDocument().addDocumentListener(new SimpleDocumentListener(this::scheduleAutoUpdate));
+        }
+        if (mtlsCertCnField != null) {
+            addAutoUpdateListener(mtlsCertCnField);
+        }
+
+        parsingTabs.addChangeListener(e -> scheduleAutoUpdate());
+        refreshFrequencySpinner.addChangeListener(e -> scheduleAutoUpdate());
+        sessionStatusSpinner.addChangeListener(e -> scheduleAutoUpdate());
+        sessionStatusRadio.addActionListener(e -> scheduleAutoUpdate());
+        sessionRegexRadio.addActionListener(e -> scheduleAutoUpdate());
+
+        for (JCheckBox box : toolCheckboxes.values()) {
+            box.addActionListener(e -> scheduleAutoUpdate());
+        }
+    }
+
+    private void addAutoUpdateListener(JTextField field)
+    {
+        field.getDocument().addDocumentListener(new SimpleDocumentListener(this::scheduleAutoUpdate));
+    }
+
+    private static final class SimpleDocumentListener implements javax.swing.event.DocumentListener
+    {
+        private final Runnable onChange;
+
+        private SimpleDocumentListener(Runnable onChange)
+        {
+            this.onChange = onChange;
+        }
+
+        @Override
+        public void insertUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
+
+        @Override
+        public void removeUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
+
+        @Override
+        public void changedUpdate(javax.swing.event.DocumentEvent e)
+        {
+            onChange.run();
+        }
+    }
 }
