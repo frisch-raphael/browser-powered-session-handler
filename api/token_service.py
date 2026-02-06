@@ -229,6 +229,10 @@ class TokenCacheManager:
         async with self._guard:
             self._entries.clear()
 
+    async def snapshot(self) -> Dict[str, TokenCacheEntry]:
+        async with self._guard:
+            return dict(self._entries)
+
 
 cache_mgr = TokenCacheManager()
 
@@ -507,3 +511,17 @@ async def token(req: TokenRequest):
 async def invalidate():
     await cache_mgr.invalidate_all()
     return {"ok": True}
+
+
+@app.get("/cache")
+async def cache():
+    entries = await cache_mgr.snapshot()
+    items = []
+    for key, entry in entries.items():
+        items.append({
+            "key": key,
+            "token": entry.token,
+            "exp": entry.exp,
+            "next_forced_refresh": entry.next_forced_refresh,
+        })
+    return {"count": len(items), "entries": items}
