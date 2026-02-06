@@ -38,6 +38,16 @@ public class Extension implements BurpExtension
 
         api.extension().registerUnloadingHandler(apiServiceManager::stop);
 
+        Config startupConfig = configRef.get();
+        new Thread(() -> {
+            try {
+                apiServiceManager.start(startupConfig.pythonExecutable);
+                apiClient.sendConfig(startupConfig);
+            } catch (Exception ex) {
+                api.logging().logToError("Auto-start failed: " + ex.getMessage());
+            }
+        }, "token-service-auto-start").start();
+
         api.logging().logToOutput(EXT_NAME + " loaded");
     }
 }

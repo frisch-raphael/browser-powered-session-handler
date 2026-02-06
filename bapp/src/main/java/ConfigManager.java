@@ -109,6 +109,12 @@ public final class ConfigManager {
         if (cfg.pythonExecutable == null) {
             cfg.pythonExecutable = "";
         }
+        if (cfg.autoSessionRecovery == null) {
+            cfg.autoSessionRecovery = true;
+        }
+        if (cfg.lastConfigDir == null) {
+            cfg.lastConfigDir = "";
+        }
 
         Set<ToolType> allowed = new LinkedHashSet<>();
         allowed.add(ToolType.SCANNER);

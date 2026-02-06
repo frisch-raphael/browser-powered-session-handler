@@ -49,6 +49,10 @@ public final class HttpSessionHandler implements HttpHandler
             return RequestToBeSentAction.continueWith(request);
         }
 
+        if (localTokenCache.isRefreshing()) {
+            return RequestToBeSentAction.continueWith(request);
+        }
+
         try {
             String token = localTokenCache.get(false);
             HttpRequest updated;
@@ -103,15 +107,17 @@ public final class HttpSessionHandler implements HttpHandler
             return ResponseReceivedAction.continueWith(response);
         }
 
-        if ("status_code".equals(cfg.sessionLostMode)) {
+        if (cfg.autoSessionRecovery == null || cfg.autoSessionRecovery) {
+            if ("status_code".equals(cfg.sessionLostMode)) {
             if (response.statusCode() == cfg.sessionLostStatusCode) {
                 tryInvalidate();
                 api.logging().logToOutput("Session lost: status code " + cfg.sessionLostStatusCode);
             }
-        } else if (cfg.sessionLostRegexPattern != null) {
+            } else if (cfg.sessionLostRegexPattern != null) {
             if (cfg.sessionLostRegexPattern.matcher(response.bodyToString()).find()) {
                 tryInvalidate();
                 api.logging().logToOutput("Session lost: regex matched");
+            }
             }
         }
 

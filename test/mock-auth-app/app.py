@@ -10,10 +10,20 @@ def index():
     return redirect("/start", code=302)
 
 
+@app.get("/data")
+def data():
+    return jsonify({"message": "This is some data."})
+
+
 @app.get("/start")
 def start():
     time.sleep(1)
     return redirect("/login", code=302)
+
+
+@app.get("/401")
+def unauthorized():
+    return make_response("Unauthorized", 401)
 
 
 @app.get("/login")

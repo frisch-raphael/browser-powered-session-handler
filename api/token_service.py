@@ -177,8 +177,13 @@ def config_cache_key(token_cfg: TokenConfig, auth_req: TokenRequest) -> str:
     """
     auth_data = auth_req.dict()
     auth_data["force"] = False
+    token_data = token_cfg.dict()
+    token_data.pop("refresh_frequency_seconds", None)
+    token_data.pop("refresh_skew_seconds", None)
+    token_data.pop("nav_timeout_ms", None)
+    token_data.pop("wait_token_timeout_ms", None)
     material = json.dumps(
-        {"token": token_cfg.dict(), "auth": auth_data},
+        {"token": token_data, "auth": auth_data},
         sort_keys=True, ensure_ascii=False
     ).encode("utf-8")
     return hashlib.sha256(material).hexdigest()

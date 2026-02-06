@@ -1,0 +1,48 @@
+{
+  "apiBaseUrl" : "http://127.0.0.1:7575",
+  "authenticationUrl" : "http://127.0.0.1:7577",
+  "headless" : false,
+  "browserProxy" : "http://127.0.0.1:8080",
+  "steps" : [ {
+    "type" : "wait_load_state",
+    "selector" : "",
+    "value" : "domcontentloaded",
+    "pin" : "",
+    "cert_cn" : ""
+  }, {
+    "type" : "input",
+    "selector" : "#user",
+    "value" : "user",
+    "pin" : "",
+    "cert_cn" : ""
+  }, {
+    "type" : "input",
+    "selector" : "#pass",
+    "value" : "pass",
+    "pin" : "",
+    "cert_cn" : ""
+  }, {
+    "type" : "click",
+    "selector" : "#login",
+    "value" : "",
+    "pin" : "",
+    "cert_cn" : ""
+  } ],
+  "mtlsEnabled" : false,
+  "mtlsHostname" : "",
+  "mtlsPin" : "",
+  "pythonExecutable" : "",
+  "authenticationServerUrlSubstring" : "/token",
+  "tokenParsingMode" : "json_path",
+  "tokenJsonPath" : "access_token",
+  "tokenCookieName" : "",
+  "refreshFrequencySeconds" : 120,
+  "refreshSkewSeconds" : 10,
+  "navTimeoutMs" : 30000,
+  "waitTokenTimeoutMs" : 3000,
+  "sessionLostMode" : "status_code",
+  "sessionLostStatusCode" : 401,
+  "sessionLostRegex" : "",
+  "scopeTools" : [ "SCANNER", "PROXY", "REPEATER", "EXTENSIONS", "INTRUDER" ],
+  "mtls_cert_cn" : ""
+}

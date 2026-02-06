@@ -57,6 +57,7 @@ public final class UiController {
     private JRadioButton sessionRegexRadio;
     private JSpinner sessionStatusSpinner;
     private JTextField sessionRegexField;
+    private JCheckBox sessionAutoRecoveryCheckbox;
 
     private final Map<ToolType, JCheckBox> toolCheckboxes = new LinkedHashMap<>();
 
@@ -145,6 +146,9 @@ public final class UiController {
         }
         sessionStatusSpinner.setValue(cfg.sessionLostStatusCode);
         sessionRegexField.setText(cfg.sessionLostRegex);
+        if (sessionAutoRecoveryCheckbox != null) {
+            sessionAutoRecoveryCheckbox.setSelected(cfg.autoSessionRecovery == null || cfg.autoSessionRecovery);
+        }
         updateSessionModeControls();
 
         Set<ToolType> toolSet = cfg.scopeToolSet;
@@ -271,6 +275,9 @@ public final class UiController {
         sessionRegexRadio = new JRadioButton("Session lost when response body matches regex");
         sessionStatusSpinner = new JSpinner(new SpinnerNumberModel(401, 100, 599, 1));
         sessionRegexField = new JTextField(30);
+        sessionAutoRecoveryCheckbox = new JCheckBox("Enable automatic session recovery");
+        sessionAutoRecoveryCheckbox.setToolTipText(
+                "If disabled, rely on the refresh frequency to keep the token fresh.");
 
         ButtonGroup sessionGroup = new ButtonGroup();
         sessionGroup.add(sessionStatusRadio);
@@ -280,11 +287,12 @@ public final class UiController {
         addRow(content, gbc, 1, "Status code", sessionStatusSpinner);
         addRow(content, gbc, 2, "", sessionRegexRadio);
         addRow(content, gbc, 3, "Regex", sessionRegexField);
+        addRow(content, gbc, 4, "", sessionAutoRecoveryCheckbox);
 
         sessionStatusRadio.addActionListener(e -> updateSessionModeControls());
         sessionRegexRadio.addActionListener(e -> updateSessionModeControls());
 
-        addVerticalSpacer(content, gbc, 4);
+        addVerticalSpacer(content, gbc, 5);
 
         panel.add(wrapLeft(content), BorderLayout.NORTH);
         return panel;
@@ -352,6 +360,7 @@ public final class UiController {
         JButton test = new JButton("Fetch test token");
         JButton emptyCache = new JButton("Empty API cache");
         JButton health = new JButton("Health test");
+        health.setToolTipText("Verify that the API is up");
         JButton verify = new JButton("Verify API install");
         JButton install = new JButton("Install API");
         JButton startStop = new JButton();
@@ -580,6 +589,9 @@ public final class UiController {
             if (apiBase.isEmpty()) {
                 throw new IllegalArgumentException("Token service base URL is required");
             }
+            Config cfg = configFromUi(true);
+            apiClient.sendConfig(cfg);
+            configRef.set(cfg);
             String token = localTokenCache.get(true);
             Toolkit.getDefaultToolkit()
                     .getSystemClipboard()
@@ -619,6 +631,9 @@ public final class UiController {
                 if (apiBase.isEmpty()) {
                     throw new IllegalArgumentException("Token service base URL is required");
                 }
+                Config cfg = configFromUi(true);
+                apiClient.sendConfig(cfg);
+                configRef.set(cfg);
                 apiClient.fetchToken(true);
                 setStatus("Authentication steps OK");
             } catch (Exception ex) {
@@ -754,6 +769,10 @@ public final class UiController {
 
     private void loadFromFile() {
         JFileChooser chooser = new JFileChooser();
+        Config current = configRef.get();
+        if (current != null && current.lastConfigDir != null && !current.lastConfigDir.isBlank()) {
+            chooser.setCurrentDirectory(new java.io.File(current.lastConfigDir));
+        }
         int result = chooser.showOpenDialog(null);
         if (result != JFileChooser.APPROVE_OPTION) {
             return;
@@ -765,6 +784,7 @@ public final class UiController {
             configManager.validate(cfg);
             configRef.set(cfg);
             applyConfigToUi(cfg);
+            cfg.lastConfigDir = path.getParent().toString();
             configManager.saveToStorage(cfg);
             statusLabel.setText("Loaded configuration");
         } catch (Exception ex) {
@@ -776,6 +796,10 @@ public final class UiController {
 
     private void saveToFile() {
         JFileChooser chooser = new JFileChooser();
+        Config current = configRef.get();
+        if (current != null && current.lastConfigDir != null && !current.lastConfigDir.isBlank()) {
+            chooser.setCurrentDirectory(new java.io.File(current.lastConfigDir));
+        }
         int result = chooser.showSaveDialog(null);
         if (result != JFileChooser.APPROVE_OPTION) {
             return;
@@ -784,6 +808,8 @@ public final class UiController {
             Config cfg = configFromUi(false);
             Path path = chooser.getSelectedFile().toPath();
             Files.writeString(path, configManager.toJson(cfg), StandardCharsets.UTF_8);
+            cfg.lastConfigDir = path.getParent().toString();
+            configManager.saveToStorage(cfg);
             statusLabel.setText("Saved configuration");
         } catch (Exception ex) {
             String msg = errorMessage(ex);
@@ -819,6 +845,7 @@ public final class UiController {
         cfg.sessionLostMode = sessionRegexRadio.isSelected() ? "regex" : "status_code";
         cfg.sessionLostStatusCode = (Integer) sessionStatusSpinner.getValue();
         cfg.sessionLostRegex = sessionRegexField.getText().trim();
+        cfg.autoSessionRecovery = sessionAutoRecoveryCheckbox == null || sessionAutoRecoveryCheckbox.isSelected();
 
         cfg.scopeTools = new ArrayList<>();
         for (Map.Entry<ToolType, JCheckBox> entry : toolCheckboxes.entrySet()) {
@@ -1005,6 +1032,9 @@ public final class UiController {
         sessionStatusSpinner.addChangeListener(e -> scheduleAutoUpdate());
         sessionStatusRadio.addActionListener(e -> scheduleAutoUpdate());
         sessionRegexRadio.addActionListener(e -> scheduleAutoUpdate());
+        if (sessionAutoRecoveryCheckbox != null) {
+            sessionAutoRecoveryCheckbox.addActionListener(e -> scheduleAutoUpdate());
+        }
 
         for (JCheckBox box : toolCheckboxes.values()) {
             box.addActionListener(e -> scheduleAutoUpdate());

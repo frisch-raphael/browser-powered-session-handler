@@ -1,3 +1,4 @@
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -6,6 +7,7 @@ public final class LocalTokenCache
     private final ReentrantLock lock = new ReentrantLock();
     private final ApiClient apiClient;
     private final AtomicReference<Config> configRef;
+    private final AtomicBoolean refreshing = new AtomicBoolean(false);
 
     private String token;
     private long validUntil;
@@ -22,9 +24,15 @@ public final class LocalTokenCache
         try {
             token = null;
             validUntil = 0;
+            refreshing.set(false);
         } finally {
             lock.unlock();
         }
+    }
+
+    public boolean isRefreshing()
+    {
+        return refreshing.get();
     }
 
     public String get(boolean force) throws Exception
@@ -37,6 +45,11 @@ public final class LocalTokenCache
             return token;
         }
 
+        boolean shouldFetch = force || token == null || now >= validUntil;
+        if (shouldFetch) {
+            refreshing.set(true);
+        }
+
         lock.lock();
         try {
             now = System.currentTimeMillis() / 1000;
@@ -47,8 +60,8 @@ public final class LocalTokenCache
             token = apiClient.fetchToken(force);
             validUntil = now + ttlSeconds;
             return token;
-
         } finally {
+            refreshing.set(false);
             lock.unlock();
         }
     }

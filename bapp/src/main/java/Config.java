@@ -30,10 +30,12 @@ public final class Config {
     public int refreshSkewSeconds;
     public int navTimeoutMs;
     public int waitTokenTimeoutMs;
+    public Boolean autoSessionRecovery;
 
     public String sessionLostMode;
     public int sessionLostStatusCode;
     public String sessionLostRegex;
+    public String lastConfigDir;
 
     public List<String> scopeTools;
 
@@ -65,10 +67,12 @@ public final class Config {
         cfg.refreshSkewSeconds = 10;
         cfg.navTimeoutMs = 30000;
         cfg.waitTokenTimeoutMs = 3000;
+        cfg.autoSessionRecovery = true;
 
         cfg.sessionLostMode = "status_code";
         cfg.sessionLostStatusCode = 401;
         cfg.sessionLostRegex = "";
+        cfg.lastConfigDir = "";
 
         cfg.scopeTools = new ArrayList<>();
         cfg.scopeTools.add(ToolType.SCANNER.name());
