@@ -1,6 +1,6 @@
 # Browser Powered Session Handler
 
-This project provides a Burp Montoya extension (`bapp`) and a Python token service (`api`) to automate authenticated traffic.
+This project provides a Burp Montoya extension (`bapp`) and a Python token service (`api`) to automate authentication.
 
 ## What this extension does
 
