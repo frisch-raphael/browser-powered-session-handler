@@ -5,6 +5,7 @@ This project provides a Burp Montoya extension (`bapp`) and a Python token servi
 ## What this extension does
 
 The extension keeps authenticated requests working in Burp by obtaining tokens through a real browser, then injecting the token into outgoing requests (header or cookie mode).
+The external browser is called through an API, configurable in the API tab. It has a dual cache system (one cache local to the extension, one to the API) to limit how much this browser is called.
 
 In practice:
 
@@ -12,6 +13,8 @@ In practice:
 - It can refresh tokens on a schedule.
 - It can detect session loss and recover automatically (if enabled).
 - It keeps cache layers to avoid unnecessary re-logins, so that the external browser is not launched too many times 
+
+The extension was only tested on Windows (sorry).
 
 ## Why browser-based auth instead of regex token extraction
 
@@ -94,7 +97,7 @@ For segregation testing with many users/roles, the time gained is enormous.
 - `GET /health` - health check
 - `POST /config` - update token configuration
 - `POST /token` - fetch token using the current auth flow
-- `GET /cache` - show tokens currently stored in API cache
+- `GET /cache` - show tokens currently stored in API cache (beware if you somehow start the API on something else than your localhost)
 - `GET /invalidate` - clear API cache
 
 ## PKCS#11 authentication (beta)
