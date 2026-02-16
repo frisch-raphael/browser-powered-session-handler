@@ -21,6 +21,7 @@ public final class Config {
     @JsonProperty("mtls_cert_cn")
     public String mtlsCertCn;
     public String pythonExecutable;
+    public String apiInstallProxy;
 
     public String authenticationServerUrlSubstring;
     public String tokenParsingMode;
@@ -36,6 +37,8 @@ public final class Config {
     public int sessionLostStatusCode;
     public String sessionLostRegex;
     public String lastConfigDir;
+    public String requestHandlingMode;
+    public String singleUrlPrefix;
 
     public List<String> scopeTools;
 
@@ -58,6 +61,7 @@ public final class Config {
         cfg.mtlsPin = "";
         cfg.mtlsCertCn = "";
         cfg.pythonExecutable = "";
+        cfg.apiInstallProxy = "";
 
         cfg.authenticationServerUrlSubstring = "/protocol/openid-connect/token";
         cfg.tokenParsingMode = "json_path";
@@ -73,6 +77,8 @@ public final class Config {
         cfg.sessionLostStatusCode = 401;
         cfg.sessionLostRegex = "";
         cfg.lastConfigDir = "";
+        cfg.requestHandlingMode = "burp_scope";
+        cfg.singleUrlPrefix = "";
 
         cfg.scopeTools = new ArrayList<>();
         cfg.scopeTools.add(ToolType.SCANNER.name());

@@ -45,7 +45,7 @@ public final class HttpSessionHandler implements HttpHandler
         if (!shouldHandleTool(cfg, request.toolSource().toolType())) {
             return RequestToBeSentAction.continueWith(request);
         }
-        if (!request.isInScope()) {
+        if (!shouldHandleUrl(cfg, request.url())) {
             return RequestToBeSentAction.continueWith(request);
         }
 
@@ -103,7 +103,7 @@ public final class HttpSessionHandler implements HttpHandler
         if (!shouldHandleTool(cfg, response.toolSource().toolType())) {
             return ResponseReceivedAction.continueWith(response);
         }
-        if (!api.scope().isInScope(response.initiatingRequest().url())) {
+        if (!shouldHandleUrl(cfg, response.initiatingRequest().url())) {
             return ResponseReceivedAction.continueWith(response);
         }
 
@@ -130,6 +130,22 @@ public final class HttpSessionHandler implements HttpHandler
             return false;
         }
         return cfg.scopeToolSet.contains(toolType);
+    }
+
+    private boolean shouldHandleUrl(Config cfg, String url)
+    {
+        String mode = cfg.requestHandlingMode == null ? "burp_scope" : cfg.requestHandlingMode;
+        if ("all_requests".equals(mode)) {
+            return true;
+        }
+        if ("single_url".equals(mode)) {
+            String prefix = cfg.singleUrlPrefix == null ? "" : cfg.singleUrlPrefix.trim();
+            if (prefix.isEmpty()) {
+                return false;
+            }
+            return url != null && url.startsWith(prefix);
+        }
+        return api.scope().isInScope(url);
     }
 
     private void tryInvalidate()

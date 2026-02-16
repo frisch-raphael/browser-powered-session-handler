@@ -3,6 +3,9 @@ import burp.api.montoya.core.ToolType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.commonmark.node.Node;
+import org.commonmark.parser.Parser;
+import org.commonmark.renderer.html.HtmlRenderer;
 
 import javax.swing.*;
 import java.awt.*;
@@ -29,6 +32,7 @@ public final class UiController {
 
     private JTextField apiBaseUrlField;
     private JTextField pythonPathField;
+    private JTextField apiInstallProxyField;
     private JTextField authenticationUrlField;
     private JCheckBox headlessCheckbox;
     private JTextField browserProxyField;
@@ -58,12 +62,20 @@ public final class UiController {
     private JSpinner sessionStatusSpinner;
     private JTextField sessionRegexField;
     private JCheckBox sessionAutoRecoveryCheckbox;
+    private JComboBox<RequestModeOption> requestHandlingModeCombo;
+    private JTextField singleUrlPrefixField;
+    private JLabel singleUrlPrefixLabel;
 
     private final Map<ToolType, JCheckBox> toolCheckboxes = new LinkedHashMap<>();
 
     private JToggleButton enableToggle;
     private JLabel statusLabel;
+    private JLabel apiWarningLabel;
+    private JButton apiStartStopButton;
     private Timer autoUpdateTimer;
+    private Timer apiWarningTimer;
+    private final AtomicBoolean apiWarningCheckInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean initialApiStartupPending = new AtomicBoolean(true);
     private boolean suppressAutoUpdate;
 
     public UiController(
@@ -98,6 +110,7 @@ public final class UiController {
         panel.add(tabs, BorderLayout.CENTER);
         panel.add(buildBottomBar(), BorderLayout.SOUTH);
         initAutoUpdate();
+        initApiWarningMonitor();
 
         return panel;
     }
@@ -107,6 +120,9 @@ public final class UiController {
         apiBaseUrlField.setText(cfg.apiBaseUrl);
         if (pythonPathField != null) {
             pythonPathField.setText(cfg.pythonExecutable);
+        }
+        if (apiInstallProxyField != null) {
+            apiInstallProxyField.setText(cfg.apiInstallProxy);
         }
         authenticationUrlField.setText(cfg.authenticationUrl);
         headlessCheckbox.setSelected(cfg.headless);
@@ -155,7 +171,17 @@ public final class UiController {
         for (Map.Entry<ToolType, JCheckBox> entry : toolCheckboxes.entrySet()) {
             entry.getValue().setSelected(toolSet.contains(entry.getKey()));
         }
+        selectRequestMode(cfg.requestHandlingMode);
+        if (singleUrlPrefixField != null) {
+            singleUrlPrefixField.setText(cfg.singleUrlPrefix);
+        }
+        updateRequestHandlingModeControls();
         suppressAutoUpdate = false;
+    }
+
+    public void setInitialApiStartupPending(boolean pending) {
+        initialApiStartupPending.set(pending);
+        refreshApiWarningAsync();
     }
 
     private JPanel buildAuthTab() {
@@ -184,7 +210,7 @@ public final class UiController {
 
         stepsPanel = new StepsPanel();
         stepsPanel.setChangeListener(this::scheduleAutoUpdate);
-        mtlsEnabledCheckbox = new JCheckBox("Enable mTLS");
+        mtlsEnabledCheckbox = new JCheckBox("Enable PKCS#11 mTLS authentication");
         mtlsEnabledCheckbox.setToolTipText("Enable client certificate authentication before the page fully loads.");
 
         mtlsHostnameField = new PlaceholderTextField("example.com", 28);
@@ -192,13 +218,15 @@ public final class UiController {
         mtlsCertCnField = new PlaceholderTextField("Certificate CN (optional)", 20);
 
         mtlsPanel = new JPanel(new GridBagLayout());
-        mtlsPanel.setBorder(BorderFactory.createTitledBorder("mTLS configuration"));
+        mtlsPanel.setBorder(BorderFactory.createTitledBorder("PKCS#11 configuration"));
         GridBagConstraints mtlsGbc = baseConstraints();
         JLabel hostLabel = new JLabel("Hostname");
         JLabel pinLabel = new JLabel("PIN");
         JLabel cnLabel = new JLabel("Certificate CN");
-        hostLabel.setToolTipText("Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
-        mtlsHostnameField.setToolTipText("Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
+        hostLabel.setToolTipText(
+                "Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
+        mtlsHostnameField.setToolTipText(
+                "Hostname that requires client certificate auth. Leave empty to use the authentication URL host.");
         pinLabel.setToolTipText("Optional PIN. Leave empty to skip PIN entry.");
         mtlsPinField.setToolTipText("Optional PIN. Leave empty to skip PIN entry.");
         cnLabel.setToolTipText("Optional certificate CN. Leave empty to select the first certificate.");
@@ -300,6 +328,23 @@ public final class UiController {
 
     private JPanel buildScopeTab() {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
+        JPanel content = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = baseConstraints();
+
+        requestHandlingModeCombo = new JComboBox<>(new RequestModeOption[] {
+                new RequestModeOption("Burp scope", "burp_scope"),
+                new RequestModeOption("All requests", "all_requests"),
+                new RequestModeOption("Single URL prefix", "single_url")
+        });
+        requestHandlingModeCombo.setToolTipText("Choose how requests are selected for token injection.");
+        addRow(content, gbc, 0, "Request selection mode", requestHandlingModeCombo);
+
+        singleUrlPrefixField = new PlaceholderTextField("https://target.example.com/api", 36);
+        singleUrlPrefixLabel = new JLabel("Single URL prefix");
+        singleUrlPrefixLabel.setToolTipText("Only requests starting with this URL prefix will be handled.");
+        singleUrlPrefixField.setToolTipText("Only requests starting with this URL prefix will be handled.");
+        addRow(content, gbc, 1, singleUrlPrefixLabel, singleUrlPrefixField);
+
         JPanel list = new JPanel(new GridLayout(0, 3, 8, 8));
 
         addScopeTool(list, ToolType.SCANNER);
@@ -308,27 +353,58 @@ public final class UiController {
         addScopeTool(list, ToolType.EXTENSIONS);
         addScopeTool(list, ToolType.INTRUDER);
 
-        panel.add(list, BorderLayout.NORTH);
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 3;
+        gbc.weightx = 1.0;
+        content.add(list, gbc);
+
+        requestHandlingModeCombo.addActionListener(e -> {
+            updateRequestHandlingModeControls();
+            scheduleAutoUpdate();
+        });
+        updateRequestHandlingModeControls();
+
+        panel.add(content, BorderLayout.NORTH);
         return panel;
     }
 
     private JPanel buildDocumentationTab() {
         JPanel panel = new JPanel(new BorderLayout());
-        JTextArea area = new JTextArea();
+        String markdown = loadDocumentationMarkdown();
+
+        JEditorPane area = new JEditorPane();
         area.setEditable(false);
-        area.setLineWrap(true);
-        area.setWrapStyleWord(true);
-        area.setText(
-                "Workflow:\n" +
-                        "1) Browser orchestration: enter the login URL and record the steps.\n" +
-                        "2) Token configuration: choose where the token appears (JSON or cookie).\n" +
-                        "3) Session lost detection: set how a logout is detected.\n" +
-                        "4) Scope: select which Burp tools use this session handler.\n" +
-                        "5) API: set the token service URL and try a test token.\n" +
-                        "6) Click Update configuration to apply changes.\n\n" +
-                        "Tip: Use Save/Load to reuse configurations across projects.");
+        area.setContentType("text/html");
+        Parser parser = Parser.builder().build();
+        HtmlRenderer renderer = HtmlRenderer.builder().build();
+        Node document = parser.parse(markdown);
+        area.setText(renderer.render(document));
+        area.setCaretPosition(0);
         panel.add(new JScrollPane(area), BorderLayout.CENTER);
         return panel;
+    }
+
+    private String loadDocumentationMarkdown() {
+        try {
+            String extensionFile = api.extension().filename();
+            if (extensionFile != null && !extensionFile.isBlank()) {
+                Path extPath = Path.of(extensionFile).toAbsolutePath();
+                Path rootReadme = extPath.getParent()
+                        .resolve("..")
+                        .resolve("..")
+                        .resolve("..")
+                        .resolve("README.md")
+                        .normalize();
+                if (Files.exists(rootReadme)) {
+                    return Files.readString(rootReadme, StandardCharsets.UTF_8);
+                }
+            }
+        } catch (Exception ex) {
+            api.logging().logToError("Failed to read README.md for documentation: " + ex.getMessage());
+        }
+
+        return "# Documentation unavailable\n\nProject root `README.md` was not found.";
     }
 
     private JPanel buildApiTab() {
@@ -342,10 +418,13 @@ public final class UiController {
         if (pythonPathField == null) {
             pythonPathField = new JTextField(40);
         }
+        if (apiInstallProxyField == null) {
+            apiInstallProxyField = new JTextField(40);
+        }
 
         JLabel apiBaseLabel = new JLabel("Token service base URL");
         apiBaseLabel.setToolTipText(
-                "Base URL of the token service, e.g. http://127.0.0.1:7575. This service is a python service installed independently. See README for details.");
+                "Base URL of the token service, e.g. http://127.0.0.1:7575. This service is a python service installed independently of the bapp, and is what will launch the embedded firefox. See README for details.");
         apiBaseUrlField.setToolTipText("Base URL of the token service, e.g. http://127.0.0.1:7575");
 
         addRow(content, gbc, 0, apiBaseLabel, apiBaseUrlField);
@@ -353,6 +432,12 @@ public final class UiController {
         pythonLabel.setToolTipText("Uses PATH python by default. Set this to override.");
         pythonPathField.setToolTipText("Uses PATH python by default. Set this to override.");
         addRow(content, gbc, 1, pythonLabel, pythonPathField);
+        JLabel installProxyLabel = new JLabel("API install proxy (optional)");
+        installProxyLabel.setToolTipText(
+                "Proxy used for API dependency/browser install. If the proxy needs authentication, set Burp as the proxy and configure authentication there.");
+        apiInstallProxyField.setToolTipText(
+                "Proxy used for API dependency/browser install. If the proxy needs authentication, set Burp as the proxy and configure authentication there.");
+        addRow(content, gbc, 2, installProxyLabel, apiInstallProxyField);
 
         JPanel actionsBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         actionsBar.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
@@ -364,6 +449,7 @@ public final class UiController {
         JButton verify = new JButton("Verify API install");
         JButton install = new JButton("Install API");
         JButton startStop = new JButton();
+        apiStartStopButton = startStop;
         updateStartStopButton(startStop);
         test.addActionListener(e -> testToken());
         emptyCache.addActionListener(e -> emptyApiCache());
@@ -388,20 +474,19 @@ public final class UiController {
         JScrollPane scrollPane = new JScrollPane(
                 actionsBar,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
-        );
-
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
         scrollPane.setPreferredSize(new Dimension(0, actionsBar.getPreferredSize().height + 11));
         scrollPane.setMinimumSize(new Dimension(0, actionsBar.getPreferredSize().height + 11));
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.setViewportBorder(null);
-        addRow(content, gbc, 2, "Actions", scrollPane);
+        addRow(content, gbc, 3, "Actions", scrollPane);
 
         JTextArea apiHelp = new JTextArea(
                 "Token service endpoints:\n" +
                         "POST /config  - update token configuration\n" +
                         "POST /token   - fetch token (auth data in body)\n" +
+                        "GET  /cache  - list tokens in cache\n" +
                         "GET  /invalidate - clear token cache\n" +
                         "GET  /health  - health check\n\n" +
                         "POST /config body:\n" +
@@ -436,8 +521,7 @@ public final class UiController {
                         "  \"mtls_pin\": \"1234\",\n" +
                         "  \"mtls_cert_cn\": \"My Cert\",\n" +
                         "  \"force\": false\n" +
-                        "}"
-        );
+                        "}");
         apiHelp.setEditable(false);
         apiHelp.setLineWrap(true);
         apiHelp.setWrapStyleWord(true);
@@ -446,6 +530,8 @@ public final class UiController {
         JCheckBox docToggle = new JCheckBox("API documentation details");
         JPanel docPanel = new JPanel(new BorderLayout());
         JScrollPane docScroll = new JScrollPane(apiHelp);
+        docScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        docScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         docPanel.add(docScroll, BorderLayout.CENTER);
         docPanel.setVisible(false);
         docToggle.addActionListener(e -> {
@@ -454,9 +540,9 @@ public final class UiController {
             content.repaint();
         });
 
-        addRow(content, gbc, 3, "API docs", docToggle);
-        addRow(content, gbc, 4, "", docPanel);
-        addVerticalSpacer(content, gbc, 5);
+        addRow(content, gbc, 4, "API docs", docToggle);
+        addRow(content, gbc, 5, "", docPanel);
+        addVerticalSpacer(content, gbc, 6);
 
         panel.add(content, BorderLayout.NORTH);
         return panel;
@@ -474,7 +560,12 @@ public final class UiController {
         JButton emptyLocalCache = new JButton("Empty local token cache");
         JButton copyHackvertor = new JButton("Copy hackvertor tag");
         enableToggle = new JToggleButton("Enabled", enabled.get());
+        enableToggle.setToolTipText(
+                "When enabled, the extension will reauthenticate and fetch new tokens according to the configuration.");
         statusLabel = new JLabel("Ready");
+        apiWarningLabel = new JLabel();
+        apiWarningLabel.setForeground(new Color(190, 40, 40));
+        apiWarningLabel.setVisible(false);
 
         update.addActionListener(e -> updateConfiguration());
         load.addActionListener(e -> loadFromFile());
@@ -500,15 +591,19 @@ public final class UiController {
         JScrollPane controlsScroll = new JScrollPane(
                 controls,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
-        );
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         controlsScroll.setBorder(BorderFactory.createEmptyBorder());
         controlsScroll.setViewportBorder(null);
         controlsScroll.setPreferredSize(new Dimension(0, controls.getPreferredSize().height + 12));
         controlsScroll.setMinimumSize(new Dimension(0, controls.getPreferredSize().height + 12));
 
+        JPanel bottomInfo = new JPanel();
+        bottomInfo.setLayout(new BoxLayout(bottomInfo, BoxLayout.Y_AXIS));
+        bottomInfo.add(apiWarningLabel);
+        bottomInfo.add(statusLabel);
+
         panel.add(controlsScroll, BorderLayout.NORTH);
-        panel.add(statusLabel, BorderLayout.SOUTH);
+        panel.add(bottomInfo, BorderLayout.SOUTH);
 
         return panel;
     }
@@ -686,14 +781,19 @@ public final class UiController {
     private void verifyApiInstall() {
         runAsync("api-verify", () -> {
             try {
-                ApiServiceManager.VerificationResult result =
-                        apiServiceManager.verify(pythonPathField == null ? "" : pythonPathField.getText());
+                ApiServiceManager.VerificationResult result = apiServiceManager
+                        .verify(pythonPathField == null ? "" : pythonPathField.getText());
                 if (result.ok) {
                     setStatus("API install OK");
                     api.logging().logToOutput(result.message);
                 } else {
                     setStatus("API verification failed. See error tab of extension for more details.");
-                    api.logging().logToError(result.message);
+                    String verifyMessage = (result.message == null || result.message.isBlank())
+                            ? "API verification failed (no details)."
+                            : result.message;
+                    api.logging().logToError(verifyMessage);
+                    // Keep output logging for debugging visibility.
+                    api.logging().logToOutput(verifyMessage);
                     if (!result.commands.isEmpty()) {
                         api.logging().logToError("API verification failed:");
                         api.logging().logToError("Suggested commands:");
@@ -713,7 +813,10 @@ public final class UiController {
     private void installApi() {
         runAsync("api-install", () -> {
             try {
-                apiServiceManager.install(pythonPathField == null ? "" : pythonPathField.getText());
+                setStatus("API installation in progress...");
+                apiServiceManager.install(
+                        pythonPathField == null ? "" : pythonPathField.getText(),
+                        apiInstallProxyField == null ? "" : apiInstallProxyField.getText());
                 setStatus("API installed");
                 api.logging().logToOutput("API installed");
             } catch (Exception ex) {
@@ -724,43 +827,45 @@ public final class UiController {
         });
     }
 
-    private void startTokenService() {
-        runAsync("api-start", () -> {
-            try {
-                apiServiceManager.start(pythonPathField == null ? "" : pythonPathField.getText());
-                setStatus("Token service started");
-            } catch (Exception ex) {
-                String msg = errorMessage(ex);
-                api.logging().logToError("Start failed: " + msg);
-                setStatus("Start failed: " + msg);
-            }
-        });
-    }
-
     private void toggleTokenService(JButton button) {
         runAsync("api-toggle", () -> {
             try {
                 if (apiServiceManager.isRunning()) {
+                    setStatus("Stopping token service...");
                     apiServiceManager.stop();
                     setStatus("Token service stopped");
                 } else {
-                    apiServiceManager.start(pythonPathField == null ? "" : pythonPathField.getText());
-                    setStatus("Token service started");
+                    startTokenServiceInternal();
                 }
-                SwingUtilities.invokeLater(() ->
-                        updateStartStopButton(button));
+                SwingUtilities.invokeLater(() -> updateStartStopButton(button));
+                refreshApiWarningAsync();
             } catch (Exception ex) {
-                String msg = errorMessage(ex);
-                api.logging().logToError("Start/stop failed: " + msg);
-                setStatus("Start/stop failed: " + msg);
+                handleServiceError("Start/stop failed", ex);
+                refreshApiWarningAsync();
             }
         });
     }
 
+    private void startTokenServiceInternal() throws Exception {
+        setStatus("Starting token service...");
+        apiServiceManager.start(pythonPathField == null ? "" : pythonPathField.getText());
+        if (apiServiceManager.isRunning()) {
+            setStatus("Token service started");
+        } else {
+            setStatus("Token service start failed");
+        }
+    }
+
+    private void handleServiceError(String prefix, Exception ex) {
+        String msg = errorMessage(ex);
+        api.logging().logToError(prefix + ": " + msg);
+        setStatus(prefix + ": " + msg);
+    }
+
     private void updateStartStopButton(JButton button) {
         boolean running = apiServiceManager.isRunning();
-        button.setText(running ? "Stop token service" : "Start token service");
-        Color bg = running ? new Color(210, 60, 60) : new Color(60, 150, 80);
+        button.setText(running ? "API is on" : "API is off");
+        Color bg = running ? new Color(60, 150, 80) : new Color(210, 60, 60);
         button.setBackground(bg);
         button.setForeground(Color.WHITE);
         button.setOpaque(true);
@@ -826,6 +931,7 @@ public final class UiController {
         Config cfg = Config.defaults();
         cfg.apiBaseUrl = apiBaseUrlField.getText().trim();
         cfg.pythonExecutable = pythonPathField == null ? "" : pythonPathField.getText().trim();
+        cfg.apiInstallProxy = apiInstallProxyField == null ? "" : apiInstallProxyField.getText().trim();
         cfg.authenticationUrl = authenticationUrlField.getText().trim();
         cfg.headless = headlessCheckbox.isSelected();
         cfg.browserProxy = browserProxyField == null ? "" : browserProxyField.getText().trim();
@@ -853,6 +959,8 @@ public final class UiController {
                 cfg.scopeTools.add(entry.getKey().name());
             }
         }
+        cfg.requestHandlingMode = selectedRequestModeValue();
+        cfg.singleUrlPrefix = singleUrlPrefixField == null ? "" : singleUrlPrefixField.getText().trim();
 
         cfg = configManager.normalize(cfg);
         if (validate) {
@@ -977,8 +1085,7 @@ public final class UiController {
         return sb.toString();
     }
 
-    private void initAutoUpdate()
-    {
+    private void initAutoUpdate() {
         autoUpdateTimer = new Timer(1000, e -> {
             if (suppressAutoUpdate) {
                 return;
@@ -990,20 +1097,51 @@ public final class UiController {
         addAutoUpdateListeners();
     }
 
-    private void scheduleAutoUpdate()
-    {
+    private void initApiWarningMonitor() {
+        apiWarningTimer = new Timer(10000, e -> refreshApiWarningAsync());
+        apiWarningTimer.setRepeats(true);
+        apiWarningTimer.start();
+        refreshApiWarningAsync();
+    }
+
+    private void refreshApiWarningAsync() {
+        if (apiWarningLabel == null || !apiWarningCheckInProgress.compareAndSet(false, true)) {
+            return;
+        }
+        runAsync("api-warning-check", () -> {
+            boolean pending = initialApiStartupPending.get();
+            boolean running = apiServiceManager.isRunning();
+            SwingUtilities.invokeLater(() -> {
+                if (apiStartStopButton != null) {
+                    updateStartStopButton(apiStartStopButton);
+                }
+                if (apiWarningLabel != null) {
+                    apiWarningLabel.setText(
+                            (!pending && running)
+                                    ? ""
+                                    : "Warning: API service is not running. Go to the API tab to start or fix it.");
+                    apiWarningLabel.setVisible(!pending && !running);
+                }
+            });
+            apiWarningCheckInProgress.set(false);
+        });
+    }
+
+    private void scheduleAutoUpdate() {
         if (suppressAutoUpdate) {
             return;
         }
         autoUpdateTimer.restart();
     }
 
-    private void addAutoUpdateListeners()
-    {
+    private void addAutoUpdateListeners() {
         addAutoUpdateListener(authenticationUrlField);
         addAutoUpdateListener(apiBaseUrlField);
         if (pythonPathField != null) {
             addAutoUpdateListener(pythonPathField);
+        }
+        if (apiInstallProxyField != null) {
+            addAutoUpdateListener(apiInstallProxyField);
         }
         addAutoUpdateListener(jsonPathField);
         addAutoUpdateListener(cookieNameField);
@@ -1035,41 +1173,90 @@ public final class UiController {
         if (sessionAutoRecoveryCheckbox != null) {
             sessionAutoRecoveryCheckbox.addActionListener(e -> scheduleAutoUpdate());
         }
+        if (requestHandlingModeCombo != null) {
+            requestHandlingModeCombo.addActionListener(e -> scheduleAutoUpdate());
+        }
+        if (singleUrlPrefixField != null) {
+            addAutoUpdateListener(singleUrlPrefixField);
+        }
 
         for (JCheckBox box : toolCheckboxes.values()) {
             box.addActionListener(e -> scheduleAutoUpdate());
         }
     }
 
-    private void addAutoUpdateListener(JTextField field)
-    {
+    private void updateRequestHandlingModeControls() {
+        if (requestHandlingModeCombo == null || singleUrlPrefixField == null || singleUrlPrefixLabel == null) {
+            return;
+        }
+        String mode = selectedRequestModeValue();
+        boolean single = "single_url".equals(mode);
+        singleUrlPrefixField.setVisible(single);
+        singleUrlPrefixLabel.setVisible(single);
+        singleUrlPrefixField.setEnabled(single);
+    }
+
+    private String selectedRequestModeValue() {
+        if (requestHandlingModeCombo == null) {
+            return "burp_scope";
+        }
+        RequestModeOption selected = (RequestModeOption) requestHandlingModeCombo.getSelectedItem();
+        return selected == null ? "burp_scope" : selected.value;
+    }
+
+    private void selectRequestMode(String value) {
+        if (requestHandlingModeCombo == null) {
+            return;
+        }
+        String target = (value == null || value.isBlank()) ? "burp_scope" : value;
+        for (int i = 0; i < requestHandlingModeCombo.getItemCount(); i++) {
+            RequestModeOption option = requestHandlingModeCombo.getItemAt(i);
+            if (option != null && option.value.equals(target)) {
+                requestHandlingModeCombo.setSelectedIndex(i);
+                return;
+            }
+        }
+        requestHandlingModeCombo.setSelectedIndex(0);
+    }
+
+    private static final class RequestModeOption {
+        private final String label;
+        private final String value;
+
+        private RequestModeOption(String label, String value) {
+            this.label = label;
+            this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private void addAutoUpdateListener(JTextField field) {
         field.getDocument().addDocumentListener(new SimpleDocumentListener(this::scheduleAutoUpdate));
     }
 
-    private static final class SimpleDocumentListener implements javax.swing.event.DocumentListener
-    {
+    private static final class SimpleDocumentListener implements javax.swing.event.DocumentListener {
         private final Runnable onChange;
 
-        private SimpleDocumentListener(Runnable onChange)
-        {
+        private SimpleDocumentListener(Runnable onChange) {
             this.onChange = onChange;
         }
 
         @Override
-        public void insertUpdate(javax.swing.event.DocumentEvent e)
-        {
+        public void insertUpdate(javax.swing.event.DocumentEvent e) {
             onChange.run();
         }
 
         @Override
-        public void removeUpdate(javax.swing.event.DocumentEvent e)
-        {
+        public void removeUpdate(javax.swing.event.DocumentEvent e) {
             onChange.run();
         }
 
         @Override
-        public void changedUpdate(javax.swing.event.DocumentEvent e)
-        {
+        public void changedUpdate(javax.swing.event.DocumentEvent e) {
             onChange.run();
         }
     }

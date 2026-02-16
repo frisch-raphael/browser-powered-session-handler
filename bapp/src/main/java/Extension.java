@@ -33,6 +33,7 @@ public class Extension implements BurpExtension
 
         api.userInterface().registerSuiteTab(EXT_NAME, uiController.buildUi());
         uiController.applyConfigToUi(configRef.get());
+        uiController.setInitialApiStartupPending(true);
 
         api.http().registerHttpHandler(new HttpSessionHandler(api, configRef, apiClient, localTokenCache, enabled));
 
@@ -45,6 +46,8 @@ public class Extension implements BurpExtension
                 apiClient.sendConfig(startupConfig);
             } catch (Exception ex) {
                 api.logging().logToError("Auto-start failed: " + ex.getMessage());
+            } finally {
+                uiController.setInitialApiStartupPending(false);
             }
         }, "token-service-auto-start").start();
 

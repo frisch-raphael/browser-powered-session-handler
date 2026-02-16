@@ -9,6 +9,7 @@ repositories {
 dependencies {
     compileOnly("net.portswigger.burp.extensions:montoya-api:2025.11")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
+    implementation("org.commonmark:commonmark:0.22.0")
 }
 
 tasks.withType<JavaCompile>().configureEach {

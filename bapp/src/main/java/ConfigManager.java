@@ -109,11 +109,25 @@ public final class ConfigManager {
         if (cfg.pythonExecutable == null) {
             cfg.pythonExecutable = "";
         }
+        if (cfg.apiInstallProxy == null) {
+            cfg.apiInstallProxy = "";
+        }
         if (cfg.autoSessionRecovery == null) {
             cfg.autoSessionRecovery = true;
         }
         if (cfg.lastConfigDir == null) {
             cfg.lastConfigDir = "";
+        }
+        if (cfg.requestHandlingMode == null || cfg.requestHandlingMode.isBlank()) {
+            cfg.requestHandlingMode = "burp_scope";
+        }
+        if (!"burp_scope".equals(cfg.requestHandlingMode)
+                && !"all_requests".equals(cfg.requestHandlingMode)
+                && !"single_url".equals(cfg.requestHandlingMode)) {
+            cfg.requestHandlingMode = "burp_scope";
+        }
+        if (cfg.singleUrlPrefix == null) {
+            cfg.singleUrlPrefix = "";
         }
 
         Set<ToolType> allowed = new LinkedHashSet<>();
@@ -153,6 +167,12 @@ public final class ConfigManager {
             String proxy = cfg.browserProxy.trim().toLowerCase(Locale.ROOT);
             if (!proxy.startsWith("http://") && !proxy.startsWith("https://")) {
                 throw new IllegalArgumentException("Browser proxy must start with http:// or https://");
+            }
+        }
+        if (cfg.apiInstallProxy != null && !cfg.apiInstallProxy.isBlank()) {
+            String proxy = cfg.apiInstallProxy.trim().toLowerCase(Locale.ROOT);
+            if (!proxy.startsWith("http://") && !proxy.startsWith("https://")) {
+                throw new IllegalArgumentException("API install proxy must start with http:// or https://");
             }
         }
         if (cfg.steps == null || cfg.steps.isEmpty()) {
@@ -218,6 +238,10 @@ public final class ConfigManager {
         if ("regex".equals(cfg.sessionLostMode)
                 && (cfg.sessionLostRegex == null || cfg.sessionLostRegex.isBlank())) {
             throw new IllegalArgumentException("Regex is required for regex session detection");
+        }
+        if ("single_url".equals(cfg.requestHandlingMode)
+                && (cfg.singleUrlPrefix == null || cfg.singleUrlPrefix.isBlank())) {
+            throw new IllegalArgumentException("A URL prefix is required for single URL request mode");
         }
     }
 

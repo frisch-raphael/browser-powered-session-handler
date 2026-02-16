@@ -55,7 +55,8 @@ def token():
     if username != "user" or password != "pass":
         return make_response("Invalid credentials", 401)
 
-    token_value = f"mock-token-{int(time.time())}"
+    # token value is a jwt with a low exp
+    token_value = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2ODAwMDAwMDB9.sflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
     resp = make_response(
         jsonify({"access_token": token_value, "token_type": "bearer"}))
     resp.set_cookie("mock_session", "ok", httponly=True)
