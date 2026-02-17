@@ -5,7 +5,7 @@ This project provides a Burp Montoya extension (`bapp`) and a Python token servi
 ## What this extension does
 
 The extension keeps authenticated requests working in Burp by obtaining tokens through a real browser, then injecting the token into outgoing requests (header or cookie mode).
-The external browser is called through an API, configurable in the API tab. It has a dual cache system (one cache local to the extension, one to the API) to limit how much this browser is called.
+The external browser is called through an HTTP API, embedded with the extension, configurable in the API tab. It has a dual cache system (one cache local to the extension, one to the API) to limit how much this browser is called.
 
 In practice:
 
