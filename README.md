@@ -28,7 +28,7 @@ Browser-based orchestration is usually more robust for complex flows:
 
 This is especially useful in complex environments where authentication is distributed across several domains, identity providers, and intermediate pages.
 
-## Workflow
+## Session handling
 
 0. If not done yet, install and start the API from the "API" tab.
 1. Browser orchestration: enter the login URL and record the steps.
