@@ -73,7 +73,7 @@ Each custom tag will be replaced with the right user-specific token automaticall
 
 Using self-refreshing tags to assess a protected endpoint:
 
-https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
+https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
 
 ### How to create a tag
 
@@ -89,7 +89,7 @@ https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
 
 The tag can now be used anywhere as an auto-refreshing token, with tag <@_\<TAGNAME\>/>.
 
-https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
+https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
 
 An execution key is also necessary for those tags. See Hackvertor wiki for more informations.
 
