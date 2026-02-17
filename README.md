@@ -73,12 +73,11 @@ Each custom tag will be replaced with the right user-specific token automaticall
 
 Creating a self-refreshing token tag:
 
-https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
+https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
 
 Using them on a protected endpoint:
 
-https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
-
+https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
 
 ### How to create a tag
 
