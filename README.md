@@ -39,7 +39,7 @@ This is especially useful in complex environments where authentication is distri
 
 From now, your session will be automatically recovered.
 
-![](README_simple_authent.mp4)
+https://github.com/user-attachments/assets/fe23272d-009b-4c04-b911-793919bbac27
 
 ## Caches overview
 
@@ -71,9 +71,11 @@ for example, if you have user 1, user 2, and user admin, you can create the foll
 
 Each custom tag will be replaced with the right user-specific token automatically in your requests.
 
-![](README_hackvertor_tag.mp4)
+Creating a self-refreshing token tag:
+https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
+Using them on a protected endpoint:
+https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
 
-![](README_hackvertor_tags.mp4)
 
 ### How to create a tag
 
