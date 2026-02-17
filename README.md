@@ -35,6 +35,11 @@ This is especially useful in complex environments where authentication is distri
 2. Token configuration: indicate where the token appears when authenticating.
 3. Session lost detection: choose how and wether logout is detected.
 4. Scope: self explanatory I guess.
+5. Ensure the extension is set to "Enabled"
+
+From now, your session will be automatically recovered.
+
+![](README_simple_authent.mp4)
 
 ## Caches overview
 
@@ -65,6 +70,10 @@ for example, if you have user 1, user 2, and user admin, you can create the foll
 `<@_jwt_user_1/>`, `<@_jwt_user_2/>` `<@_jwt_admin/>`
 
 Each custom tag will be replaced with the right user-specific token automatically in your requests.
+
+![](README_hackvertor_tag.mp4)
+
+![](README_hackvertor_tags.mp4)
 
 ### How to create a tag
 
