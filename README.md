@@ -62,7 +62,7 @@ You can create Hackvertor tags that act as auto-refreshing tokens for each user 
 
 for example, if you have user 1, user 2, and user admin, you can create the following Hackvertor tags:
 
-<@_jwt_user_1/>, <@_jwt_user_2/> <@_jwt_admin/>
+`<@_jwt_user_1/>`, `<@_jwt_user_2/>` `<@_jwt_admin/>`
 
 Each custom tag will be replaced with the right user-specific token automatically in your requests.
 
@@ -73,10 +73,10 @@ Each custom tag will be replaced with the right user-specific token automaticall
 3. Click `Copy hackvertor tag`.
 4. In Burp top menu, click `Hackvertor`.
 5. Click `Create custom tag`.
-6. Set Tag name
+6. Set `Tag name`
 7. Select language `Python`.
 8. Paste the copied code in the code box.
-9. Press "Create tag"
+9. Press `Create tag`
 
 The tag can now be used anywhere as an auto-refreshing token, with tag <@_\<TAGNAME\>/>.
 

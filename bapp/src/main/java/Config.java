@@ -55,7 +55,6 @@ public final class Config {
         cfg.headless = false;
         cfg.browserProxy = "";
         cfg.steps = new ArrayList<>();
-        cfg.steps.add(new AuthStep("click", "", ""));
         cfg.mtlsEnabled = false;
         cfg.mtlsHostname = "";
         cfg.mtlsPin = "";

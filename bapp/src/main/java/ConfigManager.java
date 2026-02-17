@@ -175,8 +175,8 @@ public final class ConfigManager {
                 throw new IllegalArgumentException("API install proxy must start with http:// or https://");
             }
         }
-        if (cfg.steps == null || cfg.steps.isEmpty()) {
-            throw new IllegalArgumentException("At least one authentication step is required");
+        if (cfg.steps == null) {
+            throw new IllegalArgumentException("Authentication steps list is required");
         }
         for (int i = 0; i < cfg.steps.size(); i++) {
             AuthStep step = cfg.steps.get(i);

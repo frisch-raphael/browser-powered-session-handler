@@ -12,8 +12,7 @@ import java.time.ZonedDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class HttpSessionHandler implements HttpHandler
-{
+public final class HttpSessionHandler implements HttpHandler {
     private final MontoyaApi api;
     private final AtomicReference<Config> configRef;
     private final ApiClient apiClient;
@@ -25,8 +24,7 @@ public final class HttpSessionHandler implements HttpHandler
             AtomicReference<Config> configRef,
             ApiClient apiClient,
             LocalTokenCache localTokenCache,
-            AtomicBoolean enabled)
-    {
+            AtomicBoolean enabled) {
         this.api = api;
         this.configRef = configRef;
         this.apiClient = apiClient;
@@ -35,8 +33,7 @@ public final class HttpSessionHandler implements HttpHandler
     }
 
     @Override
-    public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent request)
-    {
+    public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent request) {
         if (!enabled.get()) {
             return RequestToBeSentAction.continueWith(request);
         }
@@ -65,12 +62,11 @@ public final class HttpSessionHandler implements HttpHandler
                 String host = uri.getHost();
                 if (host != null && !host.isBlank()) {
                     api.http().cookieJar().setCookie(
-                            host,
-                            "/",
                             cookieName,
                             token,
-                            ZonedDateTime.now().plusYears(1)
-                    );
+                            "/",
+                            host,
+                            ZonedDateTime.now().plusYears(1));
                 }
                 String existing = request.headerValue("Cookie");
                 String cookieValue = cookieName + "=" + token;
@@ -78,8 +74,8 @@ public final class HttpSessionHandler implements HttpHandler
                         ? cookieValue
                         : existing + "; " + cookieValue;
                 updated = request
-                        .withRemovedHeader("Authorization")
-                        .withUpdatedHeader("Cookie", merged);
+                        .withRemovedHeader("Cookie")
+                        .withAddedHeader("Cookie", merged);
             } else {
                 updated = request
                         .withRemovedHeader("Authorization")
@@ -87,14 +83,13 @@ public final class HttpSessionHandler implements HttpHandler
             }
             return RequestToBeSentAction.continueWith(updated);
         } catch (Exception e) {
-            api.logging().logToError("JWT injection failed: " + e.getMessage());
+            api.logging().logToError("Token injection failed: " + e.getMessage());
             return RequestToBeSentAction.continueWith(request);
         }
     }
 
     @Override
-    public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived response)
-    {
+    public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived response) {
         if (!enabled.get()) {
             return ResponseReceivedAction.continueWith(response);
         }
@@ -109,31 +104,29 @@ public final class HttpSessionHandler implements HttpHandler
 
         if (cfg.autoSessionRecovery == null || cfg.autoSessionRecovery) {
             if ("status_code".equals(cfg.sessionLostMode)) {
-            if (response.statusCode() == cfg.sessionLostStatusCode) {
-                tryInvalidate();
-                api.logging().logToOutput("Session lost: status code " + cfg.sessionLostStatusCode);
-            }
+                if (response.statusCode() == cfg.sessionLostStatusCode) {
+                    tryInvalidate();
+                    api.logging().logToOutput("Session lost: status code " + cfg.sessionLostStatusCode);
+                }
             } else if (cfg.sessionLostRegexPattern != null) {
-            if (cfg.sessionLostRegexPattern.matcher(response.bodyToString()).find()) {
-                tryInvalidate();
-                api.logging().logToOutput("Session lost: regex matched");
-            }
+                if (cfg.sessionLostRegexPattern.matcher(response.bodyToString()).find()) {
+                    tryInvalidate();
+                    api.logging().logToOutput("Session lost: regex matched");
+                }
             }
         }
 
         return ResponseReceivedAction.continueWith(response);
     }
 
-    private boolean shouldHandleTool(Config cfg, ToolType toolType)
-    {
+    private boolean shouldHandleTool(Config cfg, ToolType toolType) {
         if (cfg.scopeToolSet == null || cfg.scopeToolSet.isEmpty()) {
             return false;
         }
         return cfg.scopeToolSet.contains(toolType);
     }
 
-    private boolean shouldHandleUrl(Config cfg, String url)
-    {
+    private boolean shouldHandleUrl(Config cfg, String url) {
         String mode = cfg.requestHandlingMode == null ? "burp_scope" : cfg.requestHandlingMode;
         if ("all_requests".equals(mode)) {
             return true;
@@ -148,8 +141,7 @@ public final class HttpSessionHandler implements HttpHandler
         return api.scope().isInScope(url);
     }
 
-    private void tryInvalidate()
-    {
+    private void tryInvalidate() {
         try {
             apiClient.invalidateCache();
             localTokenCache.invalidate();

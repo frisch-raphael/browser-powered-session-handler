@@ -42,12 +42,9 @@ public final class StepsPanel extends JPanel
             }
         }
 
-        if (rows.isEmpty()) {
-            addRow("click", "", "");
-        }
-
         revalidate();
         repaint();
+        notifyChange();
     }
 
     public void setChangeListener(StepsChangeListener listener)
@@ -106,9 +103,6 @@ public final class StepsPanel extends JPanel
     {
         rows.remove(row);
         rowsPanel.remove(row);
-        if (rows.isEmpty()) {
-            addRow("click", "", "");
-        }
         revalidate();
         repaint();
         notifyChange();

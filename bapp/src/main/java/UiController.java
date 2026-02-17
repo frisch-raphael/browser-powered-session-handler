@@ -240,8 +240,11 @@ public final class UiController {
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton testAuth = new JButton("Test authentication steps");
+        JButton clearSteps = new JButton("Clear");
         testAuth.addActionListener(e -> testAuthSteps());
+        clearSteps.addActionListener(e -> stepsPanel.setSteps(new ArrayList<>()));
         actions.add(testAuth);
+        actions.add(clearSteps);
 
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
@@ -987,8 +990,6 @@ public final class UiController {
     private JPanel buildJsonParsingPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = baseConstraints();
-        JLabel desc = new JLabel("Use when the token is inside a JSON response body.");
-        addRow(panel, gbc, 0, "", desc);
         if (jsonPathLabel == null) {
             jsonPathLabel = new JLabel("JSON path");
         }
@@ -1007,8 +1008,6 @@ public final class UiController {
     private JPanel buildCookieParsingPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = baseConstraints();
-        JLabel desc = new JLabel("Use when the token is delivered in a Set-Cookie header.");
-        addRow(panel, gbc, 0, "", desc);
         addRow(panel, gbc, 1, "Cookie name", cookieNameField);
         return panel;
     }

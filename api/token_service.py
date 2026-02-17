@@ -125,9 +125,9 @@ def validate_token_request(req: TokenRequest) -> None:
             status_code=400,
             detail="proxy must start with http:// or https://",
         )
-    if not req.steps or len(req.steps) < 1:
+    if req.steps is None:
         raise HTTPException(
-            status_code=400, detail="At least one authentication step is required")
+            status_code=400, detail="steps is required")
     for i, step in enumerate(req.steps):
         if step.type not in (
             "click",
@@ -207,9 +207,10 @@ class TokenCacheEntry:
             return False
 
         # Exp-based validity
-        if self.exp <= 0:
-            return True  # exp unknown, treat as valid until forced refresh
-        return now < (self.exp - skew_seconds)
+        # if self.exp <= 0:
+        #     return True  # exp unknown, treat as valid until forced refresh
+        # return now < (self.exp - skew_seconds)
+        return True
 
 
 class TokenCacheManager:
@@ -386,8 +387,8 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
             "ignore_https_errors": True,
             "proxy": {"server": proxy} if proxy else None,
             "env": {
-                **os.environ,
-                "SOFTHSM2_CONF": r"C:\SoftHSM2\etc\softhsm2.conf",
+                **os.environ
+                # "SOFTHSM2_CONF": r"C:\SoftHSM2\etc\softhsm2.conf",
             },
         }
         if firefox_exe:
@@ -431,7 +432,7 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
             # await context.close()
             await browser.close()
             raise RuntimeError(
-                f"Timed out waiting for token JSON response. Still at URL: {current}. "
+                f"Timed out waiting for token response. Still at URL: {current}. "
                 f"Check token_url_substring or whether tokens are fetched differently."
             ) from e
 
