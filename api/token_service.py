@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import re
+import sys
 import time
 from http.cookies import SimpleCookie
 from typing import Optional, Dict, List, Any
@@ -13,6 +14,8 @@ from fastapi import FastAPI, Response, HTTPException
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # ======================
 # Defaults
@@ -393,9 +396,9 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
         }
         if firefox_exe:
             launch_args["executable_path"] = firefox_exe
-        browser = await p.firefox.launch_persistent_context(**launch_args)
+        context = await p.firefox.launch_persistent_context(**launch_args)
 
-        page = await browser.new_page()
+        page =  context.pages[0]
 
         async def on_response(resp):
             nonlocal token_json, token_raw
@@ -404,15 +407,12 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
                     return
                 if token_cfg.parsing.mode == "cookie":
                     cookie_name = (token_cfg.parsing.cookie_name or "").strip()
-                    header_value = resp.headers.get("set-cookie")
-                    if header_value:
-                        jar = SimpleCookie()
-                        jar.load(header_value)
-                        if cookie_name in jar:
-                            token_raw = jar[cookie_name].value.strip()
-                            if token_raw:
-                                token_event.set()
-                            return
+                    cookies = await page.context.cookies(resp.url)
+                    token_raw = next((cookie["value"].strip() for cookie in cookies if cookie["name"] == cookie_name), None)
+                    
+                    if token_raw:
+                        token_event.set()
+                    return
                 data = await resp.json()
                 if isinstance(data, dict):
                     token_json = data
@@ -430,14 +430,14 @@ async def fetch_token_via_playwright(token_cfg: TokenConfig, auth_req: TokenRequ
         except asyncio.TimeoutError as e:
             current = page.url
             # await context.close()
-            await browser.close()
+            await context.close()
             raise RuntimeError(
                 f"Timed out waiting for token response. Still at URL: {current}. "
                 f"Check token_url_substring or whether tokens are fetched differently."
             ) from e
 
         # await context.close()
-        await browser.close()
+        await context.close()
 
     if token_cfg.parsing.mode == "cookie":
         if token_raw:
