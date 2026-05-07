@@ -221,11 +221,12 @@ public final class ConfigManager {
                 }
             }
         }
-        if (cfg.authenticationServerUrlSubstring == null || cfg.authenticationServerUrlSubstring.isBlank()) {
-            throw new IllegalArgumentException("Authentication server substring is required");
-        }
         if (!"json_path".equals(cfg.tokenParsingMode) && !"cookie".equals(cfg.tokenParsingMode)) {
             throw new IllegalArgumentException("Token parsing mode must be cookie or json_path");
+        }
+        if ("json_path".equals(cfg.tokenParsingMode)
+                && (cfg.authenticationServerUrlSubstring == null || cfg.authenticationServerUrlSubstring.isBlank())) {
+            throw new IllegalArgumentException("Token response URL substring is required for JSON parsing");
         }
         if ("json_path".equals(cfg.tokenParsingMode)
                 && (cfg.tokenJsonPath == null || cfg.tokenJsonPath.isBlank())) {

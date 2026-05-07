@@ -52,19 +52,7 @@ public final class ApiClient {
     }
 
     public void sendConfig(Config cfg) throws IOException, InterruptedException {
-        Map<String, Object> payload = new LinkedHashMap<>();
-
-        Map<String, Object> parsing = new LinkedHashMap<>();
-        parsing.put("mode", cfg.tokenParsingMode);
-        parsing.put("path", cfg.tokenJsonPath);
-        parsing.put("cookie_name", cfg.tokenCookieName);
-
-        payload.put("token_url_substring", cfg.authenticationServerUrlSubstring);
-        payload.put("refresh_frequency_seconds", cfg.refreshFrequencySeconds);
-        payload.put("refresh_skew_seconds", cfg.refreshSkewSeconds);
-        payload.put("nav_timeout_ms", cfg.navTimeoutMs);
-        payload.put("wait_token_timeout_ms", cfg.waitTokenTimeoutMs);
-        payload.put("parsing", parsing);
+        Map<String, Object> payload = buildTokenConfigPayload(cfg);
 
         String body = mapper.writeValueAsString(payload);
         URI uri = URI.create(cfg.apiBaseUrl + "/config");
@@ -104,6 +92,7 @@ public final class ApiClient {
         payload.put("mtls_pin", cfg.mtlsPin);
         payload.put("mtls_cert_cn", cfg.mtlsCertCn);
         payload.put("force", force);
+        payload.put("token_config", buildTokenConfigPayload(cfg));
         String body = mapper.writeValueAsString(payload);
 
         var req = java.net.http.HttpRequest.newBuilder(uri)
@@ -163,5 +152,22 @@ public final class ApiClient {
             return ex.getClass().getSimpleName();
         }
         return msg;
+    }
+
+    private Map<String, Object> buildTokenConfigPayload(Config cfg) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+
+        Map<String, Object> parsing = new LinkedHashMap<>();
+        parsing.put("mode", cfg.tokenParsingMode);
+        parsing.put("path", cfg.tokenJsonPath);
+        parsing.put("cookie_name", cfg.tokenCookieName);
+
+        payload.put("token_url_substring", cfg.authenticationServerUrlSubstring);
+        payload.put("refresh_frequency_seconds", cfg.refreshFrequencySeconds);
+        payload.put("refresh_skew_seconds", cfg.refreshSkewSeconds);
+        payload.put("nav_timeout_ms", cfg.navTimeoutMs);
+        payload.put("wait_token_timeout_ms", cfg.waitTokenTimeoutMs);
+        payload.put("parsing", parsing);
+        return payload;
     }
 }

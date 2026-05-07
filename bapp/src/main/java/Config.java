@@ -66,7 +66,7 @@ public final class Config {
         cfg.tokenParsingMode = "json_path";
         cfg.tokenJsonPath = "access_token";
         cfg.tokenCookieName = "";
-        cfg.refreshFrequencySeconds = 120;
+        cfg.refreshFrequencySeconds = 1800;
         cfg.refreshSkewSeconds = 10;
         cfg.navTimeoutMs = 30000;
         cfg.waitTokenTimeoutMs = 3000;

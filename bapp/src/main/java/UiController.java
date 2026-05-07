@@ -267,16 +267,16 @@ public final class UiController {
         authenticationServerSubstringField = new JTextField(40);
         jsonPathField = new JTextField(30);
         cookieNameField = new JTextField(20);
-        refreshFrequencySpinner = new JSpinner(new SpinnerNumberModel(120, 5, 86400, 5));
+        refreshFrequencySpinner = new JSpinner(new SpinnerNumberModel(1800, 5, 86400, 5));
+
+        authenticationServerSubstringLabel = new JLabel("Token response URL substring");
+        parsingModeLabel = new JLabel("Parsing mode");
+        refreshFrequencyLabel = new JLabel("Refresh frequency (seconds)");
+        jsonPathLabel = new JLabel("JSON path");
 
         parsingTabs = new JTabbedPane();
         parsingTabs.addTab("JSON", buildJsonParsingPanel());
         parsingTabs.addTab("Cookie", buildCookieParsingPanel());
-
-        authenticationServerSubstringLabel = new JLabel("Authentication server substring");
-        parsingModeLabel = new JLabel("Parsing mode");
-        refreshFrequencyLabel = new JLabel("Refresh frequency (seconds)");
-        jsonPathLabel = new JLabel("JSON path");
 
         authenticationServerSubstringLabel.setToolTipText("Substring of the URL that returns the token response.");
         authenticationServerSubstringField.setToolTipText("Substring of the URL that returns the token response.");
@@ -287,11 +287,10 @@ public final class UiController {
         refreshFrequencyLabel.setToolTipText("Force a token refresh after this many seconds.");
         refreshFrequencySpinner.setToolTipText("Force a token refresh after this many seconds.");
 
-        addRow(content, gbc, 0, authenticationServerSubstringLabel, authenticationServerSubstringField);
-        addRow(content, gbc, 1, parsingModeLabel, parsingTabs);
-        addRow(content, gbc, 2, refreshFrequencyLabel, refreshFrequencySpinner);
+        addRow(content, gbc, 0, parsingModeLabel, parsingTabs);
+        addRow(content, gbc, 1, refreshFrequencyLabel, refreshFrequencySpinner);
 
-        addVerticalSpacer(content, gbc, 3);
+        addVerticalSpacer(content, gbc, 2);
 
         panel.add(wrapLeft(content), BorderLayout.NORTH);
         return panel;
@@ -495,7 +494,7 @@ public final class UiController {
                         "POST /config body:\n" +
                         "{\n" +
                         "  \"token_url_substring\": \"/protocol/openid-connect/token\",\n" +
-                        "  \"refresh_frequency_seconds\": 120,\n" +
+                        "  \"refresh_frequency_seconds\": 1800,\n" +
                         "  \"refresh_skew_seconds\": 10,\n" +
                         "  \"nav_timeout_ms\": 30000,\n" +
                         "  \"wait_token_timeout_ms\": 3000,\n" +
@@ -990,11 +989,17 @@ public final class UiController {
     private JPanel buildJsonParsingPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = baseConstraints();
+        if (authenticationServerSubstringLabel == null) {
+            authenticationServerSubstringLabel = new JLabel("Token response URL substring");
+        }
         if (jsonPathLabel == null) {
             jsonPathLabel = new JLabel("JSON path");
         }
+        authenticationServerSubstringLabel.setToolTipText("Substring of the URL that returns the token response.");
+        authenticationServerSubstringField.setToolTipText("Substring of the URL that returns the token response.");
         jsonPathLabel.setToolTipText("Dot path to the token in the JSON response body.");
         jsonPathField.setToolTipText("Dot path to the token in the JSON response body.");
+        addRow(panel, gbc, 0, authenticationServerSubstringLabel, authenticationServerSubstringField);
         addRow(panel, gbc, 1, jsonPathLabel, jsonPathField);
         JLabel hint = new JLabel("Example: access_token, data.token");
         gbc.gridx = 1;
@@ -1027,6 +1032,18 @@ public final class UiController {
     }
 
     private String buildHackvertoTag(Config cfg) throws Exception {
+        Map<String, Object> tokenConfig = new LinkedHashMap<>();
+        Map<String, Object> parsing = new LinkedHashMap<>();
+        parsing.put("mode", cfg.tokenParsingMode);
+        parsing.put("path", cfg.tokenJsonPath);
+        parsing.put("cookie_name", cfg.tokenCookieName);
+        tokenConfig.put("token_url_substring", cfg.authenticationServerUrlSubstring);
+        tokenConfig.put("refresh_frequency_seconds", cfg.refreshFrequencySeconds);
+        tokenConfig.put("refresh_skew_seconds", cfg.refreshSkewSeconds);
+        tokenConfig.put("nav_timeout_ms", cfg.navTimeoutMs);
+        tokenConfig.put("wait_token_timeout_ms", cfg.waitTokenTimeoutMs);
+        tokenConfig.put("parsing", parsing);
+
         Map<String, Object> tokenRequest = new LinkedHashMap<>();
         tokenRequest.put("authentication_url", cfg.authenticationUrl);
         tokenRequest.put("headless", cfg.headless);
@@ -1059,6 +1076,7 @@ public final class UiController {
             tokenRequest.put("mtls_cert_cn", cfg.mtlsCertCn);
         }
         tokenRequest.put("force", false);
+        tokenRequest.put("token_config", tokenConfig);
 
         ObjectMapper mapper = new ObjectMapper()
                 .enable(SerializationFeature.INDENT_OUTPUT);
