@@ -1,0 +1,1457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bpsh:journey-registry:v1",
+  "title": "BPSH native journey documents v1",
+  "$comment": "ConfigManager validates document structure, stable UUIDs and secret ownership. Unfinished journeys and alias collisions can be saved; execution rejects invalid or ambiguous settings. Runtime scopes, generations, tokens and browser profiles are never serialized.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "project"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "journeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/managedJourney"
+          }
+        },
+        "retiredAliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/retired"
+          }
+        },
+        "controls": {
+          "$ref": "#/$defs/controls"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "revision",
+        "journeys",
+        "retiredAliases",
+        "controls"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "library"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "journeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/managedJourney"
+          }
+        },
+        "retiredAliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/retired"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "revision",
+        "journeys",
+        "retiredAliases"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "export"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "journeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/journey"
+          }
+        },
+        "retiredAliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/retired"
+          },
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "revision",
+        "journeys",
+        "retiredAliases"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "controls": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "SCANNER",
+              "PROXY",
+              "REPEATER",
+              "EXTENSIONS",
+              "INTRUDER"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "SCANNER",
+            "PROXY",
+            "REPEATER",
+            "EXTENSIONS",
+            "INTRUDER"
+          ]
+        },
+        "requestWaitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000,
+          "default": 60000
+        },
+        "attemptTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000,
+          "default": 60000
+        },
+        "cycleTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 1800000,
+          "default": 300000
+        },
+        "maxWaitingRequestsGlobal": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "maxWaitingRequestsPerJourney": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/automaticRule"
+          },
+          "maxItems": 64,
+          "default": []
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "$comment": "Runtime also requires requestWaitTimeoutMs and attemptTimeoutMs <= cycleTimeoutMs."
+    },
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "click"
+            },
+            "selector": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "selector"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "secure_input"
+            },
+            "selector": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "selector"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "wait_selector"
+            },
+            "selector": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "selector"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "input"
+            },
+            "selector": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "selector",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "wait_load_state"
+            },
+            "state": {
+              "enum": [
+                "load",
+                "domcontentloaded",
+                "networkidle"
+              ],
+              "default": "load"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "wait_url"
+            },
+            "urlPattern": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "urlPattern"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "type": {
+              "const": "wait_time"
+            },
+            "durationMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 300000
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "durationMs"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "browser": {
+      "type": "object",
+      "properties": {
+        "headless": {
+          "type": "boolean",
+          "default": false
+        },
+        "proxy": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^http://",
+                  "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "navigationTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000,
+          "default": 30000
+        },
+        "tokenWaitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000,
+          "default": 3000
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "extraction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "json_path"
+            },
+            "responseOrigin": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://",
+              "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+            },
+            "pathSubstring": {
+              "type": "string",
+              "minLength": 1
+            },
+            "jsonPath": {
+              "type": "string",
+              "pattern": "^(?:[A-Za-z_][A-Za-z0-9_-]*|0|[1-9][0-9]*|\\[(?:0|[1-9][0-9]*)\\])(?:\\.(?:[A-Za-z_][A-Za-z0-9_-]*|0|[1-9][0-9]*)|\\[(?:0|[1-9][0-9]*)\\])*$",
+              "$comment": "Runtime additionally bounds numeric segments to signed 32-bit."
+            }
+          },
+          "required": [
+            "type",
+            "responseOrigin",
+            "pathSubstring",
+            "jsonPath"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "cookie"
+            },
+            "originUrl": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://",
+              "$comment": "Runtime additionally requires a host, valid port, and no embedded credentials."
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+            },
+            "domain": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "path": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "type",
+            "originUrl",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "combined"
+            },
+            "tokens": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "selector": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "json_path"
+                          },
+                          "responseOrigin": {
+                            "type": "string",
+                            "format": "uri",
+                            "pattern": "^https?://",
+                            "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+                          },
+                          "pathSubstring": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "jsonPath": {
+                            "type": "string",
+                            "pattern": "^(?:[A-Za-z_][A-Za-z0-9_-]*|0|[1-9][0-9]*|\\[(?:0|[1-9][0-9]*)\\])(?:\\.(?:[A-Za-z_][A-Za-z0-9_-]*|0|[1-9][0-9]*)|\\[(?:0|[1-9][0-9]*)\\])*$",
+                            "$comment": "Runtime additionally bounds numeric segments to signed 32-bit."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "responseOrigin",
+                          "pathSubstring",
+                          "jsonPath"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "cookie"
+                          },
+                          "originUrl": {
+                            "type": "string",
+                            "format": "uri",
+                            "pattern": "^https?://",
+                            "$comment": "Runtime additionally requires a host, valid port, and no embedded credentials."
+                          },
+                          "name": {
+                            "type": "string",
+                            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                          },
+                          "domain": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "\\S"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "path": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "\\S"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "originUrl",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "regex"
+                          },
+                          "responseOrigin": {
+                            "type": "string",
+                            "format": "uri",
+                            "pattern": "^https?://",
+                            "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+                          },
+                          "pathSubstring": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "startRegex": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "$comment": "Runtime validates 1-4096 UTF-8 bytes of RE2 syntax and at most 10,000 compiled instructions. DOTALL matching; delimiters are excluded."
+                          },
+                          "endRegex": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "$comment": "Runtime validates 1-4096 UTF-8 bytes of RE2 syntax and at most 10,000 compiled instructions. DOTALL matching; delimiters are excluded."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "responseOrigin",
+                          "pathSubstring",
+                          "startRegex",
+                          "endRegex"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "selector"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "type",
+            "tokens"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "regex"
+            },
+            "responseOrigin": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://",
+              "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+            },
+            "pathSubstring": {
+              "type": "string",
+              "minLength": 1
+            },
+            "startRegex": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "$comment": "Runtime validates 1-4096 UTF-8 bytes of RE2 syntax and at most 10,000 compiled instructions. DOTALL matching; delimiters are excluded."
+            },
+            "endRegex": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "$comment": "Runtime validates 1-4096 UTF-8 bytes of RE2 syntax and at most 10,000 compiled instructions. DOTALL matching; delimiters are excluded."
+            }
+          },
+          "required": [
+            "type",
+            "responseOrigin",
+            "pathSubstring",
+            "startRegex",
+            "endRegex"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "injection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "per_token"
+        },
+        "tokens": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "disabled"
+                  },
+                  "tokenName": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "bearer"
+                  },
+                  "tokenName": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "header"
+                  },
+                  "tokenName": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                  }
+                },
+                "required": [
+                  "type",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "cookie"
+                  },
+                  "tokenName": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                  }
+                },
+                "required": [
+                  "type",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "type",
+        "tokens"
+      ],
+      "additionalProperties": false,
+      "$comment": "Exactly one mapping per JSON/regex token, tokenName omitted for a single source. Captured cookies are implicit. Runtime rejects duplicate header destinations (case-insensitive), duplicate cookie destinations (case-sensitive), unknown/missing tokens and Header named Cookie."
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "maxAgeSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 86400,
+          "default": 1800
+        },
+        "refreshSkewSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600,
+          "default": 10
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "recovery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "mode": {
+              "const": "status_code"
+            },
+            "statusCode": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "default": 401
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "mode": {
+              "const": "regex"
+            },
+            "pattern": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "mode",
+            "pattern"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "mode": {
+              "const": "both"
+            },
+            "pattern": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "statusCode": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "default": 401
+            }
+          },
+          "required": [
+            "mode",
+            "pattern"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$comment": "Runtime validates RE2 syntax, <=4096 UTF-8 bytes and <=10000 compiled instructions."
+    },
+    "mtls": {
+      "type": "object",
+      "properties": {
+        "modulePath": {
+          "type": "string",
+          "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\]+\\\\[^\\\\]+)",
+          "$comment": "Portable absolute string; local availability is checked asynchronously."
+        },
+        "slot": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "index",
+                "id"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9223372036854775807
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "index"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "maximum": 2147483647
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "index",
+            "value": 0
+          }
+        },
+        "certificateSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "$comment": "Runtime canonicalizes scheme/host/effective port and requires an empty or / path, no query/fragment."
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "trustedCaBundlePath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\]+\\\\[^\\\\]+)",
+              "$comment": "Portable absolute string; local availability is checked asynchronously."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "modulePath",
+        "certificateSha256",
+        "origins"
+      ],
+      "additionalProperties": false
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "mtlsPin": {
+          "type": "string"
+        },
+        "stepValues": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "$comment": "Runtime requires secure-step ownership and corresponding mTLS configuration; missing runtime values are allowed."
+    },
+    "journey": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/executableJourney"
+        },
+        {
+          "$ref": "#/$defs/draftJourney"
+        }
+      ]
+    },
+    "managedJourney": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/journey"
+        },
+        {
+          "if": {
+            "required": [
+              "secrets"
+            ]
+          },
+          "then": {
+            "required": [
+              "rememberSecrets"
+            ],
+            "properties": {
+              "rememberSecrets": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "retired": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "formerJourneyId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "retiredAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "required": [
+        "alias",
+        "formerJourneyId",
+        "retiredAt"
+      ],
+      "additionalProperties": false
+    },
+    "automaticRule": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "journey": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "project",
+                "library"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          },
+          "required": [
+            "scope",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "urlMode": {
+          "enum": [
+            "burp_scope",
+            "all_requests",
+            "single_url"
+          ],
+          "default": "burp_scope"
+        },
+        "urlPrefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://",
+              "$comment": "Runtime additionally requires a host, valid port, and no embedded credentials."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "recovery": {
+          "$ref": "#/$defs/recovery"
+        }
+      },
+      "required": [
+        "journey",
+        "urlMode",
+        "recovery"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "urlMode": {
+                "const": "single_url"
+              }
+            },
+            "required": [
+              "urlMode"
+            ]
+          },
+          "then": {
+            "required": [
+              "urlPrefix"
+            ],
+            "properties": {
+              "urlPrefix": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https?://",
+                "$comment": "Runtime additionally requires a host, valid port, and no embedded credentials."
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "urlPrefix": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "$comment": "Rules run in array order; duplicate scoped journey identities are rejected. Last matching destination wins."
+    },
+    "executableJourney": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "\\S"
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "authenticationUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "$comment": "Runtime additionally requires a host, valid port, and no embedded credentials."
+        },
+        "rememberSecrets": {
+          "type": "boolean",
+          "default": false
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "maxItems": 256
+        },
+        "browser": {
+          "$ref": "#/$defs/browser"
+        },
+        "extraction": {
+          "$ref": "#/$defs/extraction"
+        },
+        "injection": {
+          "$ref": "#/$defs/injection"
+        },
+        "cache": {
+          "$ref": "#/$defs/cache"
+        },
+        "mtls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mtls"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "secrets": {
+          "$ref": "#/$defs/secrets"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "alias",
+        "authenticationUrl",
+        "steps",
+        "browser",
+        "extraction",
+        "injection",
+        "cache"
+      ],
+      "additionalProperties": false,
+      "$comment": "Runtime checks unique step IDs. Secrets are absent when there are no included values."
+    },
+    "editorDraft": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "alias": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "navTimeout": {
+              "type": "string"
+            },
+            "tokenWait": {
+              "type": "string"
+            },
+            "proxy": {
+              "type": "string"
+            },
+            "maxAge": {
+              "type": "string"
+            },
+            "skew": {
+              "type": "string"
+            },
+            "module": {
+              "type": "string"
+            },
+            "slot": {
+              "type": "string"
+            },
+            "origins": {
+              "type": "string"
+            },
+            "ca": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "alias",
+            "url",
+            "navTimeout",
+            "tokenWait",
+            "proxy",
+            "maxAge",
+            "skew",
+            "module",
+            "slot",
+            "origins",
+            "ca"
+          ],
+          "additionalProperties": false
+        },
+        "flags": {
+          "type": "object",
+          "properties": {
+            "headless": {
+              "type": "boolean"
+            },
+            "remember": {
+              "type": "boolean"
+            },
+            "mtls": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "headless",
+            "remember",
+            "mtls"
+          ],
+          "additionalProperties": false
+        },
+        "slotKind": {
+          "enum": [
+            "INDEX",
+            "ID"
+          ]
+        },
+        "certificateSha256": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "type": {
+                "enum": [
+                  "CLICK",
+                  "INPUT",
+                  "SECURE_INPUT",
+                  "WAIT_SELECTOR",
+                  "WAIT_LOAD_STATE",
+                  "WAIT_URL",
+                  "WAIT_TIME"
+                ]
+              },
+              "selector": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "selector",
+              "value",
+              "state"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 256
+        },
+        "credentials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "json_path",
+                  "regex",
+                  "cookie"
+                ]
+              },
+              "origin": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "selector": {
+                "type": "string"
+              },
+              "domain": {
+                "type": "string"
+              },
+              "cookiePath": {
+                "type": "string"
+              },
+              "startRegex": {
+                "type": "string"
+              },
+              "endRegex": {
+                "type": "string"
+              },
+              "injection": {
+                "enum": [
+                  "disabled",
+                  "bearer",
+                  "header",
+                  "cookie"
+                ]
+              },
+              "destination": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "origin",
+              "path",
+              "selector",
+              "domain",
+              "cookiePath",
+              "startRegex",
+              "endRegex",
+              "injection",
+              "destination"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "text",
+        "flags",
+        "slotKind",
+        "certificateSha256",
+        "steps",
+        "credentials"
+      ],
+      "additionalProperties": false
+    },
+    "draftJourney": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "\\S"
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "rememberSecrets": {
+          "type": "boolean",
+          "default": false
+        },
+        "secrets": {
+          "$ref": "#/$defs/secrets"
+        },
+        "draft": {
+          "$ref": "#/$defs/editorDraft"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "alias",
+        "rememberSecrets",
+        "draft"
+      ],
+      "additionalProperties": false,
+      "$comment": "Unfinished editor settings are stored literally. Execution reports configuration errors before browser setup. Secure values remain in the separate secrets object."
+    }
+  }
+}

@@ -1,123 +1,120 @@
 import burp.api.montoya.core.ToolType;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.regex.Pattern;
 
+/** Defines immutable native project controls; journey definitions and secret values are stored separately. */
 public final class Config {
-    public String apiBaseUrl;
-    public String authenticationUrl;
-    public boolean headless;
-    public String browserProxy;
-    public List<AuthStep> steps;
-    public boolean mtlsEnabled;
-    public String mtlsHostname;
-    public String mtlsPin;
-    @JsonProperty("mtls_cert_cn")
-    public String mtlsCertCn;
-    public String pythonExecutable;
-    public String apiInstallProxy;
+    /** Prevents the former mutable configuration object from being instantiated after native cutover. */
+    private Config() {}
+    static final List<ToolType> SUPPORTED_TOOLS = List.of(ToolType.SCANNER, ToolType.PROXY,
+            ToolType.REPEATER, ToolType.EXTENSIONS, ToolType.INTRUDER);
 
-    public String authenticationServerUrlSubstring;
-    public String tokenParsingMode;
-    public String tokenJsonPath;
-    public String tokenCookieName;
-    public int refreshFrequencySeconds;
-    public int refreshSkewSeconds;
-    public int navTimeoutMs;
-    public int waitTokenTimeoutMs;
-    public Boolean autoSessionRecovery;
+    /**
+     * Selects ordinary automatic-injection URL handling; native tags are independent of this scope.
+     */
+    public enum UrlMode {
+        BURP_SCOPE("burp_scope"), ALL_REQUESTS("all_requests"), SINGLE_URL("single_url");
 
-    public String sessionLostMode;
-    public int sessionLostStatusCode;
-    public String sessionLostRegex;
-    public String lastConfigDir;
-    public String requestHandlingMode;
-    public String singleUrlPrefix;
+        private final String wire;
 
-    public List<String> scopeTools;
+        /**
+         * Binds an ordinary URL handling mode to its exact native project discriminator.
+         *
+         * @param wire Exact native project discriminator for ordinary URL handling.
+         */
+        UrlMode(String wire) { this.wire = wire; }
 
-    @JsonIgnore
-    public Set<ToolType> scopeToolSet = new LinkedHashSet<>();
+        /**
+         * Returns case-sensitive native project spelling, independent of enum display names.
+         *
+         * @return Case-sensitive native project spelling, independent of enum display names.
+         */
+        public String wire() { return wire; }
 
-    @JsonIgnore
-    public Pattern sessionLostRegexPattern;
-
-    static Config defaults() {
-        Config cfg = new Config();
-        cfg.apiBaseUrl = "http://127.0.0.1:7575";
-        cfg.authenticationUrl = "";
-        cfg.headless = false;
-        cfg.browserProxy = "";
-        cfg.steps = new ArrayList<>();
-        cfg.mtlsEnabled = false;
-        cfg.mtlsHostname = "";
-        cfg.mtlsPin = "";
-        cfg.mtlsCertCn = "";
-        cfg.pythonExecutable = "";
-        cfg.apiInstallProxy = "";
-
-        cfg.authenticationServerUrlSubstring = "/protocol/openid-connect/token";
-        cfg.tokenParsingMode = "json_path";
-        cfg.tokenJsonPath = "access_token";
-        cfg.tokenCookieName = "";
-        cfg.refreshFrequencySeconds = 1800;
-        cfg.refreshSkewSeconds = 10;
-        cfg.navTimeoutMs = 30000;
-        cfg.waitTokenTimeoutMs = 3000;
-        cfg.autoSessionRecovery = true;
-
-        cfg.sessionLostMode = "status_code";
-        cfg.sessionLostStatusCode = 401;
-        cfg.sessionLostRegex = "";
-        cfg.lastConfigDir = "";
-        cfg.requestHandlingMode = "burp_scope";
-        cfg.singleUrlPrefix = "";
-
-        cfg.scopeTools = new ArrayList<>();
-        cfg.scopeTools.add(ToolType.SCANNER.name());
-        cfg.scopeTools.add(ToolType.PROXY.name());
-        cfg.scopeTools.add(ToolType.REPEATER.name());
-        cfg.scopeTools.add(ToolType.EXTENSIONS.name());
-        cfg.scopeTools.add(ToolType.INTRUDER.name());
-        cfg.scopeToolSet.add(ToolType.SCANNER);
-        cfg.scopeToolSet.add(ToolType.PROXY);
-        cfg.scopeToolSet.add(ToolType.REPEATER);
-        cfg.scopeToolSet.add(ToolType.EXTENSIONS);
-        cfg.scopeToolSet.add(ToolType.INTRUDER);
-        return cfg;
-    }
-}
-
-final class AuthStep {
-    public String type;
-    public String selector;
-    public String value;
-    public String pin;
-    @JsonProperty("cert_cn")
-    public String certCn;
-
-    AuthStep() {
+        /**
+         * Compares a candidate with the fixed supported wire spelling rather than applying a fallback.
+         *
+         * @param value Candidate native discriminator.
+         * @return Whether it exactly names this ordinary URL mode.
+         */
+        public boolean matches(String value) { return wire.equals(value); }
     }
 
-    AuthStep(String type, String selector, String value) {
-        this.type = type;
-        this.selector = selector;
-        this.value = value;
-        this.pin = "";
-        this.certCn = "";
+    /** Names the supported native extraction discriminators. */
+    public enum ExtractionType {
+        JSON_PATH("json_path"), REGEX("regex"), COOKIE("cookie"), COMBINED("combined");
+
+        private final String wire;
+
+        /**
+         * Binds a supported extraction kind to its exact native discriminator without migration coercion.
+         *
+         * @param wire Fixed native extraction discriminator; no migration or coercion is performed.
+         */
+        ExtractionType(String wire) { this.wire = wire; }
+
+        /**
+         * Returns exact JSON-response or cookie extraction wire spelling.
+         *
+         * @return Exact JSON-response or cookie extraction wire spelling.
+         */
+        public String wire() { return wire; }
+
+        /**
+         * Compares a candidate with the fixed supported wire spelling rather than applying a fallback.
+         *
+         * @param value Candidate native extraction discriminator.
+         * @return Whether the exact supported spelling matches.
+         */
+        public boolean matches(String value) { return wire.equals(value); }
     }
 
-    AuthStep(String type, String selector, String value, String pin, String certCn) {
-        this.type = type;
-        this.selector = selector;
-        this.value = value;
-        this.pin = pin;
-        this.certCn = certCn;
+    /**
+     * Selects an ordinary-injection journey by scoped UUID without an implicit fallback.
+     *
+     * @param scope Project or library ownership boundary.
+     * @param id Stable journey UUID; existence/availability is checked by the registry.
+     */
+    public record JourneySelection(JourneyDefinition.Scope scope, java.util.UUID id) {}
+    /**
+     * One ordered automatic-authentication rule; later matching rules overwrite earlier destinations.
+     * @param enabled Whether this rule participates without removing its configuration.
+     * @param journey Explicit saved scoped identity.
+     * @param urlMode URL eligibility for this rule.
+     * @param urlPrefix Absolute HTTP(S) prefix for SINGLE_URL only.
+     * @param recovery Response-based expiration detection attributed to this rule's used token version.
+     */
+    public record AutomaticRule(boolean enabled, JourneySelection journey, UrlMode urlMode,
+                                java.net.URI urlPrefix, JourneyDefinition.Recovery recovery) {}
+
+    /**
+     * Immutable ordered rules, eligible tools and shared finite authentication budgets.
+     * @param enabled Master automatic-injection switch; explicit tags remain independent.
+     * @param rules User-ordered automatic rules, including disabled rows.
+     * @param tools Eligible Burp tools.
+     * @param requestWaitTimeoutMs One request deadline across all matching journeys.
+     * @param attemptTimeoutMs Per-attempt budget.
+     * @param cycleTimeoutMs Per-journey cycle budget.
+     * @param maxWaitingRequestsGlobal Global waiter limit, null for Unlimited.
+     * @param maxWaitingRequestsPerJourney Per-journey waiter limit, null for Unlimited.
+     */
+    public record Controls(boolean enabled, List<AutomaticRule> rules, List<ToolType> tools, int requestWaitTimeoutMs,
+                           int attemptTimeoutMs, int cycleTimeoutMs, Integer maxWaitingRequestsGlobal,
+                           Integer maxWaitingRequestsPerJourney) {
+        /**
+         * Copies the eligible tool list so later editor changes cannot mutate published controls.
+         */
+        public Controls { rules = List.copyOf(rules); tools = List.copyOf(tools); }
+        /**
+         * Creates native controls with ordinary injection off and no selected journey.
+         *
+         * @return Default supported tools, Burp scope, finite deadlines and both waiter limits Unlimited.
+         */
+        public static Controls defaults() {
+            return new Controls(false, List.of(), SUPPORTED_TOOLS,
+                    60_000, 60_000, 300_000, null, null);
+        }
     }
+
 }

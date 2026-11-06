@@ -1,128 +1,171 @@
 # Browser Powered Session Handler
 
-This project provides a Burp Montoya extension (`bapp`) and a Python token service (`api`) to automate authentication.
+A Burp Suite extension that runs browser authentication journeys and reuses their
+tokens and cookies in HTTP requests. Authentication, caching and request tags are
+owned by the Java extension. One universal JAR includes Playwright, Chromium and
+its driver; there is no Python service or Hackvertor dependency.
 
-## What this extension does
+This branch contains the native development build for Windows x64, Linux x64 and
+Intel macOS. Apple Silicon and other ARM systems are not supported. See the
+[validation record](docs/implementation/universal-packaging-validation.md) for
+the exact build and tested environments; native macOS testing remains outstanding.
 
-The extension keeps authenticated requests working in Burp by obtaining tokens through a real browser, then injecting the token into outgoing requests (header or cookie mode).
-The external browser is called through an HTTP API, embedded with the extension, configurable in the API tab. It has a dual cache system (one cache local to the extension, one to the API) to limit how much this browser is called.
+## Install
 
-In practice:
+1. Use Burp with Java 21 or newer and the Montoya 2026.4 request-drop and Proxy
+   action capabilities. Burp 2026.10.1 has been used for interactive checks.
+2. Build or obtain `bapp/build/libs/browser-powered-session-handler-dev.jar`
+   (about 740 MB). See the validation record for the tested Burp launcher and
+   memory settings.
+3. In Burp, open **Extensions → Installed → Add**, select **Java**, and choose that JAR.
+4. Open the **Browser Powered Session Handler** tab.
 
-- It can launch an automated login journey (redirects, forms, waits, clicks).
-- It can refresh tokens on a schedule.
-- It can detect session loss and recover automatically (if enabled).
-- It keeps cache layers to avoid unnecessary re-logins, so that the external browser is not launched too many times 
+On first authentication, bundled browser files are verified and extracted to
+`user.home/.bpsh/cache`. Later runs reuse that cache. Runtime setup does not
+download a browser or require a separate Java or Node installation.
+Only the current system's files are extracted. First use requires additional
+temporary disk space; old version caches are retained for rollback. Linux needs
+Chromium's system libraries, and visible browsers need a desktop session. The
+[developer instructions](bapp/README.md) list these prerequisites and disk usage.
 
-The extension was only tested on Windows (sorry).
+PKCS#11 authentication additionally requires your token vendor's middleware.
+[Developer build instructions](bapp/README.md) describe preparation and packaging.
 
-## Why browser-based auth instead of regex token extraction
+## Create an authentication journey
 
-Traditional regex-based strategies often assume a simple, stable authentication response (for example: the user sends it's usernames/password and gets a cookie). That works for basic setups, but breaks more easily in modern enterprise auth.
+Choose **Project** or **User** above the journey list, then use **+** to create a
+journey. Project journeys belong to the Burp project; User journeys are shared
+through your local user library.
 
-Browser-based orchestration is usually more robust for complex flows:
+Configure the wizard:
 
-- Handles multi-step redirects (SSO, IdP, external login pages).
-- Works with JavaScript-heavy login pages where token retrieval is not a single direct API response.
-- More resilient when authentication internals change but user-facing login still works.
+1. **Setup:** name, login URL, browser visibility and optional proxy URL.
+2. **Login steps:** add browser actions with **+**, then configure their inputs.
+3. **Token:** choose JSON response, regex or cookie capture. Several outputs can
+   be captured together; give each a token name when there is more than one.
+4. **Client certificate:** configure PKCS#11 if the login needs it.
+5. **Test & use:** test authentication, inspect its result and use the journey in requests.
 
-This is especially useful in complex environments where authentication is distributed across several domains, identity providers, and intermediate pages.
+Each journey remembers its last displayed step for the current extension session.
+Switching Project/User tabs also returns to the last journey opened there.
+
+The request-tag alias is derived from the journey name: **Employee login**
+becomes `<@employee-login/>`. Renaming a journey updates its alias when saved;
+update existing request tags afterward. The preview shows the actual tag.
+Conflicting aliases must be repaired before the journeys can execute.
+
+**Save** or **Ctrl+S** can retain unfinished settings. **Test login** saves edits
+and reports any configuration error before starting authentication.
+**Remember secrets** stores PINs and secure step inputs as readable local data.
+Leave it off to keep those values for the current extension session.
+
+## Use request tags
+
+In an editable request, right-click **Add authentication token**, then choose a
+journey, a named output when needed, and its encoding.
+
+A single-output journey:
+
+```http
+Authorization: Bearer <@employee-login/>
+```
+
+Several outputs from one journey:
+
+```http
+Authorization: Bearer <@employee-login token="access"/>
+Cookie: session=<@employee-login token="session"/>
+```
+
+Tags can appear in headers, text bodies, URL paths and query parameters. Values
+are raw by default; use a wrapper where encoding is required:
+
+| Wrapper | Result |
+| --- | --- |
+| `<@url><@employee-login/></@url>` | URL-component encoding |
+| `<@form><@employee-login/></@form>` | Form encoding |
+| `<@json><@employee-login/></@json>` | JSON string content, without surrounding quotes |
+
+Tags are processed regardless of Session handling's enable switch, selected
+tools or URL scope. A request containing explicit tags uses those tags instead
+of automatic injection. A tag failure stops the request and logs corrective
+guidance. There is no tag namespace prefix or separate custom-tag installation.
 
 ## Session handling
 
-0. If not done yet, install and start the API from the "API" tab.
-1. Browser orchestration: enter the login URL and record the steps.
-2. Token configuration: indicate where the token appears when authenticating.
-3. Session lost detection: choose how and wether logout is detected.
-4. Scope: self explanatory I guess.
-5. Ensure the extension is set to "Enabled"
+Enable **Session handling** to add credentials automatically to matching
+requests. Add saved journeys to the ordered list and set each rule's URL scope
+and session-expiration detection. Matching journeys run from top to bottom,
+reusing valid cached sessions. The last matching value wins when destinations
+overlap.
 
-From now, your session will be automatically recovered.
+For each JSON or regex output, choose Disabled, Bearer, Header or Cookie as its
+injection destination. Captured cookies use their original cookie names.
+All required journeys must succeed before credentials are applied. If ordinary
+automatic authentication fails, the original request goes through with a warning.
 
-https://github.com/user-attachments/assets/fe23272d-009b-4c04-b911-793919bbac27
+Expiration detection can use an HTTP status, a response-text RE2 expression, or
+either condition. In the current implementation it invalidates the affected
+cache for subsequent requests; it does not replay an application request.
 
-## Caches overview
+Valid Session handling and waiting-limit edits save automatically. **Settings**
+contains request/login timeouts and optional global/per-journey waiting limits.
+Durations are in seconds, including fractional seconds. Waiting limits default
+to Unlimited.
 
-There are two cache systems:
+## Journey cache and event log
 
-- Local cache (inside Burp): keeps a recently fetched token so Burp does not call the API for every request.
-- API cache (inside the token service): keeps tokens on the API side and can refresh them over time. The API launches the browser authentication journey if the token is expired, or if the session has been detected as lost.
+Each journey has its own credential cache. **Journey cache**, beside **Event log**,
+shows usable cached tokens/cookies and their cache lifetime without starting a
+login. Right-click a row for **Copy name** or **Copy value**.
 
-### How they work together
+**Event log** shows the selected journey's timestamped authentication and
+configuration events. Filter by severity or search messages for the full
+explanation of a failure. Event history is kept in memory for the extension
+session; credential values, PINs and response bodies are excluded.
 
-- Burp checks its local cache first.
-- If local cache is empty or expired, Burp asks the API for a token.
-- The API returns a cached token when possible, or runs the browser flow to fetch a new one.
+Use the cache-clear action in Test & use to invalidate the selected journey.
+**Cancel authentication** stops its shared login and releases waiting requests;
+it keeps credentials that are still usable.
 
-### When to clear which cache
+## Proxy and PKCS#11
 
-- Use `Empty local token cache` when Burp keeps using an old token.
-- Use `Empty API cache` when the token service should forget all stored tokens.
+An optional explicit HTTP proxy URL can point at a Burp listener. Empty means
+direct. Configured proxy authentication is unsupported; use a listener that
+does not require credentials. A configured proxy failure does not fall back
+to a direct connection.
 
-## Creating self-refreshing tokens tags
+For a client-certificate journey, select the middleware file. Connected initialized
+tokens are discovered without a PIN. A sole device is selected automatically;
+if several are available, choose a named device from the inline dropdown. The
+PIN, Choose certificate and advanced settings then appear. Certificate details
+appear only after a certificate is chosen. The device identifier is saved automatically; there are
+no manual slot fields. The HTTPS Login URL's server is included
+automatically. Advanced settings contain additional authentication servers and
+an optional Trusted CA file. An HTTP Login URL needs an explicitly configured
+HTTPS authentication server. Certificates
+with identical subjects are distinguished by their fingerprints. Java uses the
+vendor middleware through PKCS#11; only these journeys create the local TLS
+proxy. A Firefox certificate profile is not needed. PKCS#12 is outside the
+current scope.
 
-Hackvertor is another Burp extension that allows creating custom tags, and it has strong synergy with Browser Powered Session Handler.
+## Storage and transfer
 
-You can create Hackvertor tags that act as auto-refreshing tokens for each user you want to test data segregation with.
+Use the journey **…** menu to import, export or delete selected journeys.
+Ctrl/Shift selects several journeys. Import accepts multiple files and previews
+the selected entries before writing them.
 
-for example, if you have user 1, user 2, and user admin, you can create the following Hackvertor tags:
+The native project key is `bpsh_project_v3`. The User library is
+`user.home/.bpsh/library-v3.json`. Native exports include secrets only when
+explicitly selected; cached credentials, browser state and private keys are
+excluded.
 
-`<@_jwt_user_1/>`, `<@_jwt_user_2/>` `<@_jwt_admin/>`
+## Development status
 
-Each custom tag will be replaced with the right user-specific token automatically in your requests.
+See [build and architecture guidance](bapp/README.md) and
+[implementation evidence](docs/implementation/ux-test-matrix.md).
 
-Using self-refreshing tags to assess a protected endpoint:
-
-https://github.com/user-attachments/assets/152cab10-5efd-46c0-98f3-a121b7b8f0eb
-
-### How to create a tag
-
-1. Install Hackvertor.
-2. Configure your authentication in Browser Powered Session Handler.
-3. Click `Copy hackvertor tag`.
-4. In Burp top menu, click `Hackvertor`.
-5. Click `Create custom tag`.
-6. Set `Tag name`
-7. Select language `Python`.
-8. Paste the copied code in the code box.
-9. Press `Create tag`
-
-The tag can now be used anywhere as an auto-refreshing token, with tag <@_\<TAGNAME\>/>.
-
-https://github.com/user-attachments/assets/4a9261f0-f063-48e6-b7d8-588d7288eb59
-
-An execution key is also necessary for those tags. See Hackvertor wiki for more informations.
-
-### Using those tags
-
-With a normal setup, you need to authenticate as each user, and when tokens expire, do it again.
-
-If you use these tags instead, Browser Powered Session Handler will automatically authenticate each user for you through the API-backed tag replacement flow.
-
-Those tags can be used, for example, with Authmatrix, and instead of manually providing the tokens, you provide those tags, and never have to worry about re-authenticating with each of your users every X minutes.
-
-For segregation testing with many users/roles, the time gained is enormous.
-
-## API endpoints
-
-- `GET /health` - health check
-- `POST /config` - update token configuration
-- `POST /token` - fetch token using the current auth flow
-- `GET /cache` - show tokens currently stored in API cache (beware if you somehow start the API on something else than your localhost)
-- `GET /invalidate` - clear API cache
-
-## PKCS#11 authentication (beta)
-
-The PKCS#11 flow is currently **very untested** and should be treated as experimental.
-
-Current setup expectations:
-
-1. The embedded Firefox used by Playwright is installed under `.\api\browsers`.
-2. You must configure Firefox manually with the correct PKCS#11 module (your vendor DLL).
-3. For now, the easiest way is:
-   - Start an authentication flow with at least one waiting step (for example `wait_time`) so the browser stays open.
-   - While the browser is open, configure PKCS#11 manually in Firefox.
-   - Then continue/retry the authentication flow.
-
-Reference for PKCS#11 setup:
-- https://developer.mozilla.org/fr/docs/Mozilla/Add-ons/WebExtensions/API/pkcs11
+The broader authentication lab, acceptance matrix and stress suite are owned by
+the separate `test-suite` worktree. Those results must be integrated before
+claiming the complete acceptance plan is finished. No release or non-Windows
+acceptance is implied by the development build.

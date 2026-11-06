@@ -1,3 +1,5 @@
+import java.util.jar.JarFile
+
 plugins {
     id("java")
 }
@@ -7,9 +9,21 @@ repositories {
 }
 
 dependencies {
-    compileOnly("net.portswigger.burp.extensions:montoya-api:2025.11")
+    compileOnly("net.portswigger.burp.extensions:montoya-api:2026.4")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
-    implementation("org.commonmark:commonmark:0.22.0")
+    implementation("com.microsoft.playwright:playwright:1.64.0")
+    implementation("io.github.littleproxy:littleproxy:2.9.1")
+    implementation("com.google.re2j:re2j:1.8")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.86")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+    implementation("org.bouncycastle:bcutil-jdk18on:1.86")
+    implementation("org.apache.commons:commons-compress:1.28.0")
+    implementation("net.java.dev.jna:jna:5.19.1")
+
+    testImplementation("net.portswigger.burp.extensions:montoya-api:2026.4")
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -18,8 +32,124 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
-tasks.named<Jar>("jar") {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(configurations.runtimeClasspath.get().filter { it.isDirectory })
-    from(configurations.runtimeClasspath.get().filterNot { it.isDirectory }.map { zipTree(it) })
+dependencyLocking {
+    lockAllConfigurations()
 }
+
+val integrationClassNames = listOf("BrowserJourneyIntegrationTest", "Pkcs11JourneyIntegrationTest")
+/**
+ * Rejects missing browser/native test classes before explicit integration runs can report NO-SOURCE.
+ *
+ * Default unit tests deliberately do not depend on this verifier or browser asset preparation.
+ */
+val verifyIntegrationTestClasses by tasks.registering {
+    group = "verification"
+    dependsOn(tasks.testClasses)
+    doLast {
+        integrationClassNames.forEach { name ->
+            check(sourceSets.test.get().output.classesDirs.files.any { it.resolve("$name.class").isFile }) {
+                "Required integration test class $name was not compiled."
+            }
+        }
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
+
+tasks.test {
+    filter {
+        integrationClassNames.forEach { excludeTestsMatching("$it*") }
+    }
+}
+
+/** Verifies native source documentation, including private implementation helpers, without browser/native startup. */
+tasks.register<Javadoc>("verifyNativeDocumentation") {
+    group = "verification"
+    description = "Validate native Java comments with private-member Javadoc doclint."
+    dependsOn(tasks.classes)
+    source = sourceSets.main.get().allJava
+    classpath = sourceSets.main.get().compileClasspath + sourceSets.main.get().output
+    destinationDir = layout.buildDirectory.dir("docs/native").get().asFile
+    (options as org.gradle.external.javadoc.StandardJavadocDocletOptions).apply {
+        memberLevel = org.gradle.external.javadoc.JavadocMemberLevel.PRIVATE
+        addBooleanOption("Xdoclint:all,-missing", true)
+        encoding = "UTF-8"
+    }
+    isFailOnError = true
+}
+
+/**
+ * Creates an explicit JUnit task with prepared assets and fail-closed discovery checks.
+ *
+ * Both a missing compiled test tree and zero/all-skipped suites fail. Runtime classpaths include
+ * Montoya for boundary doubles and generated assets only here; test dependencies stay out of jar.
+ *
+ * @param taskName Gradle verification task name.
+ * @param className Required integration test class-name prefix.
+ * @return Registered Test task provider with its own inclusion filter.
+ */
+fun registerIntegrationTest(taskName: String, className: String) = tasks.register<Test>(taskName) {
+    group = "verification"
+    description = "Run $className with its required browser/native fixtures."
+    dependsOn(verifyIntegrationTestClasses)
+    val external = providers.gradleProperty("packagedJar").orNull
+    val candidate = if (external == null) files(tasks.named<Jar>("jar").flatMap { it.archiveFile }) else files(file(external))
+    if (external == null) dependsOn(tasks.jar)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    val testOnly = configurations.testRuntimeClasspath.get() - configurations.runtimeClasspath.get()
+    classpath = sourceSets.test.get().output + candidate + testOnly
+    inputs.files(candidate)
+    outputs.upToDateWhen { false }
+    doFirst {
+        val artifact = candidate.singleFile.canonicalFile
+        check(artifact.isFile) { "The selected packagedJar must be an existing JAR." }
+        JarFile(artifact).use { jar ->
+            check(jar.getEntry("BrowserRuntimeManager.class") != null) { "The selected JAR is not the extension artifact." }
+        }
+        systemProperty("bpsh.packagedJar", artifact.absolutePath)
+        systemProperty("bpsh.probeClasspath", classpath.asPath)
+        systemProperty("bpsh.probeResultsDir", layout.buildDirectory.dir("reports/bpsh-runtime").get().asFile.absolutePath)
+        if (taskName == "browserIntegrationTest") providers.gradleProperty("oldPackagedJar").orNull?.let { old ->
+            val previous = file(old).canonicalFile
+            check(previous.isFile) { "oldPackagedJar must exist; omit it when no compatible previous artifact is available." }
+            systemProperty("bpsh.oldPackagedJar", previous.absolutePath)
+        }
+    }
+    filter {
+        includeTestsMatching("$className*")
+        isFailOnNoMatchingTests = true
+    }
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) {}
+        override fun beforeTest(testDescriptor: TestDescriptor) {}
+        override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {}
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+            if (suite.parent == null) {
+                logger.lifecycle("$taskName: ${result.testCount} discovered, ${result.skippedTestCount} skipped, ${result.failedTestCount} failed")
+                check(result.testCount > 0 && result.skippedTestCount < result.testCount) {
+                    "Required integration suite discovered no executable tests."
+                }
+            }
+        }
+    })
+}
+
+registerIntegrationTest("browserIntegrationTest", "BrowserJourneyIntegrationTest")
+registerIntegrationTest("pkcs11IntegrationTest", "Pkcs11JourneyIntegrationTest")
+
+
+// Native tests run in their own JVM with an explicitly selected disposable SoftHSM store.
+tasks.named<Test>("pkcs11IntegrationTest") {
+    doFirst {
+        val fixture = providers.gradleProperty("pkcs11Fixture").orNull
+            ?: error("Create a fresh fixture with test/pkcs11_fixture.py and supply -Ppkcs11Fixture=<fixture.json>; no user token store is used.")
+        val manifest = file(fixture).canonicalFile
+        check(manifest.isFile) { "The explicit disposable PKCS#11 fixture manifest is missing." }
+        environment("BPSH_PKCS11_FIXTURE", manifest.absolutePath)
+        environment("SOFTHSM2_CONF", manifest.parentFile.resolve("softhsm2.conf").absolutePath)
+    }
+}
+
+apply(from = "gradle/browser-assets.gradle.kts")

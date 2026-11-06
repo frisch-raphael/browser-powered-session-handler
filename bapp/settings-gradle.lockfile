@@ -1,0 +1,12 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+com.fasterxml.jackson.core:jackson-annotations:2.17.1=classpath
+com.fasterxml.jackson.core:jackson-core:2.17.1=classpath
+com.fasterxml.jackson.core:jackson-databind:2.17.1=classpath
+com.fasterxml.jackson:jackson-bom:2.17.1=classpath
+commons-codec:commons-codec:1.19.0=classpath
+commons-io:commons-io:2.20.0=classpath
+org.apache.commons:commons-compress:1.28.0=classpath
+org.apache.commons:commons-lang3:3.18.0=classpath
+empty=

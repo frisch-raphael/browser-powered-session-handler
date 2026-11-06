@@ -1,0 +1,546 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bpsh:browser-assets:v1",
+  "title": "BPSH source lock and bundled manifest v1",
+  "$comment": "Producer/runtime additionally enforce source and output uniqueness, path collisions, selectors, overflow-safe sums, link safety and digest verification. Schemas never substitute guessed release hashes.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "formatVersion": {
+          "const": 1
+        },
+        "playwrightJavaVersion": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "enum": [
+                  "windows-x64",
+                  "linux-x64",
+                  "macos-x64"
+                ]
+              },
+              "browserName": {
+                "const": "chromium"
+              },
+              "browserVersion": {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              "browserRevision": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "driverPackageVersion": {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              "nodeVersion": {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              "browserRoot": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+              },
+              "browserExecutable": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+              },
+              "nodeExecutable": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+              },
+              "driverEntryPoint": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+              },
+              "helpers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "pattern": "^[0-9]+$"
+                    },
+                    "path": {
+                      "type": "string",
+                      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                      "maxLength": 4096,
+                      "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "revision",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    "source": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "https"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri",
+                              "pattern": "^https://",
+                              "$comment": "No userinfo."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "maven"
+                            },
+                            "coordinates": {
+                              "type": "string",
+                              "pattern": "^[^:]+:[^:]+:[^:]+$"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "coordinates"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "bytes": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "copies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                                "maxLength": 4096,
+                                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+                              },
+                              {
+                                "const": ""
+                              }
+                            ]
+                          },
+                          "to": {
+                            "type": "string",
+                            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                            "maxLength": 4096,
+                            "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "revision",
+                    "source",
+                    "sha256",
+                    "bytes",
+                    "copies"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "platform",
+              "browserName",
+              "browserVersion",
+              "browserRevision",
+              "driverPackageVersion",
+              "nodeVersion",
+              "browserRoot",
+              "browserExecutable",
+              "nodeExecutable",
+              "driverEntryPoint",
+              "helpers",
+              "sources"
+            ],
+            "additionalProperties": false
+          },
+          "uniqueItems": true,
+          "minItems": 3,
+          "maxItems": 3,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "platform": {
+                    "const": "windows-x64"
+                  }
+                },
+                "required": [
+                  "platform"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "platform": {
+                    "const": "linux-x64"
+                  }
+                },
+                "required": [
+                  "platform"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "properties": {
+                  "platform": {
+                    "const": "macos-x64"
+                  }
+                },
+                "required": [
+                  "platform"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "formatVersion",
+        "playwrightJavaVersion",
+        "platforms"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "formatVersion": {
+          "const": 1
+        },
+        "platform": {
+          "enum": [
+            "windows-x64",
+            "linux-x64",
+            "macos-x64"
+          ]
+        },
+        "playwrightJavaVersion": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "browserName": {
+          "const": "chromium"
+        },
+        "browserVersion": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "browserRevision": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "driverPackageVersion": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "nodeVersion": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "browserRoot": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096,
+          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+        },
+        "browserExecutable": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096,
+          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+        },
+        "nodeExecutable": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096,
+          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+        },
+        "driverEntryPoint": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096,
+          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+        },
+        "helpers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              "revision": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+              }
+            },
+            "required": [
+              "name",
+              "revision",
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "archive": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "enum": [
+                "META-INF/bpsh/windows-x64/browser-assets.zip",
+                "META-INF/bpsh/linux-x64/browser-assets.zip",
+                "META-INF/bpsh/macos-x64/browser-assets.zip"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483648
+            }
+          },
+          "required": [
+            "resource",
+            "sha256",
+            "bytes"
+          ],
+          "additionalProperties": false
+        },
+        "unpackedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967296
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                    "maxLength": 4096,
+                    "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+                  },
+                  "type": {
+                    "const": "file"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1073741824
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "executable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "path",
+                  "type",
+                  "bytes",
+                  "sha256",
+                  "executable"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                    "maxLength": 4096,
+                    "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
+                  },
+                  "type": {
+                    "const": "symlink"
+                  },
+                  "target": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "$comment": "Relative; bounded resolution stays inside declared tree, exists, no cycles, <=16 hops."
+                  }
+                },
+                "required": [
+                  "path",
+                  "type",
+                  "target"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "maxItems": 100000
+        }
+      },
+      "required": [
+        "formatVersion",
+        "platform",
+        "playwrightJavaVersion",
+        "browserName",
+        "browserVersion",
+        "browserRevision",
+        "driverPackageVersion",
+        "nodeVersion",
+        "browserRoot",
+        "browserExecutable",
+        "nodeExecutable",
+        "driverEntryPoint",
+        "helpers",
+        "archive",
+        "unpackedBytes",
+        "entries"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "platform": {
+                "const": "windows-x64"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "archive": {
+                "properties": {
+                  "resource": {
+                    "const": "META-INF/bpsh/windows-x64/browser-assets.zip"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "platform": {
+                "const": "linux-x64"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "archive": {
+                "properties": {
+                  "resource": {
+                    "const": "META-INF/bpsh/linux-x64/browser-assets.zip"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "platform": {
+                "const": "macos-x64"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "archive": {
+                "properties": {
+                  "resource": {
+                    "const": "META-INF/bpsh/macos-x64/browser-assets.zip"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

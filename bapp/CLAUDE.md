@@ -1,39 +1,41 @@
-# CLAUDE.md
+# Working on the native extension
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Read [root AGENTS.md](../AGENTS.md) before changing or testing this checkout.
+The native extension is implemented; this is not the Montoya starter template.
 
-This is a Burp Suite Extension template project using the Montoya API (currently a minimal starter project).
+## Architecture and build
 
-## Architecture
+[README.md](README.md) describes the service boundaries, build commands and
+existing verification tasks. The entry point is `src/main/java/Extension.java`.
+Java compatibility is 21. Dependencies and browser assets are pinned through
+Gradle, lock files, verification metadata and the browser source lock.
 
-- **Main Entry Point**: `src/main/java/Extension.java` - implements `BurpExtension` interface
-- **Build System**: Gradle with Kotlin DSL, Java 21 compatibility
-- **Dependencies**: Montoya API 2025.10 (compile-only), no runtime dependencies
-- **Extension Pattern**: Single-class extension that initializes through `initialize(MontoyaApi montoyaApi)` method
+The deployed runtime is the Java BApp with bundled Playwright/Chromium assets.
+Do not add a Python API fallback, Hackvertor dependency, system-browser installer
+or separate Java launcher.
 
-## Key Development Commands
+## Changes and documentation
 
-```bash
-./gradlew build    # Build and test the extension
-./gradlew jar      # Create the extension JAR file
-./gradlew clean    # Clean build artifacts
-```
+Follow [the authentication design](../docs/designs/bapp-owned-authentication.md)
+and its approved [universal packaging amendment](../docs/designs/universal-packaging.md).
+Ship one offline Chromium-only JAR for Windows x64, Linux x64 and Intel macOS;
+retain scoped manifests and previous cache identities. Do not restore per-OS
+artifacts, ARM payloads, browser downloads or Burp-browser discovery.
+[PRODUCT.md](../docs/product.md) and [DESIGN.md](../docs/designs/interface.md)
+record current interface commitments.
 
-The built JAR file will be in `build/libs/` and can be loaded directly into Burp Suite.
+Document responsibilities, ownership, lifecycle and failures, including private
+helpers, using the existing Doxide-compatible Java comments.
+Run appropriate existing checks for changed behavior; distinguish component
+results from browser/native integration and actual host acceptance.
 
-## Extension Loading in Burp
+## Coordination
 
-1. Build the JAR using `./gradlew jar`
-2. In Burp: Extensions > Installed > Add > Select the JAR file
-3. For quick reloading during development: Ctrl/⌘ + click the Loaded checkbox
+The separate `test-suite` worktree owns the broader authentication lab, full
+acceptance suite and stress work. Do not duplicate its fixtures or coverage
+matrix here. Keep changes scoped so its reuse audit can integrate the actual
+production revision.
 
-## Documentation Structure
-
-- See @docs/bapp-store-requirements.md for BApp Store submission requirements
-- See @docs/montoya-api-examples.md for code patterns and extension structure  
-- See @docs/development-best-practices.md for development guidelines
-- See @docs/resources.md for external documentation and links
-
-## Current State
-
-This is a template project with minimal functionality. The main extension class currently only sets the extension name to "My Extension" and contains a TODO for actual implementation.
+Do not report unfinished or skipped platform/provider/host checks as passing.
+Build a separate candidate while its installed JAR is loaded, then follow the
+Loaded checkbox off/on refresh procedure from root AGENTS.md.

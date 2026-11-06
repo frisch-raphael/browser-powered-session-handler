@@ -1,0 +1,13 @@
+# Generated development/runtime data
+.history/
+**/.history/
+**/__pycache__/
+*.pyc
+*.log
+api/venv/
+api/browsers/
+api/firefox-profile/
+api/firefox-profiles/
+api/wheelhouse/
+test/mock-auth-app/.venv/
+.impeccable/

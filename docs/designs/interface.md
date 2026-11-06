@@ -1,0 +1,338 @@
+# Native Burp journey editor
+
+## Authority and native system
+
+This records the author's guided-wizard choice and subsequent explicit UX
+amendments. Burp's Swing theme, fonts, semantic UIManager colors, focus and
+selection states remain authoritative. Use 10 px outer insets, 8 px major gaps,
+and 5-6 px within groups. Forms track viewport width and scroll vertically.
+Review at 1280x820 and larger windows. No browser-rendered UI or decorative palette.
+
+## Journey navigation
+
+Project and User tabs above the journey list select its collection and the
+destination for creation/import. The list shows name and alias without scope
+prefixes. Plus and ellipsis actions sit together at the bottom-left of the header,
+below the Project/User tabs and directly above the list. There is no sidebar
+heading. The maintenance menu opens below its button.
+There is no separate storage chooser. Autosave journey edits after 500 ms
+without changes. Before switching collection, selecting another journey, creating
+another journey or executing, flush the latest edits and wait for commitment.
+Plus immediately creates a persisted journey with a unique default name. Incomplete fields save and reopen literally; show configuration errors only
+when execution is requested, before browser setup. Alias collisions also remain
+editable and block execution rather than saving.
+Save activity appears only in Event log: coalesced Info creation/success, Warning
+for a temporary failure with a pending automatic retry, and Error when saving
+stops. Do not show Saving/Saved/Unsaved notices or a separate save-status widget.
+Retain stale-storage guidance when external changes require a reload.
+
+The list supports Ctrl/Shift multi-selection within the current collection. One
+selected journey opens its editor; several show a selection count and batch-action
+guidance. Background list refreshes preserve the selected set. Delete selected
+reviews the full set in one confirmation and performs one revision-checked write;
+it cancels authentication only for removed journeys and preserves unselected
+journeys and drafts. Export selected includes the whole saved selection.
+
+Import accepts several export files in one chooser. A single review table has an
+Import checkbox, journey name, source file and editable tag alias for each row,
+plus Select all/Select none and a selected count. Import only the checked rows,
+validate the complete batch before writing, and allocate fresh identities and
+session-only imported secrets. Row identity includes both its source file and
+source UUID, so matching source aliases or IDs in different files can be edited
+independently. Sorting the table must preserve those row identities.
+
+Import and Export share the last visited folder through Burp user preferences,
+including navigation followed by Cancel. The location survives extension and
+Burp restarts; middleware browsing uses its own chooser. There is no Reload
+storage command. Startup loading and user-library observation remain internal;
+Reload selected only restores a saved journey into its editor.
+
+## Wizard
+
+1. Setup: display name, login URL, background mode, optional PKCS#11,
+   optional proxy URL, Remember secrets. Its persistence explanation is a tooltip
+   on the checkbox, without a permanent paragraph below it. Advanced settings remain collapsed.
+   Browser action timeout and final capture wait are entered in seconds, including
+   exact fractional seconds, and retain milliseconds only in the saved format.
+2. Login steps: source action picker and plus; numbered stable steps with native
+   move/remove icons. Duration help belongs to the duration field's tooltip.
+   Empty sequences ask the user to add the actions needed to sign in. Explain
+   that zero steps applies only when opening the URL returns credentials without
+   further interaction. Group Interactions and Waits in the picker. Use one expanded
+   row with compact action/selector summaries for the rest; exclude entered text
+   and secrets from summaries. Adding reveals and focuses the new row.
+   Alt+Up/Down moves, Alt+Delete removes, and the Undo icon (tooltip and Alt+Backspace) restores a
+   structural edit without overwriting edits to other rows. History is bounded
+   and session-only, and its secret buffers are wiped on discard/navigation.
+   Duration uses seconds, including exact fractional seconds. Legacy unfinished
+   drafts retain their unit; executable storage remains milliseconds.
+   Browser load options have readable captions. URL waits offer Exact URL and
+   URL pattern; element waits offer Visible, Hidden, Present in page and Removed
+   from page. Legacy defaults remain compatible.
+   Enter secret always shows its masked input; missing versus explicitly empty
+   values are tracked internally without a Provide a secure value checkbox.
+3. Capture credentials: one or several JSON-response/regex/cookie sources, added with plus. Multiple
+   sources require unique user-defined token names.
+   Credential-name tooltips explain the 1-64 ASCII character format and case-insensitive
+   uniqueness. Validate names on leaving the field, then update shown errors as names
+   change, including duplicates affected by other rows. Test login and Copy token
+   reference reveal the first invalid name. Autosave retains unfinished input.
+   Each source shows only its applicable fields, captions and explanations. Source changes clear irrelevant
+   selectors. JSON path help gives a short dotted-key/array-index example; cookie
+   help describes capture and replacement of the same named cookie. Regex sources use the
+   same response-origin/path filters as JSON and expose Start regex and End regex.
+   Each response-token row owns its automatic-injection destination and shows a
+   destination-name field only for Header or Cookie. Captured-cookie rows explain
+   that automatic injection replaces their original cookie names.
+   New sources start blank. Expandable named rows separate Capture from browser
+   from Use on matching requests for JSON/regex tokens. Cookie rows omit that
+   box and its explanatory sentence. The Cookie name label and field share a tooltip
+   explaining that the captured value replaces the cookie with the same name in
+   matching requests; the Cookie source selector has no tooltip. Credential groups retain their existing structure with
+   12 px inner side/bottom padding, 12 px field spacing, 12 px below the credential
+   header and 16 px between capture and injection boxes. Optional cookie filters collapse unless saved
+   values need them. Multiple sources reveal naming guidance and focus a newly
+   required name. Existing JSON/origin tooltips remain sufficient. Cookie sources
+   use Capture URL with task-oriented help: a page where the cookie is available
+   after signing in. Avoid storage/filtering implementation details in the tooltip.
+4. Client certificate: optional page, enabled from Setup. Show only Middleware
+   file initially. After the middleware path is entered, discover devices in the
+   background without a PIN. Automatically select a sole device and display its
+   name; multiple devices use an inline native dropdown with Choose device as
+   its unselected prompt, readable names and serial numbers. A Refresh devices
+   icon beside it handles connections changing. There are no manual slot fields.
+   Reveal PIN, Choose certificate and Advanced settings only after a device is
+   selected. Choose certificate only lists that device's certificates; it never
+   discovers or selects a device. Hide the Selected certificate label and value
+   entirely until the current editor has loaded an actual selected certificate;
+   show no saved-selection placeholder instructions. Changing middleware
+   or device clears the previous certificate and PIN. Late discovery results
+   cannot update another middleware selection or journey. The HTTPS Login URL's
+   server receives the selected certificate automatically when requested. Advanced
+   settings group Additional authentication servers and the optional Trusted CA
+   file. Both fields have task-oriented tooltips; Trusted CA explains adding a PEM
+   CA file for a server certificate that is not already trusted.
+   Certificate selection leads with readable name, organization/email where
+   available, issuer and validity dates; technical identifiers are expandable.
+   Listing has a busy state; Retry appears only for an established PIN recovery
+   condition. Empty listings have inline feedback. Inspect saved certificate is
+   available only after a successful selection in the current editor, while its
+   PIN and device remain configured. Reload, PIN edits, device changes and failed
+   reads clear that availability; a saved fingerprint alone cannot restore it.
+   Explicit saved-certificate
+   inspection does not replace the pinned identity. Show only additional servers in
+   the editor; normalize the HTTPS Login URL's server into the saved allowlist.
+   Advanced settings start collapsed, including when extra servers or CA files
+   are saved. Expand them on request or to reveal a validation error.
+   HTTP Login URLs require an explicitly configured HTTPS authentication server.
+   The optional CA picker remembers its own folder.
+5. Test & use: separate Test login and Use in requests groups. Test login and
+   Clear cached credentials have visible labels. Explicit testing preserves the
+   current dock view and highlights Event log for new test activity instead of
+   opening it. Opening the log clears that journey's highlight;
+   failed actions carry their exact saved generation and stable step ID, with
+   Go to step available only while that generation remains current. Capture that
+   ends execution early explains skipped remaining steps in the log.
+   Copy BPSH tag offers named credentials and explicit encodings without
+   logging in or reading cached values. No request-tag preview is displayed.
+
+Back/Next are arrow icons and skip the disabled certificate page. There are no
+Save or Save and test controls. Test login flushes the latest edits before
+execution. Shared Cancel remains available during active authentication. Ctrl+S
+flushes or retries autosave; creation uses plus. Icon
+buttons have tooltips, accessible action names, native focus and theme colors.
+The vector family uses an 18 px canvas and consistent 1.7 px rounded stroke.
+Tabs and arrow navigation permit incomplete settings consistently. Validate on
+execution, and omit redundant numeric page progress when certificate setup is
+optional. A contextual name-edit explanation states the reference consequence.
+
+## Credentials and request insertion
+
+A login succeeds after all configured JSON/regex/cookie values have arrived. Named
+credentials share one cache publication, cancellation and earliest expiry.
+A single value uses <@employee/>; several use <@employee token="access"/>.
+Encoding wrappers are <@url>, <@form> and <@json>, without a bpsh: namespace.
+Other Hackvertor tags are the user's responsibility; all tag-like source notation
+is handled by this extension.
+
+In an editable request, Add authentication token offers saved journey aliases,
+then token names when necessary, then Raw/URL component/Form value/JSON string
+content. Insert the literal reference at the caret/selection; never copy the
+credential value. Recheck both the identity and request bytes before insertion.
+Automatic injection maps each JSON/regex token independently to Disabled, Bearer,
+a named Header, or a named Cookie. Disabled tokens remain available through tags.
+All captured cookies are written under their original names. Reject duplicate
+header destinations case-insensitively (Bearer targets Authorization) and duplicate
+cookie destinations case-sensitively, including captured cookies. A Header named
+Cookie must use the named Cookie destination instead. Cache lifetime remains shared
+under the Token cache disclosure, separate from these per-source destinations.
+
+Regex extraction reads a bounded UTF-8 response body (1 MiB), using bounded RE2
+start/end expressions (4096 UTF-8 bytes and 10,000 compiled instructions each).
+Matching spans line breaks; captures begin after the first start match and end
+before the next end match. Delimiters are excluded. Missing boundaries and empty
+captures wait for another response. Captured text uses the same normalization,
+expiry and control-character checks as JSON tokens. Response contents and token
+values never appear in diagnostics.
+
+## Conditional settings and feedback
+
+The bottom toolbar contains Event log, Journey cache and contextual action
+buttons only. Do not display authentication state, loaded/saved messages, waiting
+counts or other status/confirmation text beside them. Keep actionable failures
+in event history or inline field guidance, without introducing another permanent
+message box or Test & use result box. Event log opens a resizable
+bottom dock inspired by Burp's own event log, with Time/Type/Message columns,
+Info/Warning/Error filters, literal message search and selected-event details.
+Start the dock with its filters and actions; omit the repeated Event log/journey
+heading above them. Keep Close alongside the other dock actions.
+History follows the stable selected journey ID across configuration pages and
+alias edits. It is kept only in memory, bounded to 200 events per journey and
+4000 overall, and cleared on unload. Lifecycle events are recorded by the
+authentication coordinator so automatic logins and retries are included even
+when their journey is not currently displayed. No credential, raw response,
+request or unclassified exception is accepted as event data. Show Cancel only
+during authentication, Retry after a failed attempt, or Open certificate settings
+when the configured PIN requires attention. An open event
+dock remains open and switches to the selected journey's own history.
+Validation guidance appears beside the corresponding field, clears on editing,
+and never steals focus during background validation.
+An explicit failed Test login reveals the identified input or login step. A
+missing mTLS PIN opens Client certificate and focuses PIN once device discovery
+has made it available, unless the operator has moved away or edited the journey.
+This keeps the event dock in its current state. Credential errors identify the
+row and its valid entered name; unnamed credentials use their row number.
+Runtime failures carry optional typed input attribution from the operation that
+observed them. Known proxy, middleware, device, PIN, certificate, CA and capture
+problems reveal that control; combined capture failures retain the exact row.
+Focus waits for expanded controls to be laid out. Service, lifecycle and unknown
+failures with no identified input leave the current control alone.
+
+Journey cache sits immediately to the right of Event log. It switches the same
+bottom dock to an explicit, read-only inspector for the selected saved journey's
+usable atomic cache publication: configured token/cookie names, values, cache
+acquisition time, expiry and refresh time. Show fixed expiry and refresh timestamps
+first, followed by acquisition time, in a compact native summary. Display the day,
+month and clock time; full timestamps with year and timezone appear in plain-text
+tooltips and accessible descriptions. Times stay unchanged until a new cache
+publication is displayed. It never acquires or refreshes a token.
+Omit the repeated Journey cache/journey heading; align Close with the cache summary.
+Use the full-width table without a selected-value pane. Each row has a context
+menu with Copy name and Copy value, also available through Shift+F10. Copy name
+uses the configured token name or the actual cookie name, without the display
+alias decoration. Copy value copies the complete captured value. Clipboard
+writes occur only after that explicit action. Successful copies have no status
+confirmation; clipboard failures enter that journey's event log without names,
+values or raw exceptions.
+Event log and Journey cache are mutually exclusive views; neither appears as an
+additional permanent output area. Closed inspection, expiry, invalidation,
+unavailable/stale selection, multiple selection and unload remove displayed value
+references. Only explicitly opened inspection reads credential values; they
+remain excluded from logs, storage, exports and general diagnostic strings.
+
+Session handling contains an ordered table of automatic journeys with an On
+checkbox, saved identity, URL scope and expiration summary. Add chooses an unused
+saved Project/User journey. Move up/down changes execution and injection order;
+Remove deletes the rule only. Sorting never changes execution order. Missing
+saved identities remain visible and never fall back to another journey. Selecting
+a row edits its URL scope and session-expiration detection directly below the list.
+Potential header/cookie overrides are explained when enabled rule scopes overlap;
+the last matching rule wins. Rule rows, activation and ordering save automatically
+after a 600 ms pause. Turning off automatic handling preserves the rule list.
+Eligible HTTP tools and the master switch are shared. Session recovery is absent
+from Token and is configured per automatic rule: HTTP status, response text (RE2),
+or either condition. Waiting Settings remain separate, in seconds, and use the
+same independent debounce. Invalid edits retain the last valid applied controls.
+
+Show only Failure status and/or RE2 expression as appropriate. Clearing an option
+removes irrelevant values. Field/row errors use human captions and reveal the
+corresponding source when execution is requested. Autosave does not validate
+unfinished fields or steal focus. Errors explain the observed problem and a concrete next action; internal
+terms such as cycle budget and main-frame transport do not appear in guidance.
+
+## Draft and identity safety
+
+Remember each journey's last displayed wizard step for the extension session,
+keyed by Project/User scope and stable journey ID. Switching journeys, main tabs
+or collection tabs must not reset that step. Project/User tabs reopen their last
+selected journey; a new journey starts at Setup. Loading another definition must
+not overwrite its remembered step with the previous form's state. If a remembered
+optional page is no longer available, use the nearest preceding enabled page.
+This view state is not part of journey exports or persistent configuration.
+
+Journey name is the editable naming input. Keep its generated tag internal and
+offer explicit reference copying from Test & use. Generate lowercase ASCII aliases from
+the name, with spaces/punctuation replaced by hyphens and accents normalized.
+Every name edit regenerates the alias; saving commits that rename and existing
+request tags must be updated by the user. Opening an existing/imported journey
+or changing unrelated inputs preserves its recorded alias until the name is
+edited. Conflicting generated tags can be saved, but execution reports rename
+guidance rather than choosing an implicit owner.
+
+Only active aliases must be unique across Project and User. Deleted/renamed
+aliases are immediately reusable without a warning, reservation or reassignment
+checkbox. Existing tags resolve to the current active owner of the chosen name.
+Internal UUID/generation checks still reject obsolete in-flight work. Legacy
+retirement metadata does not reserve names and is omitted on subsequent saves.
+
+Navigation waits for the latest autosave without a Save/Discard prompt. Writes
+are serialized; edits made during a write replace pending work and cannot be
+marked saved by an older completion. Storage failures retain the editor inputs;
+transient busy failures retry twice, while conflicts and unavailable storage
+stop saving with recovery guidance in Event log. Reload selected explicitly
+replaces local edits with saved settings. Extension cleanup flushes the final
+captured edits off the EDT. New, edited, unavailable or externally stale
+definitions cannot act as a reviewed saved identity. Require Reload after external storage changes and recheck queued
+saved actions. No token, PIN or private key appears in UI diagnostics or exports.
+
+## Evidence boundaries
+
+Offscreen captures under bapp/build/ui-previews verify native layout, separately
+from actual Burp checks. Refresh an existing Burp test extension using its Loaded
+checkbox off/on as required by AGENTS.md. Certificate/middleware interaction,
+complete transfer/secret and assistive-technology acceptance, raw-request/drop
+acceptance and stress remain separately recorded gates.
+
+
+## Step-log acceptance requirements
+
+# Journey step log attribution — test-suite ownership
+
+The user explicitly assigned failed-step log verification to the `test-suite`
+worktree on 2026-11-05. The production worktree implements the behavior and runs
+focused editor/clipboard/secret/certificate checks. It does not add a second
+browser lab or claim the checks below have passed.
+
+## Behavior to verify in the owning suite
+
+The full audit follow-up also adds explicit element conditions (visible, hidden,
+attached, detached) and URL matching modes (exact, glob). Include runtime checks
+for those modes and verify old journeys without the optional fields retain
+visible-element and inferred URL matching behavior. New wait-duration drafts
+record their unit; executable durationMs remains unchanged. Test legacy draft
+reload and exact fractional seconds alongside failed-step attribution.
+
+- Cause a failure at a known non-first action for every supported step type.
+  The event must report that attempt's one-based step number and action name.
+  Initial navigation failures must remain navigation failures, without a step.
+- Verify timeout and positively reported multiple-selector-match wording.
+  Unclassified failures must retain generic factual wording. Selector strings,
+  entered values, passwords, PINs and raw browser exceptions must not enter logs.
+- Missing secure input and invalid indexed step configuration must identify the
+  owning row. Reordering must preserve its UUID and secret association.
+- Selecting the failure event offers Go to step for the exact unchanged saved
+  generation. The action reveals the correct row. It becomes unavailable after
+  edits, generation replacement, deletion or a switch to another journey.
+- Event sorting/filtering must keep Go to step attached to the selected event,
+  not its visible row number or the most recent failure from another run.
+- Explicit Test login opens Event log, flushes autosave, exposes the normal
+  shared Cancel action while running, and records its outcome. Background
+  authentication must not force the dock open.
+- When all configured credentials arrive early, remaining actions are skipped
+  under the existing completion policy and the log records the correct count.
+
+## Native integration requirements
+
+The HTTPS Login URL's exact canonical server is included in the client-certificate allowlist. Additional authentication servers and Trusted CA remain advanced settings. HTTP login URLs require an explicit HTTPS authentication server. Verify same-host/different-port isolation, explicitly allowed redirect servers and absence of certificate delivery to unrelated resources. These are acceptance requirements, not a physical-token compatibility claim.
+
+Step failure navigation uses stable step UUIDs and the exact journey generation, never parsed log text or the current visible row. Journey attribution and paused-recovery wrapping must preserve that target. Early credential completion records skipped-step metadata without executing the remaining steps.

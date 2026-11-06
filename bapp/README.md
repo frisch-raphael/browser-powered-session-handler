@@ -1,104 +1,176 @@
-# Extension Template Project
+# Native Java extension development
 
-This project was created by PortSwigger to help you quickly start developing extensions in Java.
+The extension owns browser authentication, saved journeys, credential caching,
+request tags, automatic session handling and Java PKCS#11 TLS.
+User setup and request examples are in the [project README](../README.md).
 
-## Contents
-* [Before you start](#before-you-start)
-* [Writing your extension](#writing-your-extension)
-* [Building your extension](#building-your-extension)
-* [Loading the JAR file into Burp](#loading-the-jar-file-into-burp)
-* [Sharing your extension](#sharing-your-extension)
+## Runtime and host
+
+The universal JAR runs inside Burp's Java 21+ JVM and bundles Chromium, Node and
+Playwright driver assets for Windows x64, Linux x64 and Intel macOS. It does not require a Python API,
+Hackvertor, a runtime browser download or a separate Java executable.
+Vendor PKCS#11 middleware is needed only for certificate journeys.
+
+The compiled Montoya API is 2026.4. Startup probes the required global
+request-drop and Proxy action factories before registering authentication hooks.
+Burp 2026.10.1 has been used for manual checks. ARM systems are rejected before
+cache preparation. Native macOS execution has not been tested; the Mac payload
+is structurally verified during packaging.
+
+## Build
+
+Use JDK 21 and the checked-in wrapper, dependency locks and verification metadata.
+From this directory, after dependencies and source archives are prepared:
+
+```powershell
+.\gradlew.bat classes test verifyBrowserAssetProducer verifyNativeDocumentation jar --offline --console=plain
+```
+
+The development artifact is
+`build/libs/browser-powered-session-handler-dev.jar` (about 740 MB).
+The JAR task verifies its bundled payload and rejects host/test APIs, retired
+runtime classes, duplicate entries and stale signatures.
+
+For a fresh build environment, resolve Gradle dependencies and explicitly
+prepare the locked browser sources:
+
+```powershell
+.\gradlew.bat prepareBrowserAssets --console=plain
+```
+
+The source lock is `browser-assets.lock.json`; source archives are cached under
+`build/browser-sources`. Browser source downloads can use
+`-PassetDownloadProxy=http://127.0.0.1:8080`. This build setting is independent
+of journey proxy URLs and Gradle's Maven/wrapper download settings.
+Runtime uses the verified payload embedded in the JAR.
+`prepareBrowserAssets` prepares all three targets without executing foreign
+binaries. The old `bundlePlatform` property is rejected. The producer's 17
+synthetic checks exercise the same packing functions, with no browser downloads.
+
+On Linux/macOS use `./gradlew` with the same tasks. On a prepared machine,
+`--offline` requires every locked source archive and dependency to be cached;
+missing source archives fail before a downloader can run.
+
+## Runtime prerequisites and space
+
+The JAR contains browser executables, not an operating system or Java runtime.
+Use Java 21+ in Burp. Burp's normal installer launcher allocates up to half the
+system RAM. A plain `java -jar burpsuite.jar` launch instead inherited this VM's
+Java default of 25% (1.45 GiB), which failed while Burp read the large JAR;
+an explicit 3 GiB test launch succeeded. This does not establish a 3 GiB minimum.
+See the
+[measured validation record](../docs/implementation/universal-packaging-validation.md)
+for the tested setting, disk measurements and evidence limits.
+
+Linux verification uses Ubuntu 24.04 x64. Install Chromium's shared libraries
+through the OS package manager: `libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64
+libatspi2.0-0t64 libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64
+libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1
+libxext6 libxfixes3 libxkbcommon0 libxrandr2 libgtk-3-0t64`, plus suitable fonts.
+Other distributions may use different package names. Visible browser windows
+also require a working desktop/display session. Headless login still needs the
+shared libraries. Native Windows and macOS prerequisites follow the pinned
+Chromium build; no claim is made for untested OS versions.
+
+Each target has its own embedded manifest and ZIP under
+`META-INF/bpsh/<target>/`. Only that target is read at runtime. Extraction uses
+`user.home/.bpsh/cache/<target>/<manifest digest>`; matching previous manifests
+keep their existing cache identity. Archive verification and extraction use
+temporary disk space in addition to the published cache and JAR. Published old
+caches are retained for rollback. To reclaim one, close all extension sessions
+using it and manually remove only the obsolete digest directory. There is no
+automatic published-cache eviction.
+
+## Existing verification
+
+The default `test` task runs local unit/component tests without starting a
+browser or initializing native middleware. Explicit integration tasks fail
+when required prerequisites are absent:
+
+```powershell
+.\gradlew.bat browserIntegrationTest --offline --console=plain
+.\gradlew.bat browserIntegrationTest '-PpackagedJar=C:/artifacts/browser-powered-session-handler-dev.jar' '-PoldPackagedJar=C:/artifacts/previous.jar' --offline --console=plain
+.\gradlew.bat pkcs11IntegrationTest '-Ppkcs11Fixture=build/pkcs11-fixtures/my-run/fixture.json' --offline --console=plain
+```
+
+Create a fresh owned PKCS#11 fixture using the
+[middleware fixture instructions](../test/mTLS-app/README.md).
+`verifyNativeDocumentation` checks private-member Javadoc too.
+`packagedJar` tests an already delivered artifact without preparing browser
+sources or rebuilding it. The integration JVM loads production classes and
+browser resources from that JAR, not loose main output. The browser suite
+requires fresh-home cold-start and cached-start probes with the normal
+60-second attempt budget. `oldPackagedJar` additionally runs update and rollback
+checks against a compatible previous JAR; if omitted, those checks are explicitly
+recorded as not run. Probe reports are under `build/reports/bpsh-runtime` and
+distinguish logical file bytes from physical allocation and sampled peak usage.
+
+The full authentication lab, catalog, host acceptance and stress work belongs
+to the separate `test-suite` worktree. Reuse existing assertions when integrating
+that work; do not build a parallel lab or coverage matrix here.
+See [UX evidence](../docs/implementation/ux-test-matrix.md) and the
+progress record (historical worktree record).
+Each historical checkpoint applies to its recorded build.
+The P5 scope record (historical worktree record)
+separates native documentation work from the suite's lab and acceptance work.
+
+## Refresh in Burp
+
+For an already installed extension, uncheck **Loaded** and confirm unload before
+replacing its JAR, then check **Loaded** again. Do not remove/re-add it.
+Disposable test drafts do not need preserving before a requested refresh.
+Follow [root AGENTS.md](../AGENTS.md).
+
+If Burp locks the installed JAR, build a separate candidate and replace the
+installed path only after unloading. Building, loading and manually checking
+the candidate are separate verification steps.
+
+## Architecture
+
+| Component | Responsibility |
+| --- | --- |
+| `Extension` | Capability probe, service graph, hook registration and ordered unload |
+| `UiController`, `JourneyDraft`, form panels | Swing editing, unfinished saves, execution validation and background storage |
+| `ConfigManager`, `JourneyRegistry`, `UserLibraryStore`, `SecretStore` | Native documents, scoped identities/generations, revision-checked storage and owned secret buffers |
+| `BrowserRuntimeManager`, `PlaywrightDriverAdapter` | Verified platform assets, private extraction and browser/driver lifecycle |
+| `BrowserFlowRunner`, `TokenExtractor` | Browser steps and complete JSON/regex/cookie output capture |
+| `Pkcs11IdentityManager`, `JourneyTlsProxy` | Exact certificate selection, shared PIN state and attempt-owned TLS routing |
+| `AuthenticationCoordinator`, `TokenLifetime`, `TokenSnapshot` | Coalesced acquisition, waiting limits, cancellation, expiry and refresh |
+| `NativeTagParser`, `NativeTagResolver` | Bounded grammar, encoding and atomic request-local credential replacement |
+| `AuthTrafficGuard`, `HttpSessionHandler`, `SessionRecovery` | Browser self-traffic exclusion, Burp hooks and version-specific invalidation |
+| `JourneyEventLog`, `JourneyCachePanel`, `Diagnostics` | Safe history, explicit cache inspection and corrective diagnostics |
+
+Project storage uses `bpsh_project_v3`; the User library is
+`user.home/.bpsh/library-v3.json`. Browser extraction uses
+`user.home/.bpsh/cache`. Journey authentication configuration is separate from
+project-wide ordered Session handling rules.
+
+## Development boundaries
+
+Keep browser, network, provider and filesystem work off Swing's event thread.
+Use serialized storage work and captured editor/storage generations so late
+results cannot replace newer work.
+
+Credential text belongs only in deliberate request insertion, explicitly opened
+Journey cache inspection and explicit Copy actions. Keep it out of logs, reports,
+diagnostic strings and exports. PINs and secure step inputs have separate
+session ownership and explicit remember/export choices.
+
+Follow the [authentication design](../docs/designs/bapp-owned-authentication.md)
+and subsequent author amendments. Record the tested artifact/revision and keep
+component, browser, SoftHSM and actual Burp evidence distinct.
 
 
-## Before you start
+## Journey autosave
 
-Before you begin development, make sure that your project's JDK is set to version "21".
+Journey edits save automatically after 500 ms without changes, including
+unfinished settings. Switching journeys or starting Test login flushes the latest
+edits first. Plus creates a saved journey immediately. There are no Save/Save and
+test controls or unsaved-changes prompts. Ctrl+S flushes or retries autosave.
 
-
-## Writing your extension
-
-To begin development, open the [Extension.java](src/main/java/Extension.java) file. It includes an example of setting your extension's name, which you can customize with your own logic.
-
-The template contains the following components for building your extension:
-
-* The `initialize` method. This is the entry point for your extension. It is called when the extension is loaded and receives a [montoyaApi](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html) argument, which provides access to all Montoya API features.
-* The `Extension` class. This implements the BurpExtension interface, so your extension is recognized and loaded by Burp.
-
-#### Related resources
-
-* For more information on Montoya API features, see the [JavaDoc](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html).
-* To explore example extensions, visit our [GitHub repository](https://github.com/PortSwigger/burp-extensions-montoya-api-examples).
-* For more information on creating extensions, see our [documentation](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/creating).
-* For a beginner tutorial, see [Writing your first extension](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/creating/first-extension).
-* If you have any questions or need help from the community, join our [Discord channel](https://discord.com/channels/1159124119074381945/1164175825474686996).
-
-### Vibe Coding Your Extension with AI
-
-You can use an LLM to help you write your extension. To support this, we've included a [`CLAUDE.md`](./CLAUDE.md) file and supporting [documentation](./docs) that provide essential context for the model.
-
-#### Vibe Coding with Claude Code
-
-To use this file with Claude Code:
-
-1. Open a terminal and navigate to the `ExtensionTemplateProject` folder.
-2. Run Claude Code using the following command: `claude`.
-3. Prompt Claude to create some code for your extension.
-
-Claude should automatically read the contents of the `ExtensionTemplateProject` folder, including the `CLAUDE.md` file, then create draft code for you to review. If you think it hasn't read the `CLAUDE.md` file, directly prompt it to do so before continuing.
-
-#### Vibe Coding with Other LLMs
-
-If you're using an LLM other than Claude Code, prompt the LLM to read the `CLAUDE.md` file and supporting documentation from the `docs` folder, or provide their contents as part of your context window.
-
----
-
-## Building your extension
-
-When you're ready to test and use your extension, follow these steps to build a JAR file and load it into Burp.
-
-### Building the JAR file
-
-To build the JAR file, run the following command in the root directory of this project:
-
-* For UNIX-based systems: `./gradlew jar`
-* For Windows systems: `gradlew jar`
-
-If successful, the JAR file is saved to `<project_root_directory>/build/libs/<project_name>.jar`. If the build fails, errors are shown in the console. By default, the project name is `extension-template-project`. You can change this in the [settings.gradle.kts](./settings.gradle.kts) file.
-
-
-## Loading the JAR file into Burp
-
-To load the JAR file into Burp:
-
-1. In Burp, go to **Extensions > Installed**.
-2. Click **Add**.
-3. Under **Extension details**, click **Select file**.
-4. Select the JAR file you just built, then click **Open**.
-5. [Optional] Under **Standard output** and **Standard error**, choose where to save output and error messages.
-6. Click **Next**. The extension is loaded into Burp.
-7. Review any messages displayed in the **Output** and **Errors** tabs.
-8. Click **Close**.
-
-Your extension is loaded and listed in the **Burp extensions** table. You can test its behavior and make changes to the code as necessary.
-
-### Reloading the JAR file in Burp
-
-If you make changes to the code, you must rebuild the JAR file and reload your extension in Burp for the changes to take effect.
-
-To rebuild the JAR file, follow the steps for [building the JAR file](#building-the-jar-file).
-
-To quickly reload your extension in Burp:
-
-1. In Burp, go to **Extensions > Installed**.
-2. Hold `Ctrl` or `⌘`, and select the **Loaded** checkbox next to your extension.
-
----
-
-## Sharing your extension
-
-Once you've built your extension, we'd love to see what you've created!
-
-Share your extension on our [PortSwigger Discord](https://discord.com/channels/1159124119074381945/1164175825474686996) #extensions channel to get feedback, showcase your work, and connect with other developers.
-Then take it to the next level by submitting your extension to the BApp store, making it available to the community of 80,000+ users worldwide.
-
-For guidance on the submission process, see [Submitting extensions to the BApp store](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/creating/bapp-store-submitting-extensions).
+Save results appear only in Event log: coalesced Info successes, Warning while a
+temporary retry is pending, and Error when saving stops. Failures retain local
+edits; revision conflicts never overwrite an external change. Reload selected
+explicitly replaces local edits with the saved version. Secure values still
+follow Remember secrets and export consent. Configuration errors are reported
+when executing the journey, before browser setup.
