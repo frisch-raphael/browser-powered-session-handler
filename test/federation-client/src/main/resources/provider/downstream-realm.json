@@ -1,0 +1,29 @@
+{
+  "realm": "authlab-downstream",
+  "enabled": true,
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 120,
+  "accessCodeLifespan": 30,
+  "ssoSessionIdleTimeout": 600,
+  "ssoSessionMaxLifespan": 600,
+  "clientSessionIdleTimeout": 90,
+  "clientSessionMaxLifespan": 600,
+  "users": [
+    {"id":"11111111-1111-4111-8111-111111111111","username":"user","firstName":"Fixture","lastName":"User","email":"user@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"pass","temporary":false}]},
+    {"id":"22222222-2222-4222-8222-222222222222","username":"user2","firstName":"Fixture","lastName":"User Two","email":"user2@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"pass2","temporary":false}]},
+    {"id":"33333333-3333-4333-8333-333333333333","username":"admin","firstName":"Fixture","lastName":"Admin","email":"admin@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"adminpass","temporary":false}]}
+  ],
+  "clients": [
+    {"clientId":"browser-client","protocol":"openid-connect","enabled":true,"publicClient":true,"standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}},
+    {"clientId":"backend-client","protocol":"openid-connect","enabled":true,"publicClient":false,"clientAuthenticatorType":"client-secret","standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}},
+    {"clientId":"cookie-verifier","protocol":"openid-connect","enabled":true,"publicClient":true,"standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}},
+    {"clientId":"wrong-client-control","protocol":"openid-connect","enabled":true,"publicClient":false,"clientAuthenticatorType":"client-secret","standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}},
+    {"clientId":"wrong-audience-client","protocol":"openid-connect","enabled":true,"publicClient":false,"clientAuthenticatorType":"client-secret","standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}},
+    {"clientId":"authlab-api","protocol":"openid-connect","enabled":true,"bearerOnly":true,"standardFlowEnabled":false,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false},
+    {"clientId":"authlab-sp","protocol":"saml","enabled":true,"redirectUris":[],"attributes":{"saml.force.post.binding":"true","saml.server.signature":"true","saml.assertion.signature":"true","saml.client.signature":"false","saml.authnstatement":"true","saml_name_id_format":"username"}}
+  ]
+}

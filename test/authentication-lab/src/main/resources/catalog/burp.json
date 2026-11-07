@@ -1,0 +1,1124 @@
+{
+  "labCatalogVersion": 1,
+  "requirements": [
+    {
+      "id": "H01.tool=scanner~mode=automatic-combined-injection",
+      "group": "H01",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "scanner"
+        },
+        {
+          "name": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "MULTI_OUTPUT",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [
+        "B",
+        "C1"
+      ],
+      "recipe": "automatic-combined-injection",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "scanner"
+        },
+        {
+          "slot": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=scanner~mode=native-tags",
+      "group": "H01",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "scanner"
+        },
+        {
+          "name": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "native-tags",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "scanner"
+        },
+        {
+          "slot": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=proxy~mode=automatic-combined-injection",
+      "group": "H01",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "proxy"
+        },
+        {
+          "name": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "MULTI_OUTPUT",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [
+        "B",
+        "C1"
+      ],
+      "recipe": "automatic-combined-injection",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "proxy"
+        },
+        {
+          "slot": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=proxy~mode=native-tags",
+      "group": "H01",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "proxy"
+        },
+        {
+          "name": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "native-tags",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "proxy"
+        },
+        {
+          "slot": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=repeater~mode=automatic-combined-injection",
+      "group": "H01",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "repeater"
+        },
+        {
+          "name": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "MULTI_OUTPUT",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [
+        "B",
+        "C1"
+      ],
+      "recipe": "automatic-combined-injection",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "repeater"
+        },
+        {
+          "slot": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=repeater~mode=native-tags",
+      "group": "H01",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "repeater"
+        },
+        {
+          "name": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "native-tags",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "repeater"
+        },
+        {
+          "slot": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=extensions~mode=automatic-combined-injection",
+      "group": "H01",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "extensions"
+        },
+        {
+          "name": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "MULTI_OUTPUT",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [
+        "B",
+        "C1"
+      ],
+      "recipe": "automatic-combined-injection",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "extensions"
+        },
+        {
+          "slot": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=extensions~mode=native-tags",
+      "group": "H01",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "extensions"
+        },
+        {
+          "name": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "native-tags",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "extensions"
+        },
+        {
+          "slot": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=intruder~mode=automatic-combined-injection",
+      "group": "H01",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "intruder"
+        },
+        {
+          "name": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "MULTI_OUTPUT",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [
+        "B",
+        "C1"
+      ],
+      "recipe": "automatic-combined-injection",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "intruder"
+        },
+        {
+          "slot": "mode",
+          "value": "automatic-combined-injection"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H01.tool=intruder~mode=native-tags",
+      "group": "H01",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [
+        {
+          "name": "tool",
+          "value": "intruder"
+        },
+        {
+          "name": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "capabilities": [
+        "PRODUCTION",
+        "INJECTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "native-tags",
+      "assignments": [
+        {
+          "slot": "tool",
+          "value": "intruder"
+        },
+        {
+          "slot": "mode",
+          "value": "native-tags"
+        }
+      ],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual host dispatch and exact target-observed output."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H02.tagged-stop",
+      "group": "H02",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "NATIVE_TAGS"
+      ],
+      "roles": [],
+      "recipe": "tagged-stop",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Zero sentinel application bytes versus actual unchanged forward and feedback."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H02.ordinary-unchanged",
+      "group": "H02",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT"
+      ],
+      "roles": [],
+      "recipe": "ordinary-unchanged",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Zero sentinel application bytes versus actual unchanged forward and feedback."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H03.successful-replay",
+      "group": "H03",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "REPLAY_PAUSE",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "successful-replay",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual one-replay delivery/visibility and no later automatic browsers while paused."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H03.rejected-replacement-pauses",
+      "group": "H03",
+      "revision": 1,
+      "contract": "REVISED",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "REPLAY_PAUSE",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "rejected-replacement-pauses",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Actual one-replay delivery/visibility and no later automatic browsers while paused."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H04.intercepted-auth-traffic",
+      "group": "H04",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "intercepted-auth-traffic",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Non-recursion, correct marker behavior and unchanged normal interception policy."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H04.mtls-through-burp",
+      "group": "H04",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "mtls-through-burp",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Non-recursion, correct marker behavior and unchanged normal interception policy."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.save",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT"
+      ],
+      "roles": [],
+      "recipe": "save",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "attempts",
+          "value": "0"
+        },
+        {
+          "fact": "outcome",
+          "value": "saved-revision-persisted-without-implicit-authentication"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources",
+        "attempts"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.test",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "test",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Saved revision/status/action semantics; coherent actual title/details/status; missing-cookie versus genuine connection-failure contrast in test/paused-test; stale-error protection in late-result; no implicit resend."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.paused-test",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "paused-test",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Saved revision/status/action semantics; coherent actual title/details/status; missing-cookie versus genuine connection-failure contrast in test/paused-test; stale-error protection in late-result; no implicit resend."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.repeated-test",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "repeated-test",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Saved revision/status/action semantics; coherent actual title/details/status; missing-cookie versus genuine connection-failure contrast in test/paused-test; stale-error protection in late-result; no implicit resend."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.dirty-editor",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT"
+      ],
+      "roles": [],
+      "recipe": "dirty-editor",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Saved revision/status/action semantics; coherent actual title/details/status; missing-cookie versus genuine connection-failure contrast in test/paused-test; stale-error protection in late-result; no implicit resend."
+        },
+        {
+          "fact": "attempts",
+          "value": "0"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources",
+        "attempts"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H05.late-result",
+      "group": "H05",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT"
+      ],
+      "roles": [],
+      "recipe": "late-result",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "Saved revision/status/action semantics; coherent actual title/details/status; missing-cookie versus genuine connection-failure contrast in test/paused-test; stale-error protection in late-result; no implicit resend."
+        },
+        {
+          "fact": "currentRevision",
+          "value": "stale-attempt-cannot-overwrite-current-display"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources",
+        "currentRevision"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H06.offline-load",
+      "group": "H06",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "offline-load",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "No lab/Python/system Node runtime dependency and complete lifecycle cleanup."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "H06.unload-reload",
+      "group": "H06",
+      "revision": 1,
+      "contract": "BASELINE",
+      "layer": "HOST",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BURP_HOST",
+        "PACKAGED_ARTIFACT",
+        "BROWSER"
+      ],
+      "roles": [],
+      "recipe": "unload-reload",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "No lab/Python/system Node runtime dependency and complete lifecycle cleanup."
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "hostCheckpoint",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    }
+  ]
+}

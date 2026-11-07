@@ -165,7 +165,8 @@ excluded.
 See [build and architecture guidance](bapp/README.md) and
 [implementation evidence](docs/implementation/ux-test-matrix.md).
 
-The broader authentication lab, acceptance matrix and stress suite are owned by
-the separate `test-suite` worktree. Those results must be integrated before
-claiming the complete acceptance plan is finished. No release or non-Windows
-acceptance is implied by the development build.
+The broader authentication lab and acceptance matrix are integrated under `test/authentication-lab`. Run the selected profiles for current evidence; host, capability and full acceptance gates remain explicit. No release or non-Windows acceptance is implied by the development build.
+
+## Authentication lab
+
+The [Java authentication lab](test/authentication-lab/README.md) provides controlled login applications, protected credential checks, production acceptance profiles and federation fixtures. Run the root Gradle `test` task for native regressions and use the guide for lab commands and prerequisites. Generated runs and reports stay under ignored build directories.

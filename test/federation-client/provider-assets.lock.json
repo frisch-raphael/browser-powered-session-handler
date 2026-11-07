@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "keycloak",
+    "version": "26.8.1",
+    "image": "quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332",
+    "platform": "linux/amd64",
+    "platformImageId": "sha256:f527e1b3c3a0501256fc8732dd3626c1059f84931c1c73cbdef0c1042dde006e",
+    "platformManifestDigest": "sha256:de6ed510b59cfcd25f129ba4118696fa10d4165eee921a8d846178b6d35d30f7"
+  },
+  "browserAdapter": {
+    "package": "keycloak-js",
+    "version": "26.2.5",
+    "url": "https://registry.npmjs.org/keycloak-js/-/keycloak-js-26.2.5.tgz",
+    "bytes": 35982,
+    "sha256": "3a60cd114f6960ba1ef8360e2ad83141909e8862fa59e22d395b4b22079b14a7",
+    "integrity": "sha512-iTR3hmYXlGZbBTskgr2PrGIfIzLrts8nwja2+D1gW6Q/S83C487rhM+WvPV9dxqXv81N0QwNG9BJAM60eDQ1Yw==",
+    "archiveEntry": "package/lib/keycloak.js",
+    "moduleType": "ESM",
+    "moduleBytes": 71792,
+    "moduleSha256": "e77ac54c8501a4e93f054e3eb8c6bb0003b127004359c17bd4a22424c8d3e24e",
+    "imports": [
+      {"archiveEntry":"package/lib/deprecations.js","file":"deprecations.js","bytes":1122,"sha256":"afaac168f913d2a38bedac7517861ae61d44f60e189bd797dc61802d6dadab2d"}
+    ]
+  }
+}

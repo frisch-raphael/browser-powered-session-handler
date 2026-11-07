@@ -105,14 +105,7 @@ checks against a compatible previous JAR; if omitted, those checks are explicitl
 recorded as not run. Probe reports are under `build/reports/bpsh-runtime` and
 distinguish logical file bytes from physical allocation and sampled peak usage.
 
-The full authentication lab, catalog, host acceptance and stress work belongs
-to the separate `test-suite` worktree. Reuse existing assertions when integrating
-that work; do not build a parallel lab or coverage matrix here.
-See [UX evidence](../docs/implementation/ux-test-matrix.md) and the
-progress record (historical worktree record).
-Each historical checkpoint applies to its recorded build.
-The P5 scope record (historical worktree record)
-separates native documentation work from the suite's lab and acceptance work.
+The authentication lab, catalog, host acceptance guide and capability gates are maintained in [the Java lab](../test/authentication-lab/README.md). Reuse its existing assertions and fixtures. [UX evidence](../docs/implementation/ux-test-matrix.md) and older checkpoints apply only to their recorded builds.
 
 ## Refresh in Burp
 
@@ -174,3 +167,7 @@ edits; revision conflicts never overwrite an external change. Reload selected
 explicitly replaces local edits with the saved version. Secure values still
 follow Remember secrets and export consent. Configuration errors are reported
 when executing the journey, before browser setup.
+
+## Authentication lab
+
+The [Java authentication lab](../test/authentication-lab/README.md) provides controlled login applications, protected credential checks, production acceptance profiles and federation fixtures. Run the root Gradle `test` task for native regressions and use the guide for lab commands and prerequisites. Generated runs and reports stay under ignored build directories.

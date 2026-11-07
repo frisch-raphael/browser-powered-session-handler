@@ -1,0 +1,1452 @@
+{
+  "labCatalogVersion": 1,
+  "requirements": [
+    {
+      "id": "TLS.proxy.direct",
+      "group": "TLS.proxy",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "FIXTURES"
+      ],
+      "roles": [],
+      "recipe": "direct",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "actual-network-route-matches-selected-transport"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.proxy.direct",
+        "executor": "JUNIT",
+        "className": "BrowserJourneyIntegrationTest",
+        "methodSignature": "actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake()",
+        "parameterKey": "TLS.proxy.direct",
+        "witnesses": [
+          {
+            "requirementId": "TLS.proxy.direct",
+            "assertionId": "TLS.proxy.direct#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java",
+            "sourceSymbol": "ordinaryDirectJourneyDoesNotReuseThePreviousProxy",
+            "inputKey": "TLS.proxy.direct"
+          },
+          {
+            "requirementId": "TLS.proxy.direct",
+            "assertionId": "TLS.proxy.direct#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.proxy.direct"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabBrowserTest",
+        "configurationHash": "6c799d6a857e5d264eee555d4dc350a4fc0060b7304752648cda9d99cf836422",
+        "xmlCaseName": "[case=TLS.proxy.direct]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.proxy.http-proxy",
+      "group": "TLS.proxy",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "FIXTURES"
+      ],
+      "roles": [],
+      "recipe": "http-proxy",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "actual-network-route-matches-selected-transport"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.proxy.http-proxy",
+        "executor": "JUNIT",
+        "className": "BrowserJourneyIntegrationTest",
+        "methodSignature": "actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake()",
+        "parameterKey": "TLS.proxy.http-proxy",
+        "witnesses": [
+          {
+            "requirementId": "TLS.proxy.http-proxy",
+            "assertionId": "TLS.proxy.http-proxy#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java",
+            "sourceSymbol": "ordinaryProxyCoversOwnedBrowserSurfaces",
+            "inputKey": "TLS.proxy.http-proxy"
+          },
+          {
+            "requirementId": "TLS.proxy.http-proxy",
+            "assertionId": "TLS.proxy.http-proxy#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.proxy.http-proxy"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabBrowserTest",
+        "configurationHash": "6c799d6a857e5d264eee555d4dc350a4fc0060b7304752648cda9d99cf836422",
+        "xmlCaseName": "[case=TLS.proxy.http-proxy]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.proxy.connect",
+      "group": "TLS.proxy",
+      "revision": 3,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "connect",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "unauthenticated-configured-tunnel-returns-expected-output-with-clean-proxy-and-origin-headers"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.proxy.connect",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials()",
+        "parameterKey": "TLS.proxy.connect",
+        "witnesses": [
+          {
+            "requirementId": "TLS.proxy.connect",
+            "assertionId": "TLS.proxy.connect#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "availableUnauthenticatedUpstream",
+            "inputKey": "TLS.proxy.connect"
+          },
+          {
+            "requirementId": "TLS.proxy.connect",
+            "assertionId": "TLS.proxy.connect#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.proxy.connect"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "[case=TLS.proxy.connect]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.proxy.proxy-unavailable",
+      "group": "TLS.proxy",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "proxy-unavailable",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "unavailable-route-returns-retryable-connection-failure-without-direct-bypass"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.proxy.proxy-unavailable",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials()",
+        "parameterKey": "TLS.proxy.proxy-unavailable",
+        "witnesses": [
+          {
+            "requirementId": "TLS.proxy.proxy-unavailable",
+            "assertionId": "TLS.proxy.proxy-unavailable#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "unavailableUnauthenticatedUpstreamNeverFallsBackToDirectOrigin",
+            "inputKey": "TLS.proxy.proxy-unavailable"
+          },
+          {
+            "requirementId": "TLS.proxy.proxy-unavailable",
+            "assertionId": "TLS.proxy.proxy-unavailable#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.proxy.proxy-unavailable"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "[case=TLS.proxy.proxy-unavailable]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.proxy.no-direct-fallback",
+      "group": "TLS.proxy",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "FIXTURES"
+      ],
+      "roles": [],
+      "recipe": "no-direct-fallback",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "failed-selected-route-never-reaches-origin-directly"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.proxy.no-direct-fallback",
+        "executor": "JUNIT",
+        "className": "BrowserJourneyIntegrationTest",
+        "methodSignature": "actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake()",
+        "parameterKey": "TLS.proxy.no-direct-fallback",
+        "witnesses": [
+          {
+            "requirementId": "TLS.proxy.no-direct-fallback",
+            "assertionId": "TLS.proxy.no-direct-fallback#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java",
+            "sourceSymbol": "unavailableOrdinaryProxyDoesNotFallBackToTheOrigin",
+            "inputKey": "TLS.proxy.no-direct-fallback"
+          },
+          {
+            "requirementId": "TLS.proxy.no-direct-fallback",
+            "assertionId": "TLS.proxy.no-direct-fallback#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.proxy.no-direct-fallback"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabBrowserTest",
+        "configurationHash": "6c799d6a857e5d264eee555d4dc350a4fc0060b7304752648cda9d99cf836422",
+        "xmlCaseName": "[case=TLS.proxy.no-direct-fallback]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.expected-fingerprint",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "expected-fingerprint",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "configured-certificate-authenticates-expected-account-with-clean-origin-headers"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.expected-fingerprint",
+            "assertionId": "TLS.mtls.expected-fingerprint#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.expected-fingerprint",
+            "assertionId": "TLS.mtls.expected-fingerprint#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.same-CN-pair",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "same-CN-pair",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "same-subject-certificates-retain-distinct-fingerprints-and-protected-identities"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.same-CN-pair",
+            "assertionId": "TLS.mtls.same-CN-pair#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.same-CN-pair",
+            "assertionId": "TLS.mtls.same-CN-pair#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.missing-certificate",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "missing-certificate",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "missing-selected-fingerprint-fails-before-browser-or-origin-use"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.missing-certificate",
+            "assertionId": "TLS.mtls.missing-certificate#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "missingSelectedFingerprintFailsBeforeBrowserLaunch",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.missing-certificate",
+            "assertionId": "TLS.mtls.missing-certificate#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.ambiguous-certificate",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "ambiguous-certificate",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "same-subject-picker-requires-explicit-fingerprint-and-cancel-preserves-selection"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.ambiguous-certificate",
+            "assertionId": "TLS.mtls.ambiguous-certificate#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.ambiguous-certificate",
+            "assertionId": "TLS.mtls.ambiguous-certificate#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.token-unavailable",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "token-unavailable",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "missing-software-module-reports-module-failure-without-another-selection-dialog"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.token-unavailable",
+            "assertionId": "TLS.mtls.token-unavailable#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.token-unavailable",
+            "assertionId": "TLS.mtls.token-unavailable#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.allowed-redirect",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "allowed-redirect",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "configured-identity-authenticates-at-each-exact-allowed-redirect-origin"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.allowed-redirect",
+            "assertionId": "TLS.mtls.allowed-redirect#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.allowed-redirect",
+            "assertionId": "TLS.mtls.allowed-redirect#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.disallowed-origin",
+      "group": "TLS.mtls",
+      "revision": 3,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "disallowed-origin",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "unlisted-origin-receives-no-client-certificate-and-returns-no-credential"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.mtls.disallowed-origin",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed()",
+        "parameterKey": "TLS.mtls.disallowed-origin",
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.disallowed-origin",
+            "assertionId": "TLS.mtls.disallowed-origin#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "unlistedOriginReceivesNoClientCertificate",
+            "inputKey": "TLS.mtls.disallowed-origin"
+          },
+          {
+            "requirementId": "TLS.mtls.disallowed-origin",
+            "assertionId": "TLS.mtls.disallowed-origin#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.mtls.disallowed-origin"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "[case=TLS.mtls.disallowed-origin]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.resource-without-mtls",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "resource-without-mtls",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "captured-bearer-authenticates-expected-account-at-non-mtls-resource"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.resource-without-mtls",
+            "assertionId": "TLS.mtls.resource-without-mtls#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.resource-without-mtls",
+            "assertionId": "TLS.mtls.resource-without-mtls#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.pool-cleanup",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "pool-cleanup",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "identity-pools-reuse-only-own-tls-sessions-and-close-owned-browser-processes"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.pool-cleanup",
+            "assertionId": "TLS.mtls.pool-cleanup#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.pool-cleanup",
+            "assertionId": "TLS.mtls.pool-cleanup#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.mtls.internal-proxy-credentials",
+      "group": "TLS.mtls",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "internal-proxy-credentials",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "owned-local-mtls-proxy-rejects-absent-wrong-and-other-attempt-credentials-before-target-contact"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:localEndpointRejectsMissingAndIncorrectAttemptCredentials",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "localEndpointRejectsMissingAndIncorrectAttemptCredentials()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.mtls.internal-proxy-credentials",
+            "assertionId": "TLS.mtls.internal-proxy-credentials#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "localEndpointRejectsMissingAndIncorrectAttemptCredentials",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.internal-proxy-credentials",
+            "assertionId": "TLS.mtls.internal-proxy-credentials#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.mtls.internal-proxy-credentials",
+            "assertionId": "TLS.mtls.internal-proxy-credentials#peerless-tls-engine-refused-before-target-contact",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "localEndpointRejectsMissingAndIncorrectAttemptCredentials",
+            "inputKey": "local-mtls-proxy"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "localEndpointRejectsMissingAndIncorrectAttemptCredentials()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.trust.untrusted-origin",
+      "group": "TLS.trust",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS"
+      ],
+      "roles": [],
+      "recipe": "untrusted-origin",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "untrusted-upstream-ca-is-rejected-before-origin-application-use"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.trust.untrusted-origin",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed()",
+        "parameterKey": "TLS.trust.untrusted-origin",
+        "witnesses": [
+          {
+            "requirementId": "TLS.trust.untrusted-origin",
+            "assertionId": "TLS.trust.untrusted-origin#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "upstreamTrustFailsBeforeOrigin",
+            "inputKey": "TLS.trust.untrusted-origin"
+          },
+          {
+            "requirementId": "TLS.trust.untrusted-origin",
+            "assertionId": "TLS.trust.untrusted-origin#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.trust.untrusted-origin"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "[case=TLS.trust.untrusted-origin]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.trust.wrong-host",
+      "group": "TLS.trust",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS"
+      ],
+      "roles": [],
+      "recipe": "wrong-host",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "wrong-upstream-certificate-hostname-is-rejected-before-origin-application-use"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:TLS.trust.wrong-host",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed()",
+        "parameterKey": "TLS.trust.wrong-host",
+        "witnesses": [
+          {
+            "requirementId": "TLS.trust.wrong-host",
+            "assertionId": "TLS.trust.wrong-host#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "upstreamTrustFailsBeforeOrigin",
+            "inputKey": "TLS.trust.wrong-host"
+          },
+          {
+            "requirementId": "TLS.trust.wrong-host",
+            "assertionId": "TLS.trust.wrong-host#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": "TLS.trust.wrong-host"
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "[case=TLS.trust.wrong-host]"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.trust.listed-proxy-key",
+      "group": "TLS.trust",
+      "revision": 2,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "listed-proxy-key",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "managed-browser-accepts-owned-local-proxy-key"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": {
+        "executionId": "production:TLS:twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+        "executor": "JUNIT",
+        "className": "Pkcs11JourneyIntegrationTest",
+        "methodSignature": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()",
+        "parameterKey": null,
+        "witnesses": [
+          {
+            "requirementId": "TLS.trust.listed-proxy-key",
+            "assertionId": "TLS.trust.listed-proxy-key#observed-route-output-or-native-rejection",
+            "sourcePath": "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java",
+            "sourceSymbol": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+            "inputKey": null
+          },
+          {
+            "requirementId": "TLS.trust.listed-proxy-key",
+            "assertionId": "TLS.trust.listed-proxy-key#actual-process-observation-and-closure",
+            "sourcePath": "test/authentication-lab/production-tests/ProductionLabAdapter.java",
+            "sourceSymbol": "finishProcessObservation",
+            "inputKey": null
+          }
+        ],
+        "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
+        "sourceHashes": {
+          "test/authentication-lab/production-tests/Pkcs11JourneyIntegrationTest.java": "0cb8af537ddb4b6eed6333359467a0866cb98d786afffcd4ae328e38afc5bff6",
+          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
+          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
+          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
+          "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
+          "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
+          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f",
+          "test/authentication-lab/src/main/java/lab/auth/TransportFixtures.java": "79ee5aad18cce18045f5c413f92d46b19a8d0feeb37782ab9738d284a5104de2",
+          "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "0dfa5c2ed15e6b09a86d8895a532f4e74b606968f98177ae3059a0610b7ad600"
+        },
+        "taskPath": ":authLabTransportTest",
+        "configurationHash": "0eb2965471e026982fa28523584abcea0063fbf21201de8d817beed6ab8093e4",
+        "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
+      },
+      "disposition": "EXTEND"
+    },
+    {
+      "id": "TLS.trust.unlisted-proxy-key",
+      "group": "TLS.trust",
+      "revision": 3,
+      "contract": "BASELINE",
+      "layer": "TRANSPORT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION",
+        "BROWSER",
+        "HTTPS",
+        "PKCS11",
+        "SOFTHSM"
+      ],
+      "roles": [],
+      "recipe": "unlisted-proxy-key",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "outcome",
+          "value": "browser-rejects-extension-owned-local-proxy-certificate-without-its-key-exception"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "outcome",
+        "completion",
+        "browserLaunch",
+        "contextClose",
+        "resources"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "EXCLUDED"
+    }
+  ]
+}

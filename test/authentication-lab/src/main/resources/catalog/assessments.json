@@ -1,0 +1,517 @@
+{
+  "labCatalogVersion": 1,
+  "requirements": [
+    {
+      "id": "CAP.assessment.totp",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "totp",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.delayed-approval",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "delayed-approval",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.webauthn",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "webauthn",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.captcha",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "captcha",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.basic",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "basic",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.digest",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "digest",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.kerberos",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "kerberos",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.ntlm",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "ntlm",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.device-flow",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "device-flow",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.client-credentials",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "client-credentials",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.refresh-grant",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "refresh-grant",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.dpop",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "dpop",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.certificate-bound-token",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "certificate-bound-token",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.idp-initiated-saml",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "idp-initiated-saml",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.websocket-opening",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "websocket-opening",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    },
+    {
+      "id": "CAP.assessment.session-loss-redirect",
+      "group": "CAP.assessment",
+      "revision": 1,
+      "contract": "ASSESSMENT",
+      "layer": "ASSESSMENT",
+      "axes": [],
+      "capabilities": [
+        "PRODUCTION"
+      ],
+      "roles": [],
+      "recipe": "session-loss-redirect",
+      "assignments": [],
+      "expected": [
+        {
+          "fact": "capability",
+          "value": "unassessed-until-explicit-evidence"
+        }
+      ],
+      "faults": [],
+      "evidence": [
+        "capability",
+        "completion"
+      ],
+      "budgetMs": {
+        "startup": 10000,
+        "case": 60000,
+        "cleanup": 30000
+      },
+      "binding": null,
+      "disposition": "MANUAL"
+    }
+  ]
+}

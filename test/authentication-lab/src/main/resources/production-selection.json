@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "additionalComponentMethods": [
+    "NativeTagPipelineTest.missingRepresentableLocationEncodingAndReferenceCombinations",
+    "NativeTagPipelineTest$ProductionHooks.ordinaryAndTaggedPolicyAcrossEveryBaselineTool",
+    "DiagnosticsTest.missingCookieNamesTheSelectedOutputWithoutClaimingAConnectionFailure",
+    "DiagnosticsTest.observedConnectionFailureKeepsItsMeaningAndOrdinaryForwardingFeedback",
+    "DiagnosticsTest.actualFailuresStayCoherentAcrossEventRowsDetailsStateAndRequestFeedback",
+    "DiagnosticsTest.combinedOutputsRetainObservedStepFailureBeforeReportingMissingCredentials",
+    "NativeTagPipelineTest.journeyTagsRetainTheirOwnLoginAcrossAccountSwitchesAndIndependentRefresh",
+    "JourneyRegistryTest$NativeUi.externalLibraryChangeCannotBeOverwrittenByAnOlderVisibleDraft",
+    "JourneyRegistryTest$NativeUi.malformedNativeProjectStaysPreservedAndVisibleInsteadOfFallingBackToOldData"
+  ],
+  "federationMethods": [
+    "FederationJourneyIntegrationTest.realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
+    "FederationJourneyIntegrationTest.realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi",
+    "FederationJourneyIntegrationTest.realSamlPostResponseProducesAUsableClientCookieWithoutInventingAnAccessToken",
+    "FederationJourneyIntegrationTest.backendRejectionProducesAnAccurateExtensionFailure",
+    "FederationJourneyIntegrationTest.brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount",
+    "FederationJourneyIntegrationTest.brokeredJourneyReturnsNoCredentialAfterUpstreamLoginRejection",
+    "FederationJourneyIntegrationTest.brokeredJourneyCancellationClosesItsBrowserBeforeReturningPartialCredentials"
+  ],
+  "browserMethods": [
+    "BrowserJourneyIntegrationTest.retainedStepsAndSecureInputProduceNormalizedToken",
+    "BrowserJourneyIntegrationTest.namedJsonAndSeveralCookiesAreAcquiredTogether",
+    "BrowserJourneyIntegrationTest.earlyJsonAndCookieAttemptsStartWithFreshContextState",
+    "BrowserJourneyIntegrationTest.responseBodyRegexJsonAndCookiesCompleteOneBrowserLogin",
+    "BrowserJourneyIntegrationTest.productionCoordinatorPublishesOwnedBrowserResultWithOriginalAcquisitionClocks",
+    "BrowserJourneyIntegrationTest.relevantStatusesAndMalformedResponsesHaveDistinctDispositions",
+    "BrowserJourneyIntegrationTest.unconfiguredSubresource503DoesNotBecomeAnAuthenticationRetry",
+    "BrowserJourneyIntegrationTest.elapsedAttemptPreservesRelevantServiceAndAuthenticationErrors",
+    "BrowserJourneyIntegrationTest.actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake",
+    "BrowserJourneyIntegrationTest.cancellationKillsOnlyTheOwnedDriverAndReturnsTypedCancellation",
+    "BrowserJourneyIntegrationTest.controlledJavaLoginAuthenticatesExpectedAccount",
+    "BrowserJourneyIntegrationTest.controlledRedirectsAuthenticateWithoutChangingMethodsOrLosingCookies",
+    "BrowserJourneyIntegrationTest.controlledCookieSelectionUsesTheCurrentApplicableCredential",
+    "BrowserJourneyIntegrationTest.controlledResponseSurfacesProduceUsableCredentials",
+    "BrowserJourneyIntegrationTest.controlledRedirectFailuresPublishNoCredentialAndCloseTheirProcesses",
+    "BrowserJourneyIntegrationTest.controlledRepeatedAttemptsDoNotReuseBrowserCookiesOrStorage",
+    "BrowserJourneyIntegrationTest.sessionLossRecoveryUsesThreeSequentialFreshBrowsersAndReplaysEightActualRequestsOnce"
+  ],
+  "transportMethods": [
+    "Pkcs11JourneyIntegrationTest.explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt",
+    "Pkcs11JourneyIntegrationTest.twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+    "Pkcs11JourneyIntegrationTest.explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials",
+    "Pkcs11JourneyIntegrationTest.wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed",
+    "Pkcs11JourneyIntegrationTest.localEndpointRejectsMissingAndIncorrectAttemptCredentials",
+    "Pkcs11JourneyIntegrationTest.certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel"
+  ]
+}

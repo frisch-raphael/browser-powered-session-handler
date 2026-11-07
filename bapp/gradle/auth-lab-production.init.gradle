@@ -1,0 +1,171 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import java.security.MessageDigest
+
+// Test-only overlay. Main sources, production dependencies and packaging stay byte-identical.
+gradle.projectsEvaluated {
+    def project = gradle.rootProject
+    def plan = new JsonSlurper().parse(new File(System.getProperty('authlab.plan')))
+    if (plan.version != 1 || !(plan.taskName in ['authLabComponentTest', 'authLabBrowserTest', 'authLabFederationTest', 'authLabTransportTest', 'authLabExamples']))
+        throw new GradleException('Invalid production invocation plan.')
+    def auditFile = new File(plan.auditFile)
+    if (MessageDigest.getInstance('SHA-256').digest(auditFile.bytes).encodeHex().toString() != plan.auditSha256)
+        throw new GradleException('Production audit changed after capture.')
+    def audit = new JsonSlurper().parse(auditFile)
+    if (audit.boundaryHash != plan.boundaryHash) throw new GradleException('Stale predecessor audit.')
+    def selection = new JsonSlurper().parse(new File(plan.selectionFile))
+    def report = new File(plan.reportDirectory)
+    // Chromium appends native profile/artifact names; a full snapshot hash here exceeds MAX_PATH.
+    def nativeTemporary = new File(plan.workspace, 'test/authentication-lab/build/tmp/p2')
+    def overlay = new File(plan.overlay)
+    def replacements = overlay.isDirectory() ? overlay.listFiles().findAll { it.name.endsWith('.java') }*.name as Set : [] as Set
+    def original = new File(project.projectDir, 'src/test/java').canonicalFile
+    project.sourceSets.test.java {
+        srcDir overlay
+        exclude { entry -> entry.file.parentFile.canonicalFile == original && replacements.contains(entry.name) }
+    }
+    project.sourceSets.test.compileClasspath += project.files(plan.labJar)
+    project.sourceSets.test.runtimeClasspath += project.files(plan.labJar)
+
+    if(plan.taskName=='authLabExamples') {
+        project.tasks.register(plan.taskName,JavaExec) {
+            dependsOn project.tasks.named('testClasses')
+            classpath=project.sourceSets.test.runtimeClasspath
+            mainClass='ProductionLabExamples'
+            systemProperty 'authlab.plan',System.getProperty('authlab.plan')
+            outputs.upToDateWhen { false }
+            doFirst {
+                def sha={file->MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString()}
+                plan.overlayHashes.each {name,hash->if(sha(new File(overlay,name))!=hash)throw new GradleException('Native example source changed after capture.')}
+                plan.labArtifactHashes.each {name,hash->def jar=plan.labClasspath.find {new File(it).name==name};if(!jar||sha(new File(jar))!=hash)throw new GradleException('Lab artifact changed after capture.')}
+            }
+        }
+        return
+    }
+
+    def federation = plan.taskName == 'authLabFederationTest'
+    def transport = plan.taskName == 'authLabTransportTest'
+    def browser = plan.taskName in ['authLabBrowserTest', 'authLabFederationTest', 'authLabTransportTest']
+    def methods = (transport ? selection.transportMethods : federation ? selection.federationMethods : browser ? selection.browserMethods : audit.componentMethods + selection.additionalComponentMethods).unique()
+    if (plan.selectedProfiles) {
+        if (!(plan.selectedMethods instanceof List) || plan.selectedMethods.isEmpty() || !methods.containsAll(plan.selectedMethods) ||
+                plan.selectedMethods.unique().size() != plan.selectedMethods.size())
+            throw new GradleException('Selected profile requests an unreviewed or empty owner set.')
+        methods = plan.selectedMethods
+    }
+    if(!browser && methods.any { (audit.exclusions?:[:]).containsKey(it) })
+        throw new GradleException('An explicitly excluded predecessor owner must not enter the component selection.')
+    if (methods.isEmpty()) throw new GradleException('Empty audited production selection.')
+    def task = project.tasks.register(plan.taskName, Test) {
+        def observedMethods = new java.util.concurrent.ConcurrentSkipListSet()
+        dependsOn project.tasks.named('testClasses')
+        if (browser) {
+            dependsOn project.tasks.named('verifyIntegrationTestClasses'), project.tasks.named('prepareBrowserAssets'), project.tasks.named('jar')
+        }
+        testClassesDirs = project.sourceSets.test.output.classesDirs
+        classpath = project.sourceSets.test.runtimeClasspath
+        if (browser) classpath += project.files(new File(project.buildDir, 'generated/browser-assets'))
+        useJUnitPlatform()
+        filter.setIncludePatterns(*(methods as String[]))
+        filter.failOnNoMatchingTests = true
+        failOnNoDiscoveredTests = true
+        reports.junitXml.outputLocation = new File(report, 'junit-xml')
+        reports.html.outputLocation = new File(report, 'html')
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+        systemProperty 'authlab.plan', System.getProperty('authlab.plan')
+        systemProperty 'java.io.tmpdir', nativeTemporary.absolutePath
+        if(transport) {
+            environment 'BPSH_PKCS11_FIXTURE', plan.pkcs11Fixture
+            environment 'SOFTHSM2_CONF', new File(plan.pkcs11OwnedRoot,'softhsm2.conf').absolutePath
+        }
+        doFirst {
+            nativeTemporary.mkdirs()
+            if (System.getProperty('os.name').startsWith('Windows') && nativeTemporary.absolutePath.length() > 170)
+                throw new GradleException('The lab native temporary path is too long for Chromium; use a shorter worktree path.')
+            def sha = { file ->
+                def digest = MessageDigest.getInstance('SHA-256')
+                file.withInputStream { stream ->
+                    byte[] buffer = new byte[65536]; int count
+                    while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+                }
+                digest.digest().encodeHex().toString()
+            }
+            if (sha(new File(plan.selectionFile)) != plan.selectionSha256) throw new GradleException('Production selection changed after invocation capture.')
+            if(transport && (sha(new File(plan.pkcs11Fixture))!=plan.pkcs11FixtureSha256 ||
+                    sha(new File(plan.pkcs11OwnedRoot,'softhsm2.conf'))!=plan.pkcs11ConfigurationSha256 || sha(new File(plan.pkcs11Module))!=plan.pkcs11ModuleSha256))
+                throw new GradleException('Owned software-token preparation changed after invocation capture.')
+            if(transport) plan.pkcs11InputHashes.each { name, hash ->
+                if(sha(new File(plan.pkcs11OwnedRoot,name))!=hash)throw new GradleException('Owned software-token TLS input changed after invocation capture.')
+            }
+            if (federation && sha(new File(plan.federationRuntimeManifest)) != plan.federationRuntimeManifestSha256)
+                throw new GradleException('Federation runtime preparation changed after invocation capture.')
+            if(federation) plan.federationInputHashes.each { name, hash ->
+                if(sha(new File(plan.federationInputs[name])) != hash) throw new GradleException('Captured federation input differs.')
+            }
+            plan.overlayHashes.each { name, hash ->
+                if (sha(new File(overlay, name)) != hash) throw new GradleException("Test overlay changed after invocation capture: $name")
+            }
+            plan.labArtifactHashes.each { name, hash ->
+                def jar = plan.labClasspath.find { new File(it).name == name }
+                if (!jar || sha(new File(jar)) != hash) throw new GradleException('Lab artifact changed after invocation capture.')
+            }
+            def coordinates = { configuration -> configuration.resolvedConfiguration.resolvedArtifacts.collect {
+                "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}"
+            }.sort() }
+            def mainGraph = coordinates(project.configurations.runtimeClasspath)
+            def testGraph = coordinates(project.configurations.testRuntimeClasspath)
+            def gson = { list -> list.findAll { it.startsWith('com.google.code.gson:gson:') } }
+            if (gson(mainGraph) != gson(testGraph)) throw new GradleException('Lab changed the production Gson version.')
+            new File(report, 'dependency-graphs.json').text = JsonOutput.toJson([production:mainGraph, test:testGraph])
+            def pins = project.configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.collect {
+                [coordinates:"${it.moduleVersion.id.group}:${it.name}".toString(), version:it.moduleVersion.id.version,
+                    integrity:'sha256:' + sha(it.file)]
+            }.sort { it.coordinates }
+            new File(report, 'production-dependency-pins.json').text = JsonOutput.toJson(pins)
+            new File(report, 'task-started.json').text = JsonOutput.toJson([invocationId:plan.invocationId, boundaryHash:plan.boundaryHash,
+                taskPath:path, methods:methods, startedAt:java.time.Instant.now().toString()])
+            def root = new File(plan.productionRoot).toPath()
+            def outputHashes = new TreeMap<String, String>()
+            project.sourceSets.main.output.files.findAll { it.isDirectory() }.each { directory ->
+                directory.eachFileRecurse(groovy.io.FileType.FILES) { file -> outputHashes[root.relativize(file.toPath()).toString().replace('\\', '/')] = sha(file) }
+            }
+            new File(report, 'production-outputs.json').text = JsonOutput.toJson(outputHashes)
+            def artifactHash = MessageDigest.getInstance('SHA-256').digest(outputHashes.collect { name, hash -> "$name:$hash" }.join('\n').getBytes('UTF-8')).encodeHex().toString()
+            def catalogParts = new File(plan.workspace, 'test/authentication-lab/src/main/resources/catalog').listFiles().findAll { it.name.endsWith('.json') }.sort { it.name }.collect { "${it.name}:${sha(it)}" }
+            def catalogHash = MessageDigest.getInstance('SHA-256').digest(catalogParts.join('\n').getBytes('UTF-8')).encodeHex().toString()
+            new File(report, 'report-context.json').text = JsonOutput.toJson([contextVersion:1, invocationId:plan.invocationId, taskPath:path,
+                configurationHash:plan.configurationHash, productionRevision:plan.productionRevision, artifactSha256:artifactHash, catalogRevision:catalogHash, state:'STARTED'])
+        }
+        afterTest { descriptor, result ->
+            def cursor = descriptor
+            while (cursor != null) {
+                methods.each { key ->
+                    def split = key.lastIndexOf('.')
+                    def owner = key.substring(0, split), method = key.substring(split + 1)
+                    if ((cursor.className ?: descriptor.className) == owner &&
+                            (cursor.name == method || cursor.name.startsWith(method + '('))) observedMethods.add(key)
+                }
+                cursor = cursor.parent
+            }
+        }
+        afterSuite { descriptor, result ->
+            if (descriptor.parent == null) {
+                def requested = plan.requestedTests
+                def required = requested ? methods.findAll { key ->
+                    key == requested || key.startsWith(requested + '.') || key.matches(java.util.regex.Pattern.quote(requested).replace('*', '\\E.*\\Q'))
+                } : methods
+                def missing = required.findAll { !observedMethods.contains(it) }
+                def complete = result.testCount > 0 && result.failedTestCount == 0 && result.skippedTestCount == 0 && missing.isEmpty()
+                new File(report, 'junit-summary.json').text = JsonOutput.toJson([invocationId:plan.invocationId, boundaryHash:plan.boundaryHash,
+                    taskPath:path, tests:result.testCount, failed:result.failedTestCount, skipped:result.skippedTestCount, complete:complete,
+                    finishedAt:java.time.Instant.now().toString(), missingMethods:missing, observedMethods:observedMethods, catalogAcceptance:false])
+                logger.lifecycle("${plan.taskName}: ${result.testCount} tests, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped")
+            }
+        }
+        doLast {
+            def summary = new JsonSlurper().parse(new File(report, 'junit-summary.json'))
+            if (!summary.complete) throw new GradleException('Audited production checks failed, were skipped, or discovered no tests.')
+        }
+    }
+}

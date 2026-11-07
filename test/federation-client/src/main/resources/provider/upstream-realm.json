@@ -1,0 +1,21 @@
+{
+  "realm": "authlab-upstream",
+  "enabled": true,
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "accessTokenLifespan": 120,
+  "accessCodeLifespan": 30,
+  "ssoSessionIdleTimeout": 600,
+  "ssoSessionMaxLifespan": 600,
+  "users": [
+    {"id":"aaaaaaaa-aaaa-4aaa-8aaa-111111111111","username":"user","firstName":"Fixture","lastName":"User","email":"user@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"pass","temporary":false}]},
+    {"id":"aaaaaaaa-aaaa-4aaa-8aaa-222222222222","username":"user2","firstName":"Fixture","lastName":"User Two","email":"user2@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"pass2","temporary":false}]},
+    {"id":"aaaaaaaa-aaaa-4aaa-8aaa-333333333333","username":"admin","firstName":"Fixture","lastName":"Admin","email":"admin@authlab.test","emailVerified":true,"enabled":true,"credentials":[{"type":"password","value":"adminpass","temporary":false}]}
+  ],
+  "clients": [
+    {"clientId":"downstream-broker","protocol":"saml","enabled":true,"redirectUris":[],"attributes":{"saml.force.post.binding":"true","saml.server.signature":"true","saml.assertion.signature":"true","saml.client.signature":"false","saml.authnstatement":"true","saml_name_id_format":"username"}},
+    {"clientId":"cookie-verifier","protocol":"openid-connect","enabled":true,"publicClient":true,"standardFlowEnabled":true,"implicitFlowEnabled":false,"directAccessGrantsEnabled":false,"redirectUris":[],"webOrigins":[],"attributes":{"pkce.code.challenge.method":"S256"}}
+  ]
+}

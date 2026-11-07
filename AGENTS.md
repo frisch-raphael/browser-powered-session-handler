@@ -8,7 +8,7 @@ Publish verified universal development builds to `bapp/build/libs/browser-powere
 
 ## Test ownership
 
-The separate test-suite worktree owns the broader authentication lab, acceptance and stress suites. Reuse its fixtures; do not duplicate its lab or harness. Python helper scripts are developer tools only.
+The broader authentication lab and acceptance suites are integrated in `test/authentication-lab` and `test/federation-client`. Reuse their fixtures; do not duplicate the lab or harness. Production acceptance overlays live under `test/authentication-lab/production-tests` and run only in isolated captured builds. Python helper scripts are developer tools only.
 
 ## Burp refresh
 

@@ -1,0 +1,6 @@
+/authentication-lab/build/
+/authentication-lab/.gradle/
+/authentication-lab/bin/
+/federation-client/build/
+/federation-client/.gradle/
+/federation-client/bin/

@@ -153,3 +153,8 @@ tasks.named<Test>("pkcs11IntegrationTest") {
 }
 
 apply(from = "gradle/browser-assets.gradle.kts")
+
+// Snapshot builds run only production configuration; the outer build owns lab orchestration.
+if (System.getProperty("authlab.plan") == null) {
+    apply(from = "gradle/auth-lab.gradle.kts")
+}
