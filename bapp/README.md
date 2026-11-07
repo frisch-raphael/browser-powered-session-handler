@@ -23,7 +23,7 @@ Use JDK 21 and the checked-in wrapper, dependency locks and verification metadat
 From this directory, after dependencies and source archives are prepared:
 
 ```powershell
-.\gradlew.bat classes test verifyBrowserAssetProducer verifyNativeDocumentation jar --offline --console=plain
+.\gradlew.bat classes check verifyBrowserAssetProducer verifyNativeDocumentation jar --offline --console=plain
 ```
 
 The development artifact is
@@ -109,16 +109,21 @@ The authentication lab, catalog, host acceptance guide and capability gates are 
 
 ## Refresh in Burp
 
+Use the development JAR from the active worktree.
+
 For an already installed extension, uncheck **Loaded** and confirm unload before
 replacing its JAR, then check **Loaded** again. Do not remove/re-add it.
 Disposable test drafts do not need preserving before a requested refresh.
 Follow [root AGENTS.md](../AGENTS.md).
 
-If Burp locks the installed JAR, build a separate candidate and replace the
-installed path only after unloading. Building, loading and manually checking
-the candidate are separate verification steps.
+Unload the existing extension before building directly to the development JAR
+path, then reload it after the build succeeds. Do not create a candidate JAR to
+preserve the existing JAR. Building, loading and manually checking the extension
+are separate verification steps.
 
 ## Architecture
+
+Production code lives in feature packages under `src/main/java/bpsh`; tests mirror those packages. See [the package map and dependency rules](../docs/designs/code-structure.md). `verifyArchitecture` checks package paths, permitted dependencies and cycles and runs as part of `check`.
 
 | Component | Responsibility |
 | --- | --- |

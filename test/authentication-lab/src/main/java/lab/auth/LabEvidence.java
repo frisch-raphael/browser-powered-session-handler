@@ -194,7 +194,7 @@ public final class LabEvidence implements AutoCloseable {
     }
     public static String configurationFingerprint(Path workspace) throws IOException {
         var parts = new ArrayList<>(List.of("authlab-fixture-config-v1", ":auth-lab:test"));
-        for (String file : List.of("bapp/build.gradle.kts", "bapp/gradle/auth-lab.gradle.kts", "bapp/settings.gradle.kts", "bapp/gradle/verification-metadata.xml", "test/authentication-lab/build.gradle.kts", "test/authentication-lab/gradle.lockfile", "bapp/gradle/auth-lab-production.gradle.kts", "bapp/gradle/auth-lab-production.init.gradle", "test/authentication-lab/src/main/resources/production-policy.json", "test/authentication-lab/src/main/resources/production-selection.json")) parts.add(sha256(Files.readAllBytes(workspace.resolve(file))));
+        for (String file : LabBuildInputs.configurationFiles(workspace)) parts.add(sha256(Files.readAllBytes(workspace.resolve(file))));
         return sha256(String.join("\n", parts).getBytes(StandardCharsets.UTF_8));
     }
     public static boolean fixtureBindingsCurrent(ScenarioCatalog.Selection selected, Path workspace) throws IOException {

@@ -51,11 +51,10 @@ Switching Project/User tabs also returns to the last journey opened there.
 
 The request-tag alias is derived from the journey name: **Employee login**
 becomes `<@employee-login/>`. Renaming a journey updates its alias when saved;
-update existing request tags afterward. The preview shows the actual tag.
+update existing request tags afterward. Copy BPSH tag and the request context menu provide the actual reference.
 Conflicting aliases must be repaired before the journeys can execute.
 
-**Save** or **Ctrl+S** can retain unfinished settings. **Test login** saves edits
-and reports any configuration error before starting authentication.
+Journey edits autosave after 500 ms, including unfinished settings. **Ctrl+S** flushes or retries autosave. **Test login** flushes edits and reports configuration errors before starting authentication.
 **Remember secrets** stores PINs and secure step inputs as readable local data.
 Leave it off to keep those values for the current extension session.
 
@@ -105,8 +104,7 @@ All required journeys must succeed before credentials are applied. If ordinary
 automatic authentication fails, the original request goes through with a warning.
 
 Expiration detection can use an HTTP status, a response-text RE2 expression, or
-either condition. In the current implementation it invalidates the affected
-cache for subsequent requests; it does not replay an application request.
+either condition. With Session handling enabled, an attributed session loss can trigger recovery and replay each original application request at most once. A rejected replacement pauses automatic recovery until an explicit Test login.
 
 Valid Session handling and waiting-limit edits save automatically. **Settings**
 contains request/login timeouts and optional global/per-journey waiting limits.

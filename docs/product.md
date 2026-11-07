@@ -58,7 +58,7 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   export inclusion is a separate unchecked choice. Tokens and private keys are
   never exported. Cached tokens and cookies are visible only in the explicitly
   opened Journey cache inspector; they never enter event logs or saved config.
-- Browser assets are bundled in platform-specific JARs. No runtime browser
+- Browser assets for Windows x64, Linux x64 and Intel macOS are bundled in one universal offline JAR. No runtime browser
   download or separate Java executable is required by the extension.
 
 The author subsequently chose Project/User collection tabs and compact icon

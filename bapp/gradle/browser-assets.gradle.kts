@@ -214,8 +214,8 @@ fun loadVerifiedSource(source: JsonNode, cache: Path, offline: Boolean, resolved
 fun withManifestValidator(action: ((ByteArray, String) -> Unit) -> Unit) {
     val classes = project.extensions.getByType<JavaPluginExtension>().sourceSets.getByName("main").output.classesDirs.files
     java.net.URLClassLoader((classes + runtime.files).map { it.toURI().toURL() }.toTypedArray(), ClassLoader.getPlatformClassLoader()).use { loader ->
-        val manager = loader.loadClass("BrowserRuntimeManager")
-        val limitsType = loader.loadClass("BrowserRuntimeManager" + "$" + "Limits")
+        val manager = loader.loadClass("bpsh.runtime.BrowserRuntimeManager")
+        val limitsType = loader.loadClass("bpsh.runtime.BrowserRuntimeManager" + "$" + "Limits")
         val standard = limitsType.getDeclaredMethod("standard").apply { isAccessible = true }.invoke(null)
         val parse = manager.getDeclaredMethod("parseManifest", ByteArray::class.java, String::class.java, limitsType).apply { isAccessible = true }
         action { bytes, target ->
@@ -617,6 +617,8 @@ tasks.named<Jar>("jar") {
         java.util.zip.ZipFile(archiveFile.get().asFile).use { jar ->
             val names = jar.entries().asSequence().map { it.name }.toList()
             require(names.toSet().size == names.size) { "Duplicate output JAR entries." }
+            require("bpsh/Extension.class" in names) { "Packaged Montoya entry point is missing." }
+            require(names.none { '/' !in it && it.endsWith(".class") }) { "Unpackaged or stale default-package classes leaked into the extension JAR." }
             require(names.none { it.startsWith("burp/api/") || it.startsWith("org/junit/") || it.endsWith("module-info.class")
                 || it.matches(Regex("META-INF/[^/]+\\.(SF|RSA|DSA|EC)", RegexOption.IGNORE_CASE)) }) { "Host/test APIs, module descriptors or stale signatures leaked into the platform JAR." }
             val retired = setOf("ApiClient", "ApiServiceManager", "LocalTokenCache", "HackvertorTagBuilder", "TokenServiceProtocol")

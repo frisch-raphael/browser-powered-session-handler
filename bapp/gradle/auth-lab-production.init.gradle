@@ -18,11 +18,17 @@ gradle.projectsEvaluated {
     // Chromium appends native profile/artifact names; a full snapshot hash here exceeds MAX_PATH.
     def nativeTemporary = new File(plan.workspace, 'test/authentication-lab/build/tmp/p2')
     def overlay = new File(plan.overlay)
-    def replacements = overlay.isDirectory() ? overlay.listFiles().findAll { it.name.endsWith('.java') }*.name as Set : [] as Set
-    def original = new File(project.projectDir, 'src/test/java').canonicalFile
+    def replacements = [] as Set
+    if (overlay.isDirectory()) overlay.eachFileRecurse(groovy.io.FileType.FILES) { file ->
+        if (file.name.endsWith('.java')) replacements.add(overlay.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
+    }
+    def original = new File(project.projectDir, 'src/test/java').canonicalFile.toPath()
     project.sourceSets.test.java {
         srcDir overlay
-        exclude { entry -> entry.file.parentFile.canonicalFile == original && replacements.contains(entry.name) }
+        exclude { entry ->
+            def source = entry.file.canonicalFile.toPath()
+            source.startsWith(original) && replacements.contains(original.relativize(source).toString().replace('\\', '/'))
+        }
     }
     project.sourceSets.test.compileClasspath += project.files(plan.labJar)
     project.sourceSets.test.runtimeClasspath += project.files(plan.labJar)
@@ -31,7 +37,7 @@ gradle.projectsEvaluated {
         project.tasks.register(plan.taskName,JavaExec) {
             dependsOn project.tasks.named('testClasses')
             classpath=project.sourceSets.test.runtimeClasspath
-            mainClass='ProductionLabExamples'
+            mainClass='bpsh.support.ProductionLabExamples'
             systemProperty 'authlab.plan',System.getProperty('authlab.plan')
             outputs.upToDateWhen { false }
             doFirst {

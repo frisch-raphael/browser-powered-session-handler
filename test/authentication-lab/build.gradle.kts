@@ -45,7 +45,9 @@ val invocationId = rootProject.extra["authLabInvocationId"].toString()
 val fixtureReports = layout.buildDirectory.dir("authlab/$invocationId/${digest(fixtureTaskPath.toByteArray(Charsets.UTF_8))}")
 val fixtureJar = tasks.named<Jar>("jar").flatMap { it.archiveFile }
 val explicitFixtures = gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "authLab" } && providers.gradleProperty("labProfiles").orNull?.split(",")?.toSet() == setOf("fixtures")
-fun fixtureConfiguration(): String = digest((listOf("authlab-fixture-config-v1", fixtureTaskPath) + listOf("bapp/build.gradle.kts", "bapp/gradle/auth-lab.gradle.kts", "bapp/settings.gradle.kts", "bapp/gradle/verification-metadata.xml", "test/authentication-lab/build.gradle.kts", "test/authentication-lab/gradle.lockfile", "bapp/gradle/auth-lab-production.gradle.kts", "bapp/gradle/auth-lab-production.init.gradle", "test/authentication-lab/src/main/resources/production-policy.json", "test/authentication-lab/src/main/resources/production-selection.json").map { digest(workspace.resolve(it).readBytes()) }).joinToString("\n").toByteArray(Charsets.UTF_8))
+@Suppress("UNCHECKED_CAST")
+fun configurationInputs(): List<String> = (JsonSlurper().parse(workspace.resolve("test/authentication-lab/src/main/resources/configuration-inputs.json")) as Map<String, Any?>)["configurationFiles"] as List<String>
+fun fixtureConfiguration(): String = digest((listOf("authlab-fixture-config-v1", fixtureTaskPath) + configurationInputs().map { digest(workspace.resolve(it).readBytes()) }).joinToString("\n").toByteArray(Charsets.UTF_8))
 fun catalogRevision(): String = digest(workspace.resolve("test/authentication-lab/src/main/resources/catalog").listFiles()!!.filter { it.extension == "json" }.sortedBy { it.name }.joinToString("\n") { "${it.name}:${digest(it.readBytes())}" }.toByteArray(Charsets.UTF_8))
 val collectFixtureResults = tasks.register<JavaExec>("collectFixtureResults") {
     group = "authentication lab"
@@ -79,4 +81,14 @@ if (explicitFixtures) tasks.test {
         systemProperty("lab.fixtureReportDirectory", directory.absolutePath)
     }
     finalizedBy(collectFixtureResults)
+}
+
+// This is an explicit maintenance operation: inspect the catalog diff before claiming coverage.
+tasks.register<JavaExec>("refreshBindings") {
+    group = "authentication lab"
+    description = "Refresh reviewed source/configuration fingerprints after an intentional refactor; runs no acceptance tests."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("lab.auth.RefreshBindings")
+    args(workspace.absolutePath)
 }

@@ -36,7 +36,7 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
-val integrationClassNames = listOf("BrowserJourneyIntegrationTest", "Pkcs11JourneyIntegrationTest")
+val integrationClassNames = listOf("bpsh.browser.BrowserJourneyIntegrationTest", "bpsh.mtls.Pkcs11JourneyIntegrationTest")
 /**
  * Rejects missing browser/native test classes before explicit integration runs can report NO-SOURCE.
  *
@@ -47,7 +47,7 @@ val verifyIntegrationTestClasses by tasks.registering {
     dependsOn(tasks.testClasses)
     doLast {
         integrationClassNames.forEach { name ->
-            check(sourceSets.test.get().output.classesDirs.files.any { it.resolve("$name.class").isFile }) {
+            check(sourceSets.test.get().output.classesDirs.files.any { it.resolve("${name.replace('.', '/')}.class").isFile }) {
                 "Required integration test class $name was not compiled."
             }
         }
@@ -106,7 +106,7 @@ fun registerIntegrationTest(taskName: String, className: String) = tasks.registe
         val artifact = candidate.singleFile.canonicalFile
         check(artifact.isFile) { "The selected packagedJar must be an existing JAR." }
         JarFile(artifact).use { jar ->
-            check(jar.getEntry("BrowserRuntimeManager.class") != null) { "The selected JAR is not the extension artifact." }
+            check(jar.getEntry("bpsh/runtime/BrowserRuntimeManager.class") != null) { "The selected JAR is not the extension artifact." }
         }
         systemProperty("bpsh.packagedJar", artifact.absolutePath)
         systemProperty("bpsh.probeClasspath", classpath.asPath)
@@ -136,8 +136,8 @@ fun registerIntegrationTest(taskName: String, className: String) = tasks.registe
     })
 }
 
-registerIntegrationTest("browserIntegrationTest", "BrowserJourneyIntegrationTest")
-registerIntegrationTest("pkcs11IntegrationTest", "Pkcs11JourneyIntegrationTest")
+registerIntegrationTest("browserIntegrationTest", "bpsh.browser.BrowserJourneyIntegrationTest")
+registerIntegrationTest("pkcs11IntegrationTest", "bpsh.mtls.Pkcs11JourneyIntegrationTest")
 
 
 // Native tests run in their own JVM with an explicitly selected disposable SoftHSM store.
@@ -158,3 +158,5 @@ apply(from = "gradle/browser-assets.gradle.kts")
 if (System.getProperty("authlab.plan") == null) {
     apply(from = "gradle/auth-lab.gradle.kts")
 }
+
+apply(from = "gradle/architecture.gradle.kts")

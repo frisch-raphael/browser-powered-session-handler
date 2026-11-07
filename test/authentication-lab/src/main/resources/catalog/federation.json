@@ -39,55 +39,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.flow.browser-oidc",
             "assertionId": "FED.flow.browser-oidc#actual-client-and-api-account",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "proof",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.browser-oidc",
             "assertionId": "FED.flow.browser-oidc#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.browser-oidc",
             "assertionId": "FED.flow.browser-oidc#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.browser-oidc",
             "assertionId": "FED.flow.browser-oidc#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -130,55 +130,55 @@
       "binding": {
         "executionId": "production:FED:realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.flow.backend-oidc",
             "assertionId": "FED.flow.backend-oidc#backend-token-hidden-client-cookie-accepted",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.backend-oidc",
             "assertionId": "FED.flow.backend-oidc#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.backend-oidc",
             "assertionId": "FED.flow.backend-oidc#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.backend-oidc",
             "assertionId": "FED.flow.backend-oidc#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi()"
       },
       "disposition": "NEW"
@@ -221,55 +221,55 @@
       "binding": {
         "executionId": "production:FED:realSamlPostResponseProducesAUsableClientCookieWithoutInventingAnAccessToken",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realSamlPostResponseProducesAUsableClientCookieWithoutInventingAnAccessToken()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.flow.saml-sp",
             "assertionId": "FED.flow.saml-sp#saml-account-and-protected-client-cookie",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "realSamlPostResponseProducesAUsableClientCookieWithoutInventingAnAccessToken",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.saml-sp",
             "assertionId": "FED.flow.saml-sp#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.saml-sp",
             "assertionId": "FED.flow.saml-sp#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.flow.saml-sp",
             "assertionId": "FED.flow.saml-sp#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realSamlPostResponseProducesAUsableClientCookieWithoutInventingAnAccessToken()"
       },
       "disposition": "NEW"
@@ -314,55 +314,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.outputs.api-token",
             "assertionId": "FED.outputs.api-token#selected-bearer-accepted-by-api",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "proof",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.api-token",
             "assertionId": "FED.outputs.api-token#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.api-token",
             "assertionId": "FED.outputs.api-token#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.api-token",
             "assertionId": "FED.outputs.api-token#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -407,55 +407,55 @@
       "binding": {
         "executionId": "production:FED:realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.outputs.client-cookie",
             "assertionId": "FED.outputs.client-cookie#selected-cookie-accepted-by-client",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie",
             "assertionId": "FED.outputs.client-cookie#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie",
             "assertionId": "FED.outputs.client-cookie#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie",
             "assertionId": "FED.outputs.client-cookie#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBackendOidcPublishesOnlyACookieAfterItsHiddenTokenReachesTheApi()"
       },
       "disposition": "NEW"
@@ -501,55 +501,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.outputs.idp-cookie",
             "assertionId": "FED.outputs.idp-cookie#selected-cookie-alone-identifies-account",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "selectedCookieProof",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.idp-cookie",
             "assertionId": "FED.outputs.idp-cookie#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.idp-cookie",
             "assertionId": "FED.outputs.idp-cookie#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.idp-cookie",
             "assertionId": "FED.outputs.idp-cookie#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -596,55 +596,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.outputs.client-cookie-plus-bearer",
             "assertionId": "FED.outputs.client-cookie-plus-bearer#matching-cookie-and-bearer-issuance-accepted",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "proof",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie-plus-bearer",
             "assertionId": "FED.outputs.client-cookie-plus-bearer#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie-plus-bearer",
             "assertionId": "FED.outputs.client-cookie-plus-bearer#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.outputs.client-cookie-plus-bearer",
             "assertionId": "FED.outputs.client-cookie-plus-bearer#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -722,55 +722,55 @@
       "binding": {
         "executionId": "production:FED:backendRejectionProducesAnAccurateExtensionFailure",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "backendRejectionProducesAnAccurateExtensionFailure()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.negative.code-expired",
             "assertionId": "FED.negative.code-expired#no-output-and-truthful-observed-missing-cookie-error",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "backendRejectionProducesAnAccurateExtensionFailure",
             "inputKey": null
           },
           {
             "requirementId": "FED.negative.code-expired",
             "assertionId": "FED.negative.code-expired#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.negative.code-expired",
             "assertionId": "FED.negative.code-expired#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.negative.code-expired",
             "assertionId": "FED.negative.code-expired#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "backendRejectionProducesAnAccurateExtensionFailure()"
       },
       "disposition": "NEW"
@@ -1094,55 +1094,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.sso.missing-cookie",
             "assertionId": "FED.sso.missing-cookie#empty-verifier-cannot-authenticate",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "verifySso",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.missing-cookie",
             "assertionId": "FED.sso.missing-cookie#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.missing-cookie",
             "assertionId": "FED.sso.missing-cookie#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.missing-cookie",
             "assertionId": "FED.sso.missing-cookie#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -1186,55 +1186,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.sso.other-account-cookie",
             "assertionId": "FED.sso.other-account-cookie#other-selected-cookie-identifies-other-account",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "verifySso",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.other-account-cookie",
             "assertionId": "FED.sso.other-account-cookie#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.other-account-cookie",
             "assertionId": "FED.sso.other-account-cookie#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.other-account-cookie",
             "assertionId": "FED.sso.other-account-cookie#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -1278,55 +1278,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.sso.wrong-service",
             "assertionId": "FED.sso.wrong-service#client-cookie-cannot-satisfy-selected-idp-cookie-proof",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "verifySso",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.wrong-service",
             "assertionId": "FED.sso.wrong-service#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.wrong-service",
             "assertionId": "FED.sso.wrong-service#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.wrong-service",
             "assertionId": "FED.sso.wrong-service#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -1370,55 +1370,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.sso.client-logout-idp-live",
             "assertionId": "FED.sso.client-logout-idp-live#client-logout-leaves-selected-idp-cookie-usable",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "selectedCookieProof",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.client-logout-idp-live",
             "assertionId": "FED.sso.client-logout-idp-live#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.client-logout-idp-live",
             "assertionId": "FED.sso.client-logout-idp-live#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.client-logout-idp-live",
             "assertionId": "FED.sso.client-logout-idp-live#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -1461,55 +1461,55 @@
       "binding": {
         "executionId": "production:FED:realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.sso.fresh-production-attempt",
             "assertionId": "FED.sso.fresh-production-attempt#interactive-production-login-after-explicit-verifier",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.fresh-production-attempt",
             "assertionId": "FED.sso.fresh-production-attempt#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.fresh-production-attempt",
             "assertionId": "FED.sso.fresh-production-attempt#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.sso.fresh-production-attempt",
             "assertionId": "FED.sso.fresh-production-attempt#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances()"
       },
       "disposition": "NEW"
@@ -1718,55 +1718,55 @@
       "binding": {
         "executionId": "production:FED:brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.broker.success",
             "assertionId": "FED.broker.success#actual-upstream-page-and-both-protected-accounts",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.success",
             "assertionId": "FED.broker.success#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.success",
             "assertionId": "FED.broker.success#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.success",
             "assertionId": "FED.broker.success#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount()"
       },
       "disposition": "NEW"
@@ -1810,55 +1810,55 @@
       "binding": {
         "executionId": "production:FED:brokeredJourneyReturnsNoCredentialAfterUpstreamLoginRejection",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "brokeredJourneyReturnsNoCredentialAfterUpstreamLoginRejection()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.broker.upstream-rejected",
             "assertionId": "FED.broker.upstream-rejected#real-runner-failure-without-credential",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "brokeredJourneyReturnsNoCredentialAfterUpstreamLoginRejection",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.upstream-rejected",
             "assertionId": "FED.broker.upstream-rejected#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.upstream-rejected",
             "assertionId": "FED.broker.upstream-rejected#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.upstream-rejected",
             "assertionId": "FED.broker.upstream-rejected#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "brokeredJourneyReturnsNoCredentialAfterUpstreamLoginRejection()"
       },
       "disposition": "NEW"
@@ -1902,55 +1902,55 @@
       "binding": {
         "executionId": "production:FED:brokeredJourneyCancellationClosesItsBrowserBeforeReturningPartialCredentials",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "brokeredJourneyCancellationClosesItsBrowserBeforeReturningPartialCredentials()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.broker.cancelled",
             "assertionId": "FED.broker.cancelled#cancel-before-client-publication-without-partial-output",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "brokeredJourneyCancellationClosesItsBrowserBeforeReturningPartialCredentials",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.cancelled",
             "assertionId": "FED.broker.cancelled#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.cancelled",
             "assertionId": "FED.broker.cancelled#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.cancelled",
             "assertionId": "FED.broker.cancelled#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "brokeredJourneyCancellationClosesItsBrowserBeforeReturningPartialCredentials()"
       },
       "disposition": "NEW"
@@ -1998,55 +1998,55 @@
       "binding": {
         "executionId": "production:FED:brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount",
         "executor": "JUNIT",
-        "className": "FederationJourneyIntegrationTest",
+        "className": "bpsh.browser.FederationJourneyIntegrationTest",
         "methodSignature": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount()",
         "parameterKey": null,
         "witnesses": [
           {
             "requirementId": "FED.broker.combined-outputs",
             "assertionId": "FED.broker.combined-outputs#three-selected-outputs-from-one-brokered-journey",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.combined-outputs",
             "assertionId": "FED.broker.combined-outputs#actual-native-context-browser-and-os-process-closure",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "login",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.combined-outputs",
             "assertionId": "FED.broker.combined-outputs#closed-child-jvms-and-case",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "captureCompletedCase",
             "inputKey": null
           },
           {
             "requirementId": "FED.broker.combined-outputs",
             "assertionId": "FED.broker.combined-outputs#owned-provider-container-and-network-absence",
-            "sourcePath": "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java",
+            "sourcePath": "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java",
             "sourceSymbol": "cleanup",
             "inputKey": null
           }
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/FederationJourneyIntegrationTest.java": "8ae082fe7a314660b8b7f4cfd2555e71a051a3ec4ce14279ebced72a604df758",
-          "test/authentication-lab/production-tests/BrowserJourneyIntegrationTest.java": "e8306e0755d9da66e3083aa788ab4c0475ce9fb4de7404e67a54311cdadaca45",
-          "test/authentication-lab/production-tests/ProductionLabAdapter.java": "f3eb0385cb28cae0bb16e10a24edfb19600156db1169505c7f9074b9e9e3fab8",
-          "test/authentication-lab/production-tests/AuthLabSupport.java": "98964203db344187320ed38db39c8ebc22ad43a1a62b1632bb0162c185e674b8",
-          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "2c4e1493edefd913e78b58b577b3d8d01379683c58eace940e356ca21c529c99",
-          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "ed73e5683afb779f588fc71d95e5de4d173f769e76d0b22f47c778258d39fce9",
+          "test/authentication-lab/production-tests/bpsh/browser/FederationJourneyIntegrationTest.java": "a20c6efa64728c81b790199716a7e03bfb4b9fb53064728c4b2eb541d3a4c217",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "477a92b7593678f3bee1a505941b2ebd03004ecab3bcabfc2b19dabfd12f7abc",
+          "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "850fabdc4fcc2124dbeed57fc0c7a23c492558c768626a800da0c1f07e729ae8",
+          "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "f385187fd5bb2114d3b883fc10fc9bc18c2a367711e659eb7580c853f43eb54d",
+          "test/authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java": "034ea297d487ef9c64f3576e88e3212022a7a47ffea5da3d4949688fa7d01b67",
+          "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "b2fab140bc706e1751a756b507f84f9541797d344090e9e1800b8eadd93eec3a",
           "test/authentication-lab/src/main/java/lab/auth/ScenarioCatalog.java": "3fd20a46dd0f8111a32d7661a8d22e3a1a98b640b6e870ad87c9b1820f82be9f",
-          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "93ddebff58db530a4942c3a31ff6641e2e9d547449beca966b24491bd88bfa78",
+          "test/authentication-lab/src/main/java/lab/auth/FederationEnvironment.java": "e9241e7a0b6fa1502753fb481f75d1182763bb42850916525d31c6ba7b78ce72",
           "test/authentication-lab/src/main/java/lab/auth/FederationApplications.java": "6cc135fdc47bc58d44c90f82a0e2b5e0490e828fd778954d8318ea6b0e30ba82",
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195",
-          "test/authentication-lab/src/main/resources/production-policy.json": "67392ac817ce60d8fb6c892a72e9cb52d725233b2fd79b2746c531232e58085f"
+          "test/authentication-lab/src/main/resources/production-policy.json": "9b5425c840200e62be78672a61ce0e9d7d7cb26159fdc0102556c81dcdc220aa"
         },
         "taskPath": ":authLabFederationTest",
-        "configurationHash": "abfe3f5289e16098e8c30e816c8b9a0cbac55bea300e57c7be623a0aba7c346b",
+        "configurationHash": "89acb78bb8441db93b5575f23590af2e711fe2e6037ddf248e9a73bd1e53b0d2",
         "xmlCaseName": "brokeredJourneyReturnsUsableCredentialsForTheExpectedAccount()"
       },
       "disposition": "NEW"

@@ -7,6 +7,7 @@ The extension runtime is Java-owned. Python is not required to install or run it
 - [User guide](../README.md)
 - [Build, prerequisites and verification](../bapp/README.md)
 - [Product contract](product.md)
+- [Code structure and dependency rules](designs/code-structure.md)
 
 ## Maintained designs
 
@@ -23,6 +24,8 @@ The universal design supersedes the authentication design's earlier platform-spe
 [Current integration validation](implementation/main-integration-validation.md) identifies the merged source, installed artifact and current test results.
 
 [Test-suite integration](implementation/test-suite-integration.md) records the integrated lab, portable capture changes and scoped validation.
+
+[Code structure validation](implementation/code-structure-validation.md) records the package boundaries, responsibility splits and packaged-runtime checks.
 
 [Authentication findings fixes](implementation/authentication-findings-fixes.md) records the subsequent main fixes, focused regressions and actual Burp recovery verification.
 

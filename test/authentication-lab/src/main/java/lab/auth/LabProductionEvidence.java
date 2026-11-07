@@ -53,16 +53,12 @@ public final class LabProductionEvidence {
         return row.group().equals("CORE.diagnostics") ? DIAGNOSTICS.get(row.id().substring("CORE.diagnostics.".length())) : null;
     }
     static boolean diagnosticSuccess(ScenarioCatalog.Requirement row){return Set.of("CORE.diagnostics.extraction-only-success","CORE.diagnostics.stale-result","CORE.diagnostics.success-after-failure").contains(row.id());}
-    public static final List<String> CONFIGURATION_FILES = List.of("bapp/build.gradle.kts", "bapp/gradle/auth-lab.gradle.kts", "bapp/settings.gradle.kts",
-            "bapp/gradle/verification-metadata.xml", "test/authentication-lab/build.gradle.kts", "test/authentication-lab/gradle.lockfile",
-            "bapp/gradle/auth-lab-production.gradle.kts", "bapp/gradle/auth-lab-production.init.gradle",
-            "test/authentication-lab/src/main/resources/production-policy.json", "test/authentication-lab/src/main/resources/production-selection.json");
     public static String configurationFingerprint(Path workspace, String task) throws IOException {
         var parts = new ArrayList<>(List.of("authlab-production-config-v1", task));
-        for (String path : CONFIGURATION_FILES) parts.add(path + ":" + LabEvidence.sha256(Files.readAllBytes(workspace.resolve(path))));
-        try (var files = Files.list(workspace.resolve("test/authentication-lab/production-tests"))) {
-            for (var path : files.filter(p -> p.toString().endsWith(".java")).sorted(Comparator.comparing(p -> p.getFileName().toString())).toList())
-                parts.add("test/authentication-lab/production-tests/" + path.getFileName() + ":" + LabEvidence.sha256(Files.readAllBytes(path)));
+        for (String path : LabBuildInputs.configurationFiles(workspace)) parts.add(path + ":" + LabEvidence.sha256(Files.readAllBytes(workspace.resolve(path))));
+        try (var files = Files.walk(workspace.resolve("test/authentication-lab/production-tests"))) {
+            for (var path : files.filter(p -> p.toString().endsWith(".java")).sorted(Comparator.comparing(p -> workspace.relativize(p).toString().replace('\\', '/'))).toList())
+                parts.add(workspace.relativize(path).toString().replace('\\', '/') + ":" + LabEvidence.sha256(Files.readAllBytes(path)));
         }
         if(task.equals(":authLabFederationTest"))for(String path:federationInputs(workspace))parts.add(path+":"+LabEvidence.sha256(Files.readAllBytes(workspace.resolve(path))));
         return LabEvidence.sha256(String.join("\n", parts).getBytes(StandardCharsets.UTF_8));

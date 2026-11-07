@@ -32,6 +32,10 @@ val captureRoot = project(":auth-lab").layout.buildDirectory.dir("captures/${roo
 val labAuditFile = captureRoot.resolve("production-audit.json")
 val productionSnapshot = captureRoot.resolve("production")
 
+fun labOverlayName(file: File) = file.relativeTo(labWorkspace.resolve("test/authentication-lab/production-tests")).invariantSeparatorsPath
+fun labOverlayFiles() = labWorkspace.resolve("test/authentication-lab/production-tests").walkTopDown()
+    .filter { it.isFile && it.extension == "java" }.sortedBy { labOverlayName(it) }.toList()
+
 val prepareAuthLabProduction = tasks.register("prepareAuthLabProduction") {
     group = "authentication lab"
     description = "Capture and recheck current production sources without changing their working copy."
@@ -117,10 +121,10 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
             val builtJar = project(":auth-lab").tasks.named<Jar>("jar").get().archiveFile.get().asFile
             val jar = labClasspath.single { it.name == builtJar.name }
             val configurationParts = mutableListOf("authlab-production-config-v1", ":$taskName")
-            listOf("bapp/build.gradle.kts", "bapp/gradle/auth-lab.gradle.kts", "bapp/settings.gradle.kts", "bapp/gradle/verification-metadata.xml", "test/authentication-lab/build.gradle.kts", "test/authentication-lab/gradle.lockfile",
-                "bapp/gradle/auth-lab-production.gradle.kts", "bapp/gradle/auth-lab-production.init.gradle", "test/authentication-lab/src/main/resources/production-policy.json",
-                "test/authentication-lab/src/main/resources/production-selection.json").forEach { configurationParts.add("$it:${labSha(labWorkspace.resolve(it).readBytes())}") }
-            labWorkspace.resolve("test/authentication-lab/production-tests").listFiles()!!.filter { it.extension == "java" }.sortedBy { it.name }.forEach { configurationParts.add("test/authentication-lab/production-tests/${it.name}:${labSha(it.readBytes())}") }
+            @Suppress("UNCHECKED_CAST")
+            val configurationInputs = (JsonSlurper().parse(labWorkspace.resolve("test/authentication-lab/src/main/resources/configuration-inputs.json")) as Map<String, Any?>)["configurationFiles"] as List<String>
+            configurationInputs.forEach { configurationParts.add("$it:${labSha(labWorkspace.resolve(it).readBytes())}") }
+            labOverlayFiles().forEach { configurationParts.add("test/authentication-lab/production-tests/${labOverlayName(it)}:${labSha(it.readBytes())}") }
             val federationInputs=linkedMapOf<String,String>()
             val federationInputHashes=linkedMapOf<String,String>()
             if(taskName == "authLabFederationTest") {
@@ -141,7 +145,7 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
                 "reportDirectory" to report.absolutePath, "labJar" to jar.absolutePath,
                 "labClasspath" to labClasspath.map { it.absolutePath },
                 "labArtifactHashes" to labClasspath.associate { it.name to labSha(it.readBytes()) },
-                "overlayHashes" to (labWorkspace.resolve("test/authentication-lab/production-tests").listFiles()?.filter { it.extension == "java" } ?: emptyList()).associate { it.name to labSha(it.readBytes()) },
+                "overlayHashes" to labOverlayFiles().associate { labOverlayName(it) to labSha(it.readBytes()) },
                 "selectionSha256" to labSha(labWorkspace.resolve("test/authentication-lab/src/main/resources/production-selection.json").readBytes()),
                 "buildScriptHashes" to listOf("bapp/build.gradle.kts", "bapp/gradle/auth-lab-production.gradle.kts").associateWith { labSha(labWorkspace.resolve(it).readBytes()) },
                 "initSha256" to labSha(labWorkspace.resolve("bapp/gradle/auth-lab-production.init.gradle").readBytes()),
@@ -150,7 +154,7 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
             )
             val transportProfile=rootProject.extra["authLabTransportProfile"]==true
             val requestedTests=providers.gradleProperty("labTests").orNull?:if(transportProfile&&taskName=="authLabBrowserTest")
-                "BrowserJourneyIntegrationTest.actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake" else null
+                "bpsh.browser.BrowserJourneyIntegrationTest.actualUserAgentMarkerCoversRedirectsPopupsFramesFetchWorkersAndWebsocketHandshake" else null
             requestedTests?.let { plan["requestedTests"] = it }
             @Suppress("UNCHECKED_CAST")
             val focusedProfiles = rootProject.extra["authLabFocusedProfiles"] as List<String>
