@@ -64,7 +64,8 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
                 recovery.record(request.messageId(), replay.plan.uses(), false);
                 replay.actualId = request.messageId();
                 appendNote(replay.originalNotes, "BPSH replay: request " + request.messageId() + ". Original response retained.");
-                return RequestToBeSentAction.continueWith(replay.clean, request.annotations().withNotes("BPSH recovery replay of request " + replay.plan.originalId() + "."));
+                var notes = request.annotations(); appendNote(notes, "BPSH recovery replay of request " + replay.plan.originalId() + ".");
+                return RequestToBeSentAction.continueWith(replay.clean, notes);
             }
             ByteArray bytes = request.toByteArray(); tagged = hasTags(bytes);
             if (ownership.classification() == AuthTrafficGuard.Classification.OWNED) {
@@ -122,6 +123,10 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
      */
     @Override public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived response) {
         var notes = response.annotations();
+        // Active jobs already own bounded replay correlation; never retain a second response ledger.
+        for (var replay : replayDeliveries.values()) if (replay.actualId == response.messageId()) {
+            appendNote(notes, "BPSH recovery replay of request " + replay.plan.originalId() + "."); break;
+        }
         if (!closed.get()) {
             boolean internal = guard.consumeResponse(AuthTrafficGuard.Family.GLOBAL, response.messageId());
             var decision = recovery.receivedPlan(response.messageId(), response.statusCode(), () -> {
@@ -131,6 +136,7 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
             }, internal, controls.get().enabled());
             if (decision.matched()) appendNote(notes, "BPSH detected session loss. Original response retained; a request can be replayed at most once.");
             if (decision.replay() != null) {
+                appendNote(notes, "BPSH original request " + response.messageId() + ". Any recovery replay is annotated with this original request reference.");
                 var initiating = response.initiatingRequest(); var service = initiating == null ? null : initiating.httpService();
                 decision.replay().whenComplete((plan, error) -> {
                     if (error != null) { replayFailure(notes, error); return; }
@@ -160,17 +166,25 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
                 if (closed.get() || !controls.get().enabled()) return;
                 clean = HttpRequest.httpRequest(service, ByteArray.byteArray(plan.claim()));
                 lease = guard.beginReplay(); replayDeliveries.put(lease.key(), this);
-                var marked = clean.withUpdatedHeader("User-Agent", lease.decorate(clean.headerValue("User-Agent")));
+                String agent = lease.decorate(clean.headerValue("User-Agent"));
+                // Montoya updates existing headers only; absent agents must receive the marker explicitly.
+                var marked = clean.hasHeader("User-Agent") ? clean.withUpdatedHeader("User-Agent", agent) : clean.withAddedHeader("User-Agent", agent);
                 if (closed.get()) return;
                 transport.send(marked, controls.get().requestWaitTimeoutMs());
             } catch (Exception | LinkageError error) { replayFailure(originalNotes, error); }
             finally { close(); }
         }
-        @Override public void close() { var marker = lease; if (marker != null) { replayDeliveries.remove(marker.key(), this); marker.close(); } plan.close(); }
+        @Override public void close() {
+            var marker = lease; if (marker != null) { replayDeliveries.remove(marker.key(), this); marker.close(); } plan.close();
+        }
     }
     /** Preserves existing user notes and identifies both original and replay outcomes using safe numeric IDs. */
     private static void appendNote(Annotations notes, String message) {
-        synchronized (notes) { String current = notes.notes(); notes.setNotes((current == null || current.isBlank() ? "" : current + "\n") + message); }
+        synchronized (notes) {
+            String current = notes.notes();
+            if (current != null && current.lines().anyMatch(message::equals)) return;
+            notes.setNotes((current == null || current.isBlank() ? "" : current + "\n") + message);
+        }
     }
     /** Reports a known failed replay/wait without changing its cause or inventing an application response. */
     private void replayFailure(Annotations notes, Throwable error) {

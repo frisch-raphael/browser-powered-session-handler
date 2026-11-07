@@ -39,6 +39,19 @@ class JourneyEventLogTest {
             fixture.coordinator.invalidate(fixture.entry(0).identity()); assertTrue(fixture.coordinator.events().snapshot(owner).getLast().message().contains("cleared"));
         }
     }
+    @Test void applicationResponseFeedbackReportsItsStatusWithoutClaimingAuthentication() {
+        for (int status : List.of(200, 204)) try (var fixture = new AuthenticationCoordinatorTest.Fixture(Config.Controls.defaults());
+                var recovery = new SessionRecovery(fixture.coordinator, fixture.clock::nanos)) {
+            var ticket = fixture.acquire(0); fixture.clock.runWorker(); ticket.future().join();
+            var entry = fixture.entry(0); var token = fixture.coordinator.peek(entry.identity());
+            var rule = new JourneyDefinition.Recovery(false, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null);
+            recovery.record(17, List.of(new SessionRecovery.Used(entry.identity(), token.version(), rule)), false);
+            recovery.receivedPlan(17, status, () -> { throw new AssertionError("Status feedback must not inspect a login page's body."); }, false, true);
+            var message = fixture.coordinator.events().snapshot(entry.identity().key()).getLast().message();
+            assertEquals("Request using this journey's credentials returned HTTP " + status + ".", message);
+            assertFalse(message.toLowerCase().contains("accepted"));
+        }
+    }
     @Test void terminalFailuresRecordSafeRecovery() {
         try (var fixture = new AuthenticationCoordinatorTest.Fixture(Config.Controls.defaults())) {
             var failure = new AuthenticationFailure(AuthenticationFailure.Phase.EXTRACTION, AuthenticationFailure.Cause.EXTRACTION, "Session cookie missing.", "Check the cookie name.");

@@ -633,7 +633,7 @@ public final class UiController {
             recovery = current.failure() != null || current.phase() == AuthenticationCoordinator.Phase.COOLDOWN;
             tokenAvailable = current.usableToken();
             String message = current.phase() == AuthenticationCoordinator.Phase.PAUSED ? "Automatic recovery paused: " + entry.definition().displayName() : active ? switch (current.phase()) { case QUEUED -> "Waiting to sign in..."; case BACKOFF -> "Waiting to retry..."; default -> current.setupStage() == null ? "Signing in..." : current.setupStage().description(); }
-                    : current.failure() != null ? current.failure().problem() : current.usableToken() ? current.acceptedUse() ? "Request accepted" : "Credentials captured; protected access unverified" : "Not authenticated";
+                    : current.failure() != null ? current.failure().problem() : current.usableToken() ? current.acceptedUse() ? "Request returned 2xx; protected access unverified" : "Credentials captured; protected access unverified" : "Not authenticated";
             if (current.waitingRequests() > 0) message += " · " + current.waitingRequests() + (current.waitingRequests() == 1 ? " request waiting" : " requests waiting");
             String detail = !active && current.failure() != null ? current.failure().getMessage() + (current.usableToken() ? " Previously cached credentials are still available." : "") : "";
             if (current.phase() == AuthenticationCoordinator.Phase.PAUSED) status.clear();

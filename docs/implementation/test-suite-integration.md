@@ -36,7 +36,7 @@ Counts overlap and must not be added as independent coverage.
 
 An earlier scoped browser run passed all 50 automated checks without skips, using invocation `89aa96ca-baca-4250-8889-780aaccebcf5` and boundary `d6d02200345b527e424ef6184394d1d4f7f88bac4f1bc17679b710b90a4f1df1`. That run preceded final harness fingerprint adjustments; it does not establish final catalog/profile acceptance. A concurrent preliminary baseline/recovery/diagnostics aggregate was rejected after its harness inputs changed, even though its 18 browser checks passed. The fresh diagnostics and fixture profiles above validate the completed evidence join. Preliminary rejected captures were not relabeled as passing.
 
-Validation used the existing uncommitted main authentication fixes. Those files and the local mTLS changes were preserved outside this integration commit; these results are not clean-HEAD qualification without those fixes. Existing root production dependency versions were compared and remained identical.
+Validation used the existing uncommitted main authentication fixes. Those files and the local mTLS changes were preserved outside the original suite integration commit. They are included in the subsequent main delivery; the native source/test bytes were checked against the passing capture before that delivery. Existing root production dependency versions were compared and remained identical.
 
 No additional Burp/UI acceptance or install/refresh was performed. Full federation/transport/host/capability and `all` acceptance are not claimed. Provider assets, certificates and private software-token stores need explicit preparation in this checkout; the old worktree's generated material was not copied. No push was performed.
 

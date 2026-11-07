@@ -24,6 +24,8 @@ The universal design supersedes the authentication design's earlier platform-spe
 
 [Test-suite integration](implementation/test-suite-integration.md) records the integrated lab, portable capture changes and scoped validation.
 
+[Authentication findings fixes](implementation/authentication-findings-fixes.md) records the subsequent main fixes, focused regressions and actual Burp recovery verification.
+
 Each historical record applies only to its recorded artifact and date. It does not establish acceptance of a later integrated build.
 
 - [driver resource probe](implementation/driver-resource-probe.md)

@@ -89,7 +89,7 @@ class SessionRecoveryTest {
             }
             assertTrue(f.coordinator.status(f.entry(0).identity()).acceptedUse()); assertEquals(0, f.coordinator.capacity().waitingRequests());
             assertEquals(1, f.coordinator.events().snapshot(f.entry(0).identity().key()).stream()
-                    .filter(e -> e.message().equals("Application request accepted with these credentials.")).count(), "successful use is visible once per publication, independently of credential capture");
+                    .filter(e -> e.message().equals("Request using this journey's credentials returned HTTP 200.")).count(), "the observed HTTP status is visible once per publication, independently of credential capture");
         }
     }
 

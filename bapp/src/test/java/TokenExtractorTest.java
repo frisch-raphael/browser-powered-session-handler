@@ -72,7 +72,30 @@ class TokenExtractorTest {
         var ambiguous = new TokenExtractor(extraction, CLOCK); ambiguous.considerCookies(List.of(first, second)); assertThrows(AuthenticationFailure.class, ambiguous::result);
         var exact = new TokenExtractor(new JourneyDefinition.CookieExtraction(extraction.originUrl(), "session", "app.example", "/"), CLOCK);
         exact.considerCookies(List.of(first, second)); assertEquals("first", exact.result());
-        var absent = new TokenExtractor(extraction, CLOCK); absent.considerCookies(List.of(new Cookie("session", "old").setDomain("app.example").setPath("/").setExpires(1))); assertThrows(AuthenticationFailure.class, absent::result);
+        var absent = new TokenExtractor(extraction, CLOCK); absent.considerCookies(List.of(new Cookie("session", "old").setDomain("app.example").setPath("/").setExpires(1)));
+        var missing = assertThrows(AuthenticationFailure.class, absent::result);
+        assertTrue(missing.problem().contains("session"));
+        assertEquals(AuthenticationFailure.Cause.EXTRACTION, missing.reason());
+        assertFalse(missing.problem().contains("old")); assertFalse(missing.problem().contains("app.example"));
+    }
+    @Test void incompleteCombinedOutputsKeepObservedFailuresAndCompleteOutputsSupersedeThem() throws Exception {
+        var definition = new JourneyDefinition.CombinedExtraction(List.of(
+                new JourneyDefinition.NamedExtraction("bearer", new JourneyDefinition.JsonExtraction(URI.create("https://login.example"), "/token", "access_token")),
+                new JourneyDefinition.NamedExtraction("cookie", new JourneyDefinition.CookieExtraction(URI.create("https://app.example/"), "session", null, null))));
+        var step = new AuthenticationFailure.Step(java.util.UUID.randomUUID(), 2, AuthStep.Type.WAIT_SELECTOR);
+        var timeout = new AuthenticationFailure(AuthenticationFailure.Phase.STEP, AuthenticationFailure.Cause.STEP_TIMEOUT, "Step 2 timed out.").atStep(step);
+        var connection = BrowserFlowRunner.networkFailure("ERR_CONNECTION_REFUSED");
+        for (var observed : List.of(timeout, connection)) for (boolean partial : List.of(false, true)) {
+            var extractor = new TokenExtractor(definition, CLOCK);
+            if (partial) extractor.considerJson("https://login.example/token", bytes("{\"access_token\":\"usable\"}"), true);
+            extractor.observe(observed);
+            var result = assertThrows(AuthenticationFailure.class, extractor::result);
+            assertEquals(observed.phase(), result.phase()); assertEquals(observed.reason(), result.reason());
+            assertEquals(observed.step(), result.step()); assertEquals(observed.input(), result.input());
+            extractor.considerJson("https://login.example/token", bytes("{\"access_token\":\"usable\"}"), true);
+            extractor.collectCookies(url -> List.of(new Cookie("session", "cookie-value").setDomain("app.example").setPath("/")));
+            assertEquals("usable", extractor.result());
+        }
     }
     @Test void expiryMetadataIsNotSignatureValidationAndIsRecheckedAtCompletion() throws Exception {
         assertEquals(AuthenticationFailure.Cause.TOKEN_EXPIRED, assertThrows(AuthenticationFailure.class, () -> TokenExtractor.normalize(jwt("{\"exp\":2000000000}"), CLOCK)).reason());

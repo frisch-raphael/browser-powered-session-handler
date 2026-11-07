@@ -241,13 +241,22 @@ public final class TokenExtractor {
      */
     public String result() throws AuthenticationFailure {
         if (!parts.isEmpty() && hasToken()) return parts.stream().filter(p -> !(p.definition instanceof JourneyDefinition.CookieExtraction)).findFirst().orElse(parts.getFirst()).result();
+        if (hasToken()) return normalize(token, clock);
+        AuthenticationFailure observed = failure;
+        for (int index = 0; index < parts.size(); index++) {
+            var child = parts.get(index);
+            if (child.hasToken() || child.failure == null) continue;
+            var candidate = child.failure.forCredential(index);
+            if (observed == null || candidate.priority() < observed.priority()) observed = candidate;
+        }
+        if (observed != null) throw observed.phase() == AuthenticationFailure.Phase.EXTRACTION && observed.input() == null
+                ? observed.atInput(AuthenticationFailure.Input.CAPTURE_SOURCE) : observed;
         if (!parts.isEmpty()) for (int index = 0; index < parts.size(); index++) if (!parts.get(index).hasToken()) {
             try { parts.get(index).result(); }
             catch (AuthenticationFailure error) { throw error.forCredential(index); }
         }
-        if (hasToken()) return normalize(token, clock);
-        if (failure != null) throw failure.phase() == AuthenticationFailure.Phase.EXTRACTION && failure.input() == null
-                ? failure.atInput(AuthenticationFailure.Input.CAPTURE_SOURCE) : failure;
+        if (definition instanceof JourneyDefinition.CookieExtraction cookie)
+            throw extraction("The selected cookie " + cookie.name() + " was not received.", "").atInput(AuthenticationFailure.Input.CAPTURE_SOURCE);
         throw extraction("A configured token or cookie was not received.", "").atInput(AuthenticationFailure.Input.CAPTURE_SOURCE);
     }
 

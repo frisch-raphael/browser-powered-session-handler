@@ -6,6 +6,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Checks evidence-based browser diagnostics without launching a browser or making network requests. */
 class BrowserFailureMessagesTest {
+    @Test void unavailableMtlsUpstreamIsTemporaryOnlyWithPositiveSocketEvidence() {
+        for (var cause : new Throwable[]{new java.net.ConnectException("CANARY_CONNECTION"), new java.net.SocketTimeoutException("CANARY_TIMEOUT"),
+                new RuntimeException("CANARY_WRAPPER", new java.net.ConnectException("CANARY_NESTED"))}) {
+            var failure = JourneyTlsProxy.upstreamFailure(cause);
+            assertEquals(AuthenticationFailure.Phase.PROXY, failure.phase());
+            assertEquals(AuthenticationFailure.Cause.TRANSPORT, failure.reason()); assertTrue(failure.retryable());
+            assertFalse(failure.getMessage().contains("CANARY"));
+        }
+        var unknown = JourneyTlsProxy.upstreamFailure(new IllegalStateException("CANARY_UNKNOWN"));
+        assertEquals(AuthenticationFailure.Cause.UNKNOWN, unknown.reason()); assertFalse(unknown.retryable());
+        assertFalse(unknown.getMessage().contains("CANARY"));
+    }
     @Test
     void dnsFailureExplainsHostnameResolutionWithoutUnrelatedTroubleshooting() {
         var failure = BrowserFlowRunner.networkFailure("net::ERR_NAME_NOT_RESOLVED");

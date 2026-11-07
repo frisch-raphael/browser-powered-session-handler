@@ -152,7 +152,7 @@ class AuthenticationCoordinatorTest {
             f.coordinator.recover(List.of(new SessionRecovery.Used(original.identity(), original.version(), rule))); f.clock.runWorker();
             var replacement = f.coordinator.peek(original.identity());
             var validating = f.coordinator.provenance(new SessionRecovery.Used(replacement.identity(), replacement.version(), rule), true);
-            assertFalse(f.coordinator.status(original.identity()).acceptedUse()); f.coordinator.accepted(validating);
+            assertFalse(f.coordinator.status(original.identity()).acceptedUse()); f.coordinator.accepted(validating, 200);
             assertTrue(f.coordinator.status(original.identity()).acceptedUse());
             var later = f.coordinator.provenance(new SessionRecovery.Used(replacement.identity(), replacement.version(), rule), false);
             assertEquals(0, later.validationEpisode());

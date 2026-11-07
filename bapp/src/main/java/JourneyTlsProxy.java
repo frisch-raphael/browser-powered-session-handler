@@ -155,7 +155,8 @@ public final class JourneyTlsProxy implements AutoCloseable, MitmManager {
                      * @param cause Raw chain error inspected only for safe classification, never logged here.
                      */
                     @Override public void connectionFailed(Throwable cause) {
-                        failure.compareAndSet(null, problem(AuthenticationFailure.Cause.PROXY_AUTH, "The configured proxy could not connect to the login server.", "").atInput(AuthenticationFailure.Input.PROXY_URL));
+                        var observed = upstreamFailure(cause);
+                        failure.updateAndGet(current -> current == null || observed.priority() < current.priority() ? observed : current);
                     }
                 }));
             }
@@ -176,6 +177,23 @@ public final class JourneyTlsProxy implements AutoCloseable, MitmManager {
      * @return Only this attempt's browser-facing generated key exception.
      */
     public String spkiSha256() { return certificates.spkiSha256(); }
+    /**
+     * Distinguishes positively observed temporary socket failures from unknown tunnel failures.
+     * @param cause Native connection failure inspected by type only; its text is never retained.
+     * @return Safe proxy-stage failure; trust and configuration failures elsewhere keep precedence.
+     */
+    static AuthenticationFailure upstreamFailure(Throwable cause) {
+        var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+        for (int depth = 0; cause != null && depth < 16 && seen.add(cause); depth++, cause = cause.getCause()) {
+            if (cause instanceof java.net.ConnectException || cause instanceof java.net.NoRouteToHostException
+                    || cause instanceof java.net.SocketTimeoutException || cause instanceof java.nio.channels.ClosedChannelException
+                    || cause instanceof io.netty.channel.ConnectTimeoutException)
+                return problem(AuthenticationFailure.Cause.TRANSPORT, "The connection to the configured proxy could not be established.", "")
+                        .atInput(AuthenticationFailure.Input.PROXY_URL);
+        }
+        return problem(AuthenticationFailure.Cause.UNKNOWN, "The configured proxy could not connect to the login server.", "")
+                .atInput(AuthenticationFailure.Input.PROXY_URL);
+    }
     /**
      * Builds a typed failure with operator recovery guidance and no raw exception cause.
      *

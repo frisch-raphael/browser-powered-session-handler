@@ -280,7 +280,11 @@ public final class BrowserFlowRunner {
             if (routingFailure.get() != null) throw routingFailure.get();
             cookies(context, journey, extractor);
             if (!extractor.hasToken()) try { page.waitForTimeout(Math.min(50.0, Math.max(0.001, (waitEnd - System.nanoTime()) / 1_000_000.0))); }
-            catch (PlaywrightException ex) { break; }
+            catch (PlaywrightException ex) {
+                extractor.observe(new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
+                        "The browser stopped before credentials could be captured."));
+                break;
+            }
         }
         if (routingFailure.get() != null) throw routingFailure.get();
         if (transport != null && transport.failure() != null) extractor.observe(transport.failure());

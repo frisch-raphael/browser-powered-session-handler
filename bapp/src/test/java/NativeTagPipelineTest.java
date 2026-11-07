@@ -292,6 +292,8 @@ class NativeTagPipelineTest {
                         case "httpService" -> null; case "toolSource" -> stub(burp.api.montoya.core.ToolSource.class, (method, x) -> ToolTypeForTest());
                         case "headerValue" -> headers.stream().filter(h -> h.name().equalsIgnoreCase((String) a[0])).map(h -> h.value()).findFirst().orElse(null);
                         case "url" -> { urls.incrementAndGet(); if (raw.contains("<@bpsh")) throw new AssertionError("URL helpers must not receive literal native syntax"); yield "https://app.example/protected"; }
+                        case "hasHeader" -> headers.stream().anyMatch(h -> h.name().equalsIgnoreCase((String) a[0]));
+                        case "withAddedHeader" -> request(raw.substring(0, end) + "\r\n" + a[0] + ": " + a[1] + raw.substring(end), id, inScope);
                         case "withUpdatedHeader" -> {
                             String changed = raw.replaceAll("(?im)^" + java.util.regex.Pattern.quote((String) a[0]) + ":[^\\r\\n]*", a[0] + ": " + a[1]); yield request(changed, id, inScope);
                         }
@@ -396,11 +398,19 @@ class NativeTagPipelineTest {
         }
         @Test void proxyOwnedCarrierIsRetainedUntilGlobalSendAndResponseLedgersRemainIndependent() throws Exception {
             try (var f = new Fixture(); var host = new Host(f); var lease = host.guard.begin()) {
+                var entry = f.registry.snapshot().resolve("employee"); var defaults = Config.Controls.defaults();
+                var rule = new Config.AutomaticRule(true, new Config.JourneySelection(entry.identity().scope(), entry.identity().journeyId()),
+                        Config.UrlMode.ALL_REQUESTS, null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
+                host.controls.set(new Config.Controls(true, List.of(rule), defaults.tools(), 60_000, 60_000, 300_000, null, null));
                 String raw = header("existing").replace("\r\n\r\n", "\r\nUser-Agent: " + lease.decorate("Actual full agent") + "\r\n\r\n"); var request = host.request(raw, 77, false);
                 var proxy = host.handler.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) request);
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.DO_NOT_INTERCEPT, proxy.action());
-                var global = host.handler.handleHttpRequestToBeSent(request); assertTrue(global.request().headerValue("User-Agent").equals("Actual full agent")); assertTrue(f.clock.workers.isEmpty());
-                var response = host.response(77, (short) 200, "application/octet-stream", new byte[0]); host.handler.handleHttpResponseReceived(response);
+                var global = callback(f, () -> host.handler.handleHttpRequestToBeSent(request));
+                assertEquals("Actual full agent", global.request().headerValue("User-Agent")); assertTrue(f.clock.workers.isEmpty());
+                var response = host.response(77, (short) 401, "application/octet-stream", new byte[0]);
+                assertSame(response, host.handler.handleHttpResponseReceived(response).response());
+                assertEquals(0, f.attempts, "Owned login traffic must not authenticate itself even when its URL and 401 match automatic handling.");
+                assertTrue(f.clock.workers.isEmpty()); assertEquals(0, f.coordinator.capacity().waitingRequests());
                 var proxyResponse = host.handler.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response);
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.DO_NOT_INTERCEPT, proxyResponse.action());
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.handler.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response).action());
@@ -419,8 +429,8 @@ class NativeTagPipelineTest {
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.handler.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) normal).action()); assertTrue(f.clock.workers.isEmpty());
             }
         }
-        @ParameterizedTest @ValueSource(booleans = {false, true})
-        void actualReplaySendTraversesTheHooksOnceAndRejectedReplacementPausesBothRequestPolicies(boolean reject) throws Exception {
+        @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({"false,true", "true,true", "false,false", "true,false"})
+        void actualReplaySendTraversesTheHooksOnceAndRejectedReplacementPausesBothRequestPolicies(boolean reject, boolean hasAgent) throws Exception {
             try (var f = new Fixture()) {
                 var hostRef = new java.util.concurrent.atomic.AtomicReference<Host>();
                 var deliveryFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
@@ -434,10 +444,12 @@ class NativeTagPipelineTest {
                         assertEquals(burp.api.montoya.http.handler.RequestAction.CONTINUE, outgoing.action());
                         String wire = new String(outgoing.request().toByteArray().getBytes(), StandardCharsets.ISO_8859_1);
                         assertFalse(wire.contains("BPSHAuth/")); assertTrue(wire.contains("Bearer replacement-token"));
-                        assertTrue(wire.endsWith("body=data")); assertTrue(wire.contains("Cookie: unrelated=keep")); assertTrue(wire.contains("User-Agent: application-agent"));
+                        assertTrue(wire.endsWith("body=data")); assertTrue(wire.contains("Cookie: unrelated=keep")); assertEquals(hasAgent, wire.contains("User-Agent: application-agent")); assertEquals(hasAgent, wire.contains("User-Agent:"));
                         assertTrue(outgoing.annotations().notes().contains("request 50"));
                         var response = h.response(900, (short) (reject ? 401 : 200), null, new byte[0]);
-                        assertSame(response, h.handler.handleHttpResponseReceived(response).response());
+                        var returned = h.handler.handleHttpResponseReceived(response);
+                        assertSame(response, returned.response());
+                        assertTrue(returned.annotations().notes().contains("request 50"), "The response callback must restore correlation even with fresh host annotations.");
                     } catch (Throwable failure) { deliveryFailure.set(failure); }
                     finally { delivered.countDown(); }
                 })) {
@@ -446,10 +458,12 @@ class NativeTagPipelineTest {
                             new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
                     host.controls.set(new Config.Controls(true, List.of(rule), Config.Controls.defaults().tools(), 60_000, 60_000, 300_000, null, null));
                     f.coordinator.acquire(List.of(entry)); f.clock.runWorker();
-                    String raw = "POST /protected HTTP/1.1\r\nHost: app.example\r\nUser-Agent: application-agent\r\nAuthorization: Bearer stale\r\nCookie: unrelated=keep\r\nContent-Length: 9\r\n\r\nbody=data";
+                    String raw = "POST /protected HTTP/1.1\r\nHost: app.example\r\n" + (hasAgent ? "User-Agent: application-agent\r\n" : "") + "Authorization: Bearer stale\r\nCookie: unrelated=keep\r\nContent-Length: 9\r\n\r\nbody=data";
                     host.handler.handleHttpRequestToBeSent(host.request(raw, 50, true));
                     var original = host.response(50, (short) 401, null, new byte[0]);
                     var originalOutcome = host.handler.handleHttpResponseReceived(original); assertSame(original, originalOutcome.response());
+                    String persistedOriginalNotes = originalOutcome.annotations().notes();
+                    assertTrue(persistedOriginalNotes.contains("request 50"), "Original correlation must exist before the host copies the callback result.");
                     assertEquals(0, sends.get()); f.values.put("employee", "replacement-token"); f.clock.runWorker();
                     assertTrue(delivered.await(5, java.util.concurrent.TimeUnit.SECONDS)); assertNull(deliveryFailure.get());
                     assertEquals(1, sends.get()); assertEquals(2, f.attempts); assertTrue(originalOutcome.annotations().notes().contains("request 900"));

@@ -211,7 +211,7 @@ public final class SessionRecovery implements AutoCloseable {
         String text = null; boolean read = false;
         var result = new ArrayList<Used>();
         for (var used : source.used()) {
-            var rule = used.rule(); if (!rule.enabled()) { if (status >= 200 && status < 300) coordinator.accepted(used); continue; }
+            var rule = used.rule(); if (!rule.enabled()) { if (status >= 200 && status < 300) coordinator.accepted(used, status); continue; }
             boolean matched = rule.mode() != JourneyDefinition.RecoveryMode.REGEX && rule.statusCode() == status;
             boolean assessed = rule.mode() == JourneyDefinition.RecoveryMode.STATUS_CODE || matched;
             if (!matched && rule.mode() != JourneyDefinition.RecoveryMode.STATUS_CODE) {
@@ -222,7 +222,7 @@ public final class SessionRecovery implements AutoCloseable {
                 if (text != null) try { matched = pattern(rule.pattern()).matcher(text).find(); assessed = true; } catch (AuthenticationFailure ignored) { }
             }
             if (matched) result.add(used);
-            else if (assessed && status >= 200 && status < 300) coordinator.accepted(used);
+            else if (assessed && status >= 200 && status < 300) coordinator.accepted(used, status);
         }
         return result;
     }

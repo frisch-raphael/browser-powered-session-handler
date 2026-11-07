@@ -726,12 +726,12 @@ public final class AuthenticationCoordinator implements AutoCloseable {
             return new SessionRecovery.Used(used.identity(), used.version(), used.rule(), validation, replay);
         }
     }
-    /** Accepts only an observed successful application response, never credential extraction alone. */
-    public void accepted(SessionRecovery.Used used) {
+    /** Records an attributed 2xx response without claiming that the application verified authentication. */
+    public void accepted(SessionRecovery.Used used, int status) {
         synchronized (lock) {
             State state = states.get(used.identity()); TokenSnapshot token = state == null ? null : state.token.get();
             if (token == null || token.version() != used.version() || paused.containsKey(used.identity().key())) return;
-            if (!state.acceptedUse) event(state.entry, JourneyEventLog.Level.INFO, "Application request accepted with these credentials.");
+            if (!state.acceptedUse) event(state.entry, JourneyEventLog.Level.INFO, "Request using this journey's credentials returned HTTP " + status + ".");
             state.acceptedUse = true;
             if (state.episode != null && state.episode.replacementVersion == used.version()) state.episode.accepted = true;
         }
