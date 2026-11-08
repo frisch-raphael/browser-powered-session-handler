@@ -1,11 +1,13 @@
 package bpsh.support;
 
-import bpsh.config.Config;
-import bpsh.config.JourneyRegistry;
-import bpsh.credentials.AuthenticationResult;
-import bpsh.credentials.TokenExtractor;
-import bpsh.model.AuthenticationFailure;
-import bpsh.session.CoordinatorFixtures;
+import bpsh.journey.JourneyCatalog;
+
+import bpsh.request.RequestSettings;
+import bpsh.journey.editing.JourneyWorkspace;
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.credentials.TokenExtractor;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.authentication.session.CoordinatorFixtures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
@@ -64,7 +66,7 @@ public final class AuthLabSupport implements AutoCloseable {
         var command = new ArrayList<String>();
         command.add(Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString());
         command.add("-Dlab.environmentRoot=" + environment);
-        command.add("-Dlab.cycleDeadlineMs=" + Config.Controls.defaults().cycleTimeoutMs());
+        command.add("-Dlab.cycleDeadlineMs=" + RequestSettings.Controls.defaults().cycleTimeoutMs());
         command.add("-Dlab.invocationId=" + plan.path("invocationId").asText());
         command.add("-classpath");
         var jars = new ArrayList<String>(); plan.path("labClasspath").forEach(p -> jars.add(p.asText()));
@@ -182,10 +184,10 @@ public final class AuthLabSupport implements AutoCloseable {
             control("POST", "/cases/" + id + "/faults", Map.of("generation", generation, "fault", fault), 200);
         }
         /** Actual HTTP fixture acquisition through the production extractor, with no browser-policy claim. */
-        public AuthenticationResult acquire(JourneyRegistry.Entry entry, CoordinatorFixtures.ManualRuntime clock) throws AuthenticationFailure {
+        public AuthenticationResult acquire(JourneyCatalog.Entry entry, CoordinatorFixtures.ManualRuntime clock) throws AuthenticationFailure {
             return acquire(entry,clock,"user2","pass2");
         }
-        public AuthenticationResult acquire(JourneyRegistry.Entry entry, CoordinatorFixtures.ManualRuntime clock,String username,String password) throws AuthenticationFailure {
+        public AuthenticationResult acquire(JourneyCatalog.Entry entry, CoordinatorFixtures.ManualRuntime clock,String username,String password) throws AuthenticationFailure {
             try {
                 var endpoint = url("login/json");
                 var response = http.send(HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(3)).header("Content-Type", "application/json")
@@ -193,9 +195,9 @@ public final class AuthLabSupport implements AutoCloseable {
                 assertEquals(200, response.statusCode());
                 var extractor = new TokenExtractor(entry.definition().extraction(), java.time.Clock.systemUTC());
                 extractor.considerResponse(endpoint.toString(), response.body(), true);
-                var cookies = new ArrayList<com.microsoft.playwright.options.Cookie>();
+                var cookies = new ArrayList<bpsh.authentication.credentials.CapturedCookie>();
                 for (String header : response.headers().allValues("Set-Cookie")) for (var parsed : java.net.HttpCookie.parse(header))
-                    cookies.add(new com.microsoft.playwright.options.Cookie(parsed.getName(), parsed.getValue()).setDomain(endpoint.getHost()).setPath(parsed.getPath()));
+                    cookies.add(new bpsh.authentication.credentials.CapturedCookie(parsed.getName(), parsed.getValue(), endpoint.getHost(), parsed.getPath(), null));
                 extractor.collectCookies(ignored -> cookies);
                 return new AuthenticationResult(entry.identity(), extractor.result(), clock.instant(), clock.nanos(), extractor.cookieValues(), extractor.namedValues(), extractor.expirySeconds());
             } catch (AuthenticationFailure known) { throw known; }

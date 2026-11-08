@@ -1,10 +1,10 @@
 package bpsh.browser;
 
-import bpsh.credentials.AuthenticationResult;
-import bpsh.model.AuthenticationFailure;
-import bpsh.model.JourneyDefinition;
-import bpsh.runtime.PlaywrightDriverAdapter;
-import bpsh.secrets.SecretStore;
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.journey.JourneyDefinition;
+import bpsh.browser.runtime.PlaywrightDriverAdapter;
+import bpsh.journey.SecretStore;
 import bpsh.support.AuthLabSupport;
 import bpsh.support.ProductionLabAdapter;
 import java.net.*;

@@ -2,8 +2,7 @@
 
 ## Authority and native system
 
-This records the author's guided-wizard choice and subsequent explicit UX
-amendments. Burp's Swing theme, fonts, semantic UIManager colors, focus and
+This contract defines the maintained guided-wizard interface. Burp's Swing theme, fonts, semantic UIManager colors, focus and
 selection states remain authoritative. Use 10 px outer insets, 8 px major gaps,
 and 5-6 px within groups. Forms track viewport width and scroll vertically.
 Review at 1280x820 and larger windows. No browser-rendered UI or decorative palette.
@@ -54,48 +53,7 @@ Reload selected only restores a saved journey into its editor.
    on the checkbox, without a permanent paragraph below it. Advanced settings remain collapsed.
    Browser action timeout and final capture wait are entered in seconds, including
    exact fractional seconds, and retain milliseconds only in the saved format.
-2. Login steps: source action picker and plus; numbered stable steps with native
-   move/remove icons. Duration help belongs to the duration field's tooltip.
-   Empty sequences ask the user to add the actions needed to sign in. Explain
-   that zero steps applies only when opening the URL returns credentials without
-   further interaction. Group Interactions and Waits in the picker. Use one expanded
-   row with compact action/selector summaries for the rest; exclude entered text
-   and secrets from summaries. Adding reveals and focuses the new row.
-   Alt+Up/Down moves, Alt+Delete removes, and the Undo icon (tooltip and Alt+Backspace) restores a
-   structural edit without overwriting edits to other rows. History is bounded
-   and session-only, and its secret buffers are wiped on discard/navigation.
-   Duration uses seconds, including exact fractional seconds. Legacy unfinished
-   drafts retain their unit; executable storage remains milliseconds.
-   Browser load options have readable captions. URL waits offer Exact URL and
-   URL pattern; element waits offer Visible, Hidden, Present in page and Removed
-   from page. Legacy defaults remain compatible.
-   Enter secret always shows its masked input; missing versus explicitly empty
-   values are tracked internally without a Provide a secure value checkbox.
-3. Capture credentials: one or several JSON-response/regex/cookie sources, added with plus. Multiple
-   sources require unique user-defined token names.
-   Credential-name tooltips explain the 1-64 ASCII character format and case-insensitive
-   uniqueness. Validate names on leaving the field, then update shown errors as names
-   change, including duplicates affected by other rows. Test login and Copy token
-   reference reveal the first invalid name. Autosave retains unfinished input.
-   Each source shows only its applicable fields, captions and explanations. Source changes clear irrelevant
-   selectors. JSON path help gives a short dotted-key/array-index example; cookie
-   help describes capture and replacement of the same named cookie. Regex sources use the
-   same response-origin/path filters as JSON and expose Start regex and End regex.
-   Each response-token row owns its automatic-injection destination and shows a
-   destination-name field only for Header or Cookie. Captured-cookie rows explain
-   that automatic injection replaces their original cookie names.
-   New sources start blank. Expandable named rows separate Capture from browser
-   from Use on matching requests for JSON/regex tokens. Cookie rows omit that
-   box and its explanatory sentence. The Cookie name label and field share a tooltip
-   explaining that the captured value replaces the cookie with the same name in
-   matching requests; the Cookie source selector has no tooltip. Credential groups retain their existing structure with
-   12 px inner side/bottom padding, 12 px field spacing, 12 px below the credential
-   header and 16 px between capture and injection boxes. Optional cookie filters collapse unless saved
-   values need them. Multiple sources reveal naming guidance and focus a newly
-   required name. Existing JSON/origin tooltips remain sufficient. Cookie sources
-   use Capture URL with task-oriented help: a page where the cookie is available
-   after signing in. Avoid storage/filtering implementation details in the tooltip.
-4. Client certificate: optional page, enabled from Setup. Show only Middleware
+2. Client certificate: optional page, enabled from Setup. Show only Middleware
    file initially. After the middleware path is entered, discover devices in the
    background without a PIN. Automatically select a sole device and display its
    name; multiple devices use an inline native dropdown with Choose device as
@@ -126,13 +84,86 @@ Reload selected only restores a saved journey into its editor.
    are saved. Expand them on request or to reveal a validation error.
    HTTP Login URLs require an explicitly configured HTTPS authentication server.
    The optional CA picker remembers its own folder.
+3. Login steps: source action picker and plus; numbered stable steps with native
+   move/remove icons. Record in browser is an icon action with a tooltip and
+   accessible name. Duration help belongs to the duration field's tooltip.
+   Recording review names omitted browser interactions when known and explains
+   that their numbers are independent of step numbers. Partial recordings,
+   missing values and unresolved popup relationships can replace the captured
+   rows as an editable draft. Finish them in Login steps; Test login validates
+   before execution. Replacement remains one undoable edit.
+   Empty sequences ask the user to add the actions needed to sign in. Explain
+   that zero steps applies only when opening the URL returns credentials without
+   further interaction. Group Interactions, Waits, Controls, Pages and Frames in the picker. Use one expanded
+   row with compact action/selector summaries for the rest; exclude entered text
+   and secrets from summaries. Adding reveals and focuses the new row.
+   Alt+Up/Down moves, Alt+Delete removes, and the Undo icon (tooltip and Alt+Backspace) restores a
+   structural edit without overwriting edits to other rows. History is bounded
+   and session-only, and its secret buffers are wiped on discard/navigation.
+   Duration uses seconds, including exact fractional seconds. Legacy unfinished
+   drafts retain their unit; executable storage remains milliseconds.
+   Browser load options have readable captions. URL waits offer Exact URL and
+   URL pattern; element waits offer Visible, Hidden, Present in page and Removed
+   from page. Legacy defaults remain compatible.
+   Enter secret always shows its masked input; missing versus explicitly empty
+   values are tracked internally without a Provide a secure value checkbox.
+   Every action has its own concise tooltip on the hovered list item before selection,
+   in the Add picker and each row. Keyboard highlighting exposes the same help.
+   Hovering never selects an action or saves the draft. Use the exact copy in
+   [browser recording](browser-journey-recording.md#action-picker-tooltips-and-wording).
+   Checkbox/radio steps choose Checked or Unchecked; new rows require a choice.
+   Dropdown options use an editable value list with Add/Remove, preserving an empty
+   list separately from an empty value. Press key offers Enter, Ctrl+Enter, Tab
+   and Shift+Tab in a native selector. The compact summary names the selected key.
+   Frame steps enter one embedded frame, leave one level or
+   leave all frames. Page steps declare a popup before its next opening action,
+   select the initial tab or a declared popup, and explicitly close the current page.
+   No automatic context fallback follows a closed page or detached frame.
+   Field guidance explains selectors, seconds, URL modes, option values and popup
+   names even after typing. Popup references use native choices and retain missing
+   references as invalid drafts for correction.
+4. Capture credentials: one or several JSON-response/regex/cookie sources, added with plus. Multiple
+   sources require unique user-defined token names.
+   Credential-name tooltips explain the 1-64 ASCII character format and case-insensitive
+   uniqueness. Validate names on leaving the field, then update shown errors as names
+   change, including duplicates affected by other rows. Test login and Copy token
+   reference reveal the first invalid name. Autosave retains unfinished input.
+   Each source shows only its applicable fields, captions and explanations. Source changes clear irrelevant
+   selectors. JSON path help gives a short dotted-key/array-index example; cookie
+   help describes capture and replacement of the same named cookie. Regex sources use the
+   same response-origin/path filters as JSON and expose Start regex and End regex.
+   Each response-token row owns its automatic-injection destination and shows a
+   destination-name field only for Header or Cookie. Captured-cookie rows explain
+   that automatic injection replaces their original cookie names.
+   New sources start blank. Expandable named rows separate Capture from browser
+   from Use on matching requests for JSON/regex tokens. Cookie rows omit that
+   box and its explanatory sentence. The Cookie name label and field share a tooltip
+   explaining that the captured value replaces the cookie with the same name in
+   matching requests; the Cookie source selector has no tooltip. Credential groups retain their existing structure with
+   12 px inner side/bottom padding, 12 px field spacing, 12 px below the credential
+   header and 16 px between capture and injection boxes. Optional cookie filters collapse unless saved
+   values need them. Multiple sources reveal naming guidance and focus a newly
+   required name. Once exposed, the name field stays editable when other sources
+   are removed, including while its text is cleared and retyped. Reloading a named
+   single source also keeps its name field visible. Existing JSON/origin tooltips remain sufficient. Cookie sources
+   use Capture URL with task-oriented help: a page where the cookie is available
+   after signing in. Avoid storage/filtering implementation details in the tooltip.
 5. Test & use: separate Test login and Use in requests groups. Test login and
    Clear cached credentials have visible labels. Explicit testing preserves the
    current dock view and highlights Event log for new test activity instead of
    opening it. Opening the log clears that journey's highlight;
    failed actions carry their exact saved generation and stable step ID, with
    Go to step available only while that generation remains current. Capture that
-   ends execution early explains skipped remaining steps in the log.
+   ends response-only execution early explains skipped remaining steps in the log.
+   Cookie-based journeys complete all configured login steps before accepting
+   captured credentials, including when the login page already sets a session cookie.
+   When an explicit Test login or Retry finishes, show a native result dialog
+   naming the journey and the captured token/cookie names and count, or the safe
+   error and identified failed step. Captured values remain in Journey cache.
+   Refresh the completed controls before opening the dialog; after dismissal,
+   reveal any identified invalid field or failed step. Automatic authentication
+   stays non-modal. Do not show obsolete results after editing, changing journeys,
+   cancelling the test or unloading the extension; unload dismisses an open result.
    Copy BPSH tag offers named credentials and explicit encodings without
    logging in or reading cached values. No request-tag preview is displayed.
 
@@ -216,6 +247,12 @@ first, followed by acquisition time, in a compact native summary. Display the da
 month and clock time; full timestamps with year and timezone appear in plain-text
 tooltips and accessible descriptions. Times stay unchanged until a new cache
 publication is displayed. It never acquires or refreshes a token.
+Saved edits retain usable cached values with their original acquisition, expiry
+and refresh times. Renamed and reordered credentials follow their unchanged
+capture sources; removed credentials disappear. A newly required source needs
+a fresh login. While edits are incomplete, the inspector shows the previous
+captured selection and execution stays blocked until the settings are valid.
+Clear cache, deletion, unavailability and expiry discard the cached values.
 Omit the repeated Journey cache/journey heading; align Close with the cache summary.
 Use the full-width table without a selected-value pane. Each row has a context
 menu with Copy name and Copy value, also available through Shift+F10. Copy name
@@ -296,16 +333,9 @@ acceptance and stress remain separately recorded gates.
 
 ## Step-log acceptance requirements
 
-# Journey step log attribution — test-suite ownership
+The integrated Java authentication lab owns browser and host acceptance. Reuse its current fixtures and assertions.
 
-The user explicitly assigned failed-step log verification to the `test-suite`
-worktree on 2026-11-05. The production worktree implements the behavior and runs
-focused editor/clipboard/secret/certificate checks. It does not add a second
-browser lab or claim the checks below have passed.
-
-## Behavior to verify in the owning suite
-
-The full audit follow-up also adds explicit element conditions (visible, hidden,
+Step controls include explicit element conditions (visible, hidden,
 attached, detached) and URL matching modes (exact, glob). Include runtime checks
 for those modes and verify old journeys without the optional fields retain
 visible-element and inferred URL matching behavior. New wait-duration drafts
@@ -325,14 +355,21 @@ reload and exact fractional seconds alongside failed-step attribution.
   edits, generation replacement, deletion or a switch to another journey.
 - Event sorting/filtering must keep Go to step attached to the selected event,
   not its visible row number or the most recent failure from another run.
-- Explicit Test login opens Event log, flushes autosave, exposes the normal
-  shared Cancel action while running, and records its outcome. Background
-  authentication must not force the dock open.
-- When all configured credentials arrive early, remaining actions are skipped
+- Explicit Test login flushes autosave, exposes the normal shared Cancel action
+  while running, records its outcome and opens the completion summary. It keeps
+  the current dock view and highlights Event log. Background authentication
+  must not force the dock or a completion dialog open.
+- When all configured response-only credentials arrive early, remaining actions are skipped
   under the existing completion policy and the log records the correct count.
 
 ## Native integration requirements
 
 The HTTPS Login URL's exact canonical server is included in the client-certificate allowlist. Additional authentication servers and Trusted CA remain advanced settings. HTTP login URLs require an explicit HTTPS authentication server. Verify same-host/different-port isolation, explicitly allowed redirect servers and absence of certificate delivery to unrelated resources. These are acceptance requirements, not a physical-token compatibility claim.
 
-Step failure navigation uses stable step UUIDs and the exact journey generation, never parsed log text or the current visible row. Journey attribution and paused-recovery wrapping must preserve that target. Early credential completion records skipped-step metadata without executing the remaining steps.
+Step failure navigation uses stable step UUIDs and the exact journey generation, never parsed log text or the current visible row. Journey attribution and paused-recovery wrapping must preserve that target. Response-only early completion records skipped-step metadata without executing the remaining steps. Any cookie capture requires successful completion of the configured sequence; an anonymous cookie must not turn a failed login step into a success.
+
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
+
+Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+
+Settings keeps the selected authentication policy explanation visible below its selector. It states whether a request waits or is sent unchanged, when background credentials take effect, and that valid cached credentials are added immediately. Tooltips and accessible descriptions use the same selected-policy explanation.

@@ -21,6 +21,63 @@ import org.littleshoot.proxy.impl.ThreadPoolConfiguration;
 /** Shared transport applications used by native checks and foreground serving. No extension logic lives here. */
 public final class TransportFixtures {
     private TransportFixtures() {}
+
+    /** Completes an owned WebSocket upgrade so browser fixtures observe the actual handshake. */
+    public static void webSocketUpgrade(HttpExchange exchange) throws IOException {
+        try {
+            String key = exchange.getRequestHeaders().getFirst("Sec-WebSocket-Key");
+            String accept = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-1")
+                    .digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+            exchange.getResponseHeaders().set("Upgrade", "websocket");
+            exchange.getResponseHeaders().set("Connection", "Upgrade");
+            exchange.getResponseHeaders().set("Sec-WebSocket-Accept", accept);
+            exchange.sendResponseHeaders(101, -1);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IOException("WebSocket handshake digest unavailable", impossible);
+        } finally { exchange.close(); }
+    }
+
+    /** A target whose ingress proves that an intended transport rejection was bypassed. */
+    public static ControlledApplication.Origin countingTarget(ControlledApplication.Origin origin, Runnable observed) {
+        return origin.route("/login", exchange -> {
+            observed.run();
+            ControlledApplication.Origin.reply(exchange, 200, "application/json", "{\"access_token\":\"must-not-arrive\"}");
+        });
+    }
+
+    /** Observes a positive certificate control and subsequent absence at an unlisted destination. */
+    public static final class CertificateObservation {
+        private final String expected;
+        private final List<String> fingerprints = new CopyOnWriteArrayList<>();
+        private final AtomicBoolean allowedRedirect = new AtomicBoolean();
+        public CertificateObservation(String expected) {
+            if (!expected.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Expected a fixture fingerprint");
+            this.expected = expected;
+        }
+        private String peer(HttpExchange exchange) throws Exception {
+            try {
+                var certificate = ((HttpsExchange)exchange).getSSLSession().getPeerCertificates()[0];
+                return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()));
+            } catch (SSLPeerUnverifiedException absent) { return "NONE"; }
+        }
+        public void target(HttpExchange exchange) throws IOException {
+            try {
+                String fingerprint = peer(exchange); fingerprints.add(fingerprint);
+                boolean matched = expected.equals(fingerprint);
+                ControlledApplication.Origin.reply(exchange, matched ? 200 : 401, "application/json", matched
+                        ? "{\"access_token\":\"selected-certificate-proof\"}" : "{\"error\":\"client_certificate_absent\"}");
+            } catch (IOException error) { throw error; } catch (Exception invalid) { exchange.close(); }
+        }
+        public void redirect(HttpExchange exchange, URI destination) throws IOException {
+            try {
+                if (!expected.equals(peer(exchange))) { exchange.sendResponseHeaders(403, -1); exchange.close(); return; }
+                allowedRedirect.set(true); exchange.getResponseHeaders().set("Location", destination.toString());
+                exchange.sendResponseHeaders(302, -1); exchange.close();
+            } catch (IOException error) { throw error; } catch (Exception invalid) { exchange.close(); }
+        }
+        public List<String> fingerprints() { return List.copyOf(fingerprints); }
+        public boolean allowedRedirectObserved() { return allowedRedirect.get(); }
+    }
     public static final Set<String> SERVABLE=Set.of("TLS.proxy.direct","TLS.proxy.http-proxy","TLS.proxy.connect","TLS.proxy.proxy-unavailable","TLS.proxy.no-direct-fallback",
             "TLS.mtls.expected-fingerprint","TLS.mtls.same-CN-pair","TLS.mtls.missing-certificate","TLS.mtls.token-unavailable","TLS.mtls.allowed-redirect","TLS.mtls.disallowed-origin",
             "TLS.mtls.resource-without-mtls","TLS.trust.untrusted-origin","TLS.trust.wrong-host");
@@ -190,7 +247,7 @@ public final class TransportFixtures {
         var trusted=KeyStore.getInstance("JKS");trusted.load(null,null);trusted.setCertificateEntry("fixture-ca",ca);
         var trust=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());trust.init(trusted);
         var context=SSLContext.getInstance("TLS");context.init(keys.getKeyManagers(),trust.getTrustManagers(),null);
-        var server=HttpsServer.create(new InetSocketAddress("127.0.0.1",0),128);
+        var server=(HttpsServer)ControlledApplication.Origin.listener(true);
         server.setHttpsConfigurator(new HttpsConfigurator(context){
             @Override public void configure(HttpsParameters parameters){var ssl=context.getDefaultSSLParameters();if(clientAuth==ClientAuth.OPTIONAL)ssl.setWantClientAuth(true);else ssl.setNeedClientAuth(clientAuth==ClientAuth.REQUIRED);parameters.setSSLParameters(ssl);}
         });

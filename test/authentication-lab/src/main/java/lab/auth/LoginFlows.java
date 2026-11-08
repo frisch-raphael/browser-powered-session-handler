@@ -10,6 +10,288 @@ import lab.auth.FixtureIdentityStore.Role;
 
 /** The test application's login state machine, independent of the extension's journey runner. */
 public final class LoginFlows {
+    /** Reuses the controlled origins and control endpoints for password/metadata and rapid-Stop qualification. */
+    public static ControlObservations recording(ControlledApplication.Origin origin, ControlledApplication.Origin cross) {
+        var observed = journeyControls(origin, cross);
+        origin.route("/recording", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html; charset=utf-8",
+                readResource("recording.html").replace("{{OUTER}}", cross.url("/controls/outer").toString())));
+        origin.route("/recording-submit", exchange -> {
+            observed.recordedSubmission.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            ControlledApplication.Origin.reply(exchange, 200, "application/json", "{\"access_token\":\"recording-token\"}");
+        });
+        return observed;
+    }
+    /** Shared control/frame/popup evidence for native replay and recorder qualification. */
+    public static final class ControlObservations {
+        public final java.util.concurrent.atomic.AtomicReference<String> nested = new java.util.concurrent.atomic.AtomicReference<>();
+        public final java.util.concurrent.atomic.AtomicReference<String> popup = new java.util.concurrent.atomic.AtomicReference<>();
+        public final java.util.concurrent.atomic.AtomicInteger popupSubmissions = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicInteger completed = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicReference<String> recordedSubmission = new java.util.concurrent.atomic.AtomicReference<>();
+    }
+
+    /** Installs common form controls, nested cross-origin frames and popup fault controls on owned origins. */
+    public static ControlObservations journeyControls(ControlledApplication.Origin origin, ControlledApplication.Origin cross) {
+        var observed = new ControlObservations();
+        origin.route("/login", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html; charset=utf-8", """
+                <label><input type=checkbox id=check>Remember</label>
+                <label><input type=radio name=role id=radio>Administrator</label>
+                <select id=single><option value=guest>Guest</option><option value=admin>Administrator</option></select>
+                <select id=multi multiple><option value=''>Empty value</option><option value='blue,green'>Two colors</option><option value=old selected>Old</option></select>
+                <input id=enter aria-label='Submission field'><output id=key-proof></output>
+                <iframe id=outer src='%s'></iframe>
+                <button id=open onclick="window.open('/controls/popup')">Open login popup</button>
+                <button id=double onclick="window.open('/controls/popup');window.open('/controls/popup')">Open two popups</button>
+                <button id=closed onclick="window.open('/controls/closed')">Open closing popup</button>
+                <button id=detach onclick="document.querySelector('#outer').remove()">Remove frame</button>
+                <button id=finish>Finish</button>
+                <script>
+                document.querySelector('#enter').onkeydown=e=>{if(e.key==='Enter'&&e.ctrlKey)document.querySelector('#key-proof').textContent='ctrl-enter'};
+                document.querySelector('#finish').onclick=()=>fetch('/token',{method:'POST',body:JSON.stringify({
+                  checked:document.querySelector('#check').checked,radio:document.querySelector('#radio').checked,
+                  single:document.querySelector('#single').value,multi:Array.from(document.querySelector('#multi').selectedOptions,o=>o.value),
+                  key:document.querySelector('#key-proof').textContent})});
+                </script>
+                """.formatted(cross.url("/controls/outer"))));
+        cross.route("/controls/outer", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html",
+                "<p id=outer-marker>Outer frame</p><iframe id=inner src='" + origin.url("/controls/inner") + "'></iframe>"));
+        origin.route("/controls/inner", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", """
+                <input id=nested><button id=framebutton>Continue inside frame</button>
+                <script>document.querySelector('#framebutton').onclick=()=>fetch('/controls/frame-state',{method:'POST',body:document.querySelector('#nested').value})
+                  .then(()=>{history.pushState({},'', '/controls/inner?done');let marker=document.createElement('p');marker.id='frame-done';marker.textContent='Frame completed';document.body.append(marker)})</script>
+                """));
+        origin.route("/controls/frame-state", exchange -> {
+            observed.nested.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            ControlledApplication.Origin.reply(exchange, 200, "text/plain", "ok");
+        });
+        origin.route("/controls/popup", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", """
+                <form><input id=popup-text><button>Submit</button></form><script>
+                document.querySelector('form').onsubmit=e=>{e.preventDefault();fetch('/controls/popup-state',{method:'POST',body:document.querySelector('#popup-text').value})
+                  .then(()=>{let marker=document.createElement('p');marker.id='submitted';marker.textContent='Submitted';document.body.append(marker)})}</script>
+                """));
+        origin.route("/controls/closed", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", "<script>setTimeout(()=>window.close(),100)</script>"));
+        origin.route("/controls/popup-state", exchange -> {
+            observed.popup.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            observed.popupSubmissions.incrementAndGet();
+            ControlledApplication.Origin.reply(exchange, 200, "text/plain", "ok");
+        });
+        origin.route("/token", exchange -> {
+            JsonObject state = JsonParser.parseString(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+            boolean correct = !state.get("checked").getAsBoolean() && state.get("radio").getAsBoolean()
+                    && state.get("single").getAsString().equals("admin") && state.get("multi").toString().equals("[\"\",\"blue,green\"]")
+                    && state.get("key").getAsString().equals("ctrl-enter") && "nested value".equals(observed.nested.get()) && "popup value".equals(observed.popup.get());
+            if (correct) observed.completed.incrementAndGet();
+            ControlledApplication.Origin.reply(exchange, correct ? 200 : 400, "application/json", correct ? "{\"access_token\":\"controls-token\"}" : "{}");
+        });
+        return observed;
+    }
+
+    /** Token-response variants shared by focused browser regressions. */
+    public enum TokenResponse { SUCCESS, MISSING_OUTPUT, AUTH_REJECTED, TEMPORARY_SERVICE }
+
+    /** Installs a token-fetch login on an owned HTTP or HTTPS origin; the caller starts it. */
+    public static ControlledApplication.Origin tokenFetch(ControlledApplication.Origin origin, String token, TokenResponse response) {
+        return tokenFetch(origin, token, response, ignored -> {});
+    }
+
+    /** Installs the shared response while leaving production-specific request assertions in the caller. */
+    public static ControlledApplication.Origin tokenFetch(ControlledApplication.Origin origin, String token, TokenResponse response,
+            java.util.function.Consumer<HttpExchange> tokenObserved) {
+        origin.route("/login", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", "<script>fetch('/token')</script>"));
+        origin.route("/token", exchange -> {
+            tokenObserved.accept(exchange);
+            int status = switch (response) { case AUTH_REJECTED -> 401; case TEMPORARY_SERVICE -> 503; default -> 200; };
+            if (response != TokenResponse.SUCCESS) exchange.getResponseHeaders().set("Retry-After", "7");
+            ControlledApplication.Origin.reply(exchange, status, "application/json", response == TokenResponse.SUCCESS
+                    ? LabRun.JSON.toJson(Map.of("access_token", token)) : "{}");
+        });
+        return origin;
+    }
+
+    /** Installs one login exposing JSON, cookies and an optional regex capture surface. */
+    public static ControlledApplication.Origin combinedOutputs(ControlledApplication.Origin origin, boolean tenantCookie, boolean csrfMeta) {
+        origin.route("/login", exchange -> {
+            exchange.getResponseHeaders().add("Set-Cookie", "sid=session-value; Path=/; HttpOnly");
+            ControlledApplication.Origin.reply(exchange, 200, "text/html; charset=utf-8",
+                    (csrfMeta ? "<meta name='csrf' content='csrf-value'>" : "") + "<script>fetch('/token')</script>");
+        });
+        origin.route("/token", exchange -> {
+            if (tenantCookie) exchange.getResponseHeaders().add("Set-Cookie", "tenant=tenant-value; Path=/; HttpOnly");
+            ControlledApplication.Origin.reply(exchange, 200, "application/json", "{\"access_token\":\"access-value\"}");
+        });
+        return origin;
+    }
+
+    /** Installs the standalone form used by isolated artifact/runtime probes. */
+    public static ControlledApplication.Origin probeForm(ControlledApplication.Origin origin, String token, String cookie) {
+        return probeForm(origin, token, cookie, null);
+    }
+
+    /** Installs the same form with an optional anonymous session cookie issued before submission. */
+    public static ControlledApplication.Origin probeForm(ControlledApplication.Origin origin, String token, String cookie, String anonymousCookie) {
+        origin.route("/login", exchange -> {
+            if (anonymousCookie != null) exchange.getResponseHeaders().add("Set-Cookie", "session=" + anonymousCookie + "; Path=/; HttpOnly");
+            ControlledApplication.Origin.reply(exchange, 200, "text/html",
+                    "<form method='POST' action='/token'><input id='user' name='user'><button id='submit'>Sign in</button></form>");
+        });
+        origin.route("/token", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            if (cookie != null) exchange.getResponseHeaders().add("Set-Cookie", "session=" + cookie + "; Path=/; HttpOnly");
+            ControlledApplication.Origin.reply(exchange, 200, "application/json", LabRun.JSON.toJson(Map.of("access_token", token)));
+        });
+        return origin;
+    }
+
+    /** Installs an output-free login; observation can request cancellation in its test owner. */
+    public static ControlledApplication.Origin noOutput(ControlledApplication.Origin origin, Runnable observed) {
+        origin.route("/login", exchange -> {
+            observed.run();
+            ControlledApplication.Origin.reply(exchange, 200, "text/html", "never emits token");
+        });
+        return origin;
+    }
+
+    /** Fresh-cookie observations are local to one fixture and never shared between tests. */
+    public static final class FreshCookie {
+        private final java.util.concurrent.atomic.AtomicInteger visits = new java.util.concurrent.atomic.AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicInteger oldCookies = new java.util.concurrent.atomic.AtomicInteger();
+        public int visits() { return visits.get(); }
+        public int oldCookies() { return oldCookies.get(); }
+    }
+
+    /** Installs a new cookie per visit and detects cookies carried from a previous context. */
+    public static FreshCookie freshCookie(ControlledApplication.Origin origin) {
+        var observation = new FreshCookie();
+        origin.route("/login", exchange -> {
+            if (exchange.getRequestHeaders().getFirst("Cookie") != null) observation.oldCookies.incrementAndGet();
+            exchange.getResponseHeaders().add("Set-Cookie", "session=fresh-" + observation.visits.incrementAndGet() + "; Path=/; HttpOnly");
+            ControlledApplication.Origin.reply(exchange, 200, "text/html", "<script>fetch('/token')</script>");
+        });
+        origin.route("/token", exchange -> ControlledApplication.Origin.reply(exchange, 200, "application/json", "{\"access_token\":\"early-token\"}"));
+        return observation;
+    }
+
+    /** Observations and invalidation control for the browser session-recovery fixture. */
+    public static final class Recovery {
+        public final java.util.concurrent.atomic.AtomicInteger loginAttempts = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicInteger issuances = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicInteger protectedIngress = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicInteger acceptedActions = new java.util.concurrent.atomic.AtomicInteger();
+        public final java.util.concurrent.atomic.AtomicReference<String> acceptedToken = new java.util.concurrent.atomic.AtomicReference<>();
+    }
+
+    /** Installs one successful acquisition, two temporary failures, then successful recovery. */
+    public static Recovery recovery(ControlledApplication.Origin origin) {
+        var state = new Recovery();
+        origin.route("/login", exchange -> {
+            int attempt = state.loginAttempts.incrementAndGet();
+            boolean unavailable = attempt == 2 || attempt == 3;
+            ControlledApplication.Origin.reply(exchange, unavailable ? 503 : 200, "text/html",
+                    unavailable ? "temporarily unavailable" : "<script>fetch('/token')</script>");
+        });
+        origin.route("/token", exchange -> {
+            String token = "browser-recovery-" + state.issuances.incrementAndGet(); state.acceptedToken.set(token);
+            ControlledApplication.Origin.reply(exchange, 200, "application/json", LabRun.JSON.toJson(Map.of("access_token", token)));
+        });
+        origin.route("/protected", exchange -> {
+            state.protectedIngress.incrementAndGet();
+            boolean accepted = state.acceptedToken.get() != null
+                    && ("Bearer " + state.acceptedToken.get()).equals(exchange.getRequestHeaders().getFirst("Authorization"));
+            if (accepted) state.acceptedActions.incrementAndGet();
+            ControlledApplication.Origin.reply(exchange, accepted ? 200 : 401, "text/plain", accepted ? "fixture-account" : "session lost");
+        });
+        return state;
+    }
+
+    /** Installs the retained-step form, redirect and delayed normalized-token response. */
+    public static java.util.concurrent.atomic.AtomicInteger normalizedForm(ControlledApplication.Origin origin) {
+        var posted = new java.util.concurrent.atomic.AtomicInteger();
+        origin.route("/login", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", """
+                <input id='name'><input id='password' type='password'><button id='submit'>Sign in</button>
+                <script>submit.onclick=async()=>{await fetch('/credentials',{method:'POST',body:JSON.stringify({user:document.querySelector('#name').value,password:document.querySelector('#password').value})});location.href='/done'};</script>
+                """));
+        origin.route("/credentials", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (body.contains("fixture-user") && body.contains("fixture-password")) posted.incrementAndGet();
+            ControlledApplication.Origin.reply(exchange, 200, "text/plain", "ok");
+        });
+        origin.route("/done", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", "<div id='done'>Ready</div><script>setTimeout(()=>fetch('/token'),1200)</script>"));
+        origin.route("/token", exchange -> ControlledApplication.Origin.reply(exchange, 200, "application/json", "{\"access_token\":\"  Bearer fixture-token  \"}"));
+        return posted;
+    }
+
+    /** Installs an unrelated failing asset and exposes its actual request observations. */
+    public static void unrelatedFailure(ControlledApplication.Origin origin, Runnable loginObserved, Runnable assetObserved) {
+        origin.route("/login", exchange -> {
+            loginObserved.run();
+            ControlledApplication.Origin.reply(exchange, 200, "text/html", "<body><script>fetch('/unrelated').then(()=>{let done=document.createElement('div');done.id='asset-observed';done.textContent='Asset observed';document.body.append(done)})</script>");
+        });
+        origin.route("/unrelated", exchange -> {
+            assetObserved.run(); ControlledApplication.Origin.reply(exchange, 503, "text/plain", "temporary third-party asset");
+        });
+    }
+
+    /** Bounded response hold used by actual-browser step-failure assertions. */
+    public static final class StepFailure {
+        private final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        public void release() { release.countDown(); }
+    }
+
+    /** Installs missing/ambiguous controls and a bounded busy response on the shared origin. */
+    public static StepFailure stepFailure(ControlledApplication.Origin origin, boolean presentCanary) {
+        var state = new StepFailure();
+        origin.route("/login", exchange -> ControlledApplication.Origin.reply(exchange, 200, "text/html", "<input><input>"
+                + (presentCanary ? "<input id=CANARY_SELECTOR>" : "")
+                + "<button id=begin-busy onclick=\"fetch('/busy')\">Begin</button>"));
+        origin.route("/busy", exchange -> {
+            try { state.release.await(5, java.util.concurrent.TimeUnit.SECONDS); ControlledApplication.Origin.reply(exchange, 200, "text/plain", "ready"); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); exchange.close(); }
+        });
+        return state;
+    }
+
+    /** Live, read-only observations for the complete owned browser-surface recipe. */
+    public record BrowserSurfaces(Set<String> requiredPaths, Set<String> reachedPaths) {
+        public BrowserSurfaces { requiredPaths = Set.copyOf(requiredPaths); reachedPaths = Collections.unmodifiableSet(reachedPaths); }
+    }
+
+    /** Installs redirect/frame/popup/fetch/worker/WebSocket coverage without extension-specific policy. */
+    public static BrowserSurfaces ownedBrowserSurfaces(ControlledApplication.Origin origin,
+            ControlledApplication.Origin cross, java.util.function.Consumer<HttpExchange> webSocketObserved) {
+            var requiredPaths=Set.of("/redirect","/redirected","/frame-fetch","/popup-fetch","/cross","/dedicated-fetch","/sw-fetch","/ws");
+            Set<String> reachedPaths=java.util.concurrent.ConcurrentHashMap.newKeySet();
+            java.util.function.Consumer<String> reached=path->{if(requiredPaths.contains(path))reachedPaths.add(path);};
+            cross.route("/cross", e -> { reached.accept("/cross");e.getResponseHeaders().set("Access-Control-Allow-Origin", "*"); ControlledApplication.Origin.reply(e, 200, "text/plain", "cross"); });
+            origin.route("/login", e -> ControlledApplication.Origin.reply(e, 200, "text/html", """
+                <body><script>
+                (async()=>{
+                const signal=name=>new Promise(resolve=>{const listener=e=>{if(e.data===name){window.removeEventListener('message',listener);resolve();}};window.addEventListener('message',listener);});
+                await fetch('/redirect');await fetch('%s');
+                const frameReady=signal('frame-ready'),frame=document.createElement('iframe');frame.src='/frame';document.body.append(frame);await frameReady;
+                const popupReady=signal('popup-ready');window.open('/popup');await popupReady;
+                const worker=new Worker('/worker.js');await new Promise(resolve=>worker.onmessage=()=>resolve());
+                const swReady=new Promise(resolve=>navigator.serviceWorker.addEventListener('message',e=>{if(e.data==='sw-ready')resolve();}));
+                const registration=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;registration.active.postMessage('go');
+                await swReady;await new Promise(resolve=>{const ws=new WebSocket('ws://'+location.host+'/ws');ws.onopen=()=>{ws.close();resolve();};});
+                await fetch('/token');
+                })().catch(()=>fetch('/fixture-error'));</script>
+                """.formatted(cross.url("/cross"))));
+            origin.route("/redirect", e -> { reached.accept("/redirect");e.getResponseHeaders().set("Location", "/redirected"); e.sendResponseHeaders(302, -1); e.close(); });
+            for (String path : List.of("/redirected", "/frame-fetch", "/popup-fetch", "/dedicated-fetch", "/sw-fetch")) origin.route(path, e -> {reached.accept(path);ControlledApplication.Origin.reply(e, 200, "text/plain", "ok");});
+            origin.route("/frame", e -> ControlledApplication.Origin.reply(e, 200, "text/html", "<script>fetch('/frame-fetch').then(()=>parent.postMessage('frame-ready','*'))</script>"));
+            origin.route("/popup", e -> ControlledApplication.Origin.reply(e, 200, "text/html", "<script>fetch('/popup-fetch').then(()=>opener.postMessage('popup-ready','*'))</script>"));
+            origin.route("/worker.js", e -> ControlledApplication.Origin.reply(e, 200, "application/javascript", "fetch('/dedicated-fetch').then(()=>postMessage('worker-ready'))"));
+            origin.route("/sw.js", e -> ControlledApplication.Origin.reply(e, 200, "application/javascript", "self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('message',e=>e.waitUntil(fetch('/sw-fetch').then(()=>e.source.postMessage('sw-ready'))));"));
+            origin.route("/ws", exchange -> {
+                reached.accept("/ws"); webSocketObserved.accept(exchange); TransportFixtures.webSocketUpgrade(exchange);
+            });
+            origin.route("/token", e -> {
+                if(reachedPaths.containsAll(requiredPaths))ControlledApplication.Origin.reply(e,200,"application/json","{\"access_token\":\"marked-token\"}");
+                else ControlledApplication.Origin.reply(e,500,"text/plain","owned browser surfaces incomplete");
+            });
+        return new BrowserSurfaces(requiredPaths, reachedPaths);
+    }
+
     static final class Transaction {
         final FixtureIdentityStore.Secret state = FixtureIdentityStore.randomSecret();
         final FixtureIdentityStore.Secret csrf = FixtureIdentityStore.randomSecret();

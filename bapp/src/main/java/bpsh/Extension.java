@@ -3,21 +3,23 @@ package bpsh;
 import bpsh.browser.AuthTrafficGuard;
 import bpsh.browser.BrowserAuthentication;
 import bpsh.browser.BrowserFlowRunner;
-import bpsh.config.Config;
-import bpsh.config.ConfigManager;
-import bpsh.config.JourneyRegistry;
-import bpsh.config.UserLibraryStore;
-import bpsh.diagnostics.Diagnostics;
-import bpsh.http.HttpSessionHandler;
-import bpsh.http.NativeTagResolver;
-import bpsh.http.SessionRecovery;
-import bpsh.model.AuthenticationFailure;
-import bpsh.mtls.Pkcs11IdentityManager;
-import bpsh.runtime.BrowserRuntimeManager;
-import bpsh.secrets.SecretStore;
-import bpsh.session.AuthenticationCoordinator;
-import bpsh.ui.AuthenticationTagMenu;
-import bpsh.ui.UiController;
+import bpsh.browser.BrowserSessionLauncher;
+import bpsh.browser.BrowserJourneyRecorder;
+import bpsh.request.RequestSettings;
+import bpsh.journey.persistence.ProjectStore;
+import bpsh.journey.editing.JourneyWorkspace;
+import bpsh.journey.persistence.UserLibraryStore;
+import bpsh.burp.http.Diagnostics;
+import bpsh.burp.http.HttpSessionHandler;
+import bpsh.burp.http.NativeTagResolver;
+import bpsh.burp.http.SessionRecovery;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.browser.runtime.BrowserRuntimeManager;
+import bpsh.journey.SecretStore;
+import bpsh.authentication.session.AuthenticationCoordinator;
+import bpsh.burp.ui.AuthenticationTagMenu;
+import bpsh.burp.ui.UiController;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.Annotations;
@@ -88,14 +90,15 @@ public final class Extension implements BurpExtension {
         final MontoyaApi api;
         final AtomicBoolean closed = new AtomicBoolean();
         final List<Registration> registrations = new ArrayList<>();
-        final AtomicReference<Config.Controls> controls = new AtomicReference<>(Config.Controls.defaults());
+        final AtomicReference<RequestSettings.Controls> controls = new AtomicReference<>(RequestSettings.Controls.defaults());
         final SecretStore secrets = new SecretStore();
-        final JourneyRegistry registry = new JourneyRegistry(secrets);
+        final JourneyWorkspace registry = new JourneyWorkspace(secrets);
         final UserLibraryStore library = new UserLibraryStore();
         final BrowserRuntimeManager runtime = new BrowserRuntimeManager();
         final Pkcs11IdentityManager identities = new Pkcs11IdentityManager();
         final AuthTrafficGuard guard = new AuthTrafficGuard();
         final AuthenticationCoordinator coordinator;
+        final BrowserJourneyRecorder recorder;
         final NativeTagResolver resolver;
         final SessionRecovery recovery;
         final Diagnostics diagnostics;
@@ -109,7 +112,9 @@ public final class Extension implements BurpExtension {
          */
         Services(MontoyaApi api) {
             this.api = api; diagnostics = new Diagnostics(api.logging()::logToError);
-            var runner = new BrowserFlowRunner(runtime, identities, guard, Clock.systemUTC());
+            var launcher = new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC());
+            var runner = new BrowserFlowRunner(launcher, Clock.systemUTC());
+            recorder = new BrowserJourneyRecorder(launcher);
             coordinator = BrowserAuthentication.coordinator(registry, secrets, runner, identities, controls.get()); resolver = new NativeTagResolver(registry, coordinator);
             recovery = new SessionRecovery(coordinator, (identity, message) -> {
                 var entry = registry.snapshot().entries().get(identity.key());
@@ -121,7 +126,7 @@ public final class Extension implements BurpExtension {
             });
             handler = new HttpSessionHandler(registry, resolver, guard, recovery, diagnostics, controls,
                     (request, timeout) -> api.http().sendRequest(request, burp.api.montoya.http.RequestOptions.requestOptions().withResponseTimeout(timeout)));
-            ui = new UiController(api, new ConfigManager(api.persistence().extensionData()), library, secrets, registry, coordinator, identities, controls, diagnostics);
+            ui = new UiController(api, new bpsh.journey.editing.JourneyStorage(new ProjectStore(api.persistence().extensionData()), library), secrets, registry, coordinator, identities, controls, diagnostics, recorder);
         }
         /** Builds and registers the suite tab on the EDT; loading native stores is queued afterward. */
         void buildUi() { var component = ui.buildUi(); api.userInterface().applyThemeToComponent(component); registrations.add(api.userInterface().registerSuiteTab(NAME, component)); }
@@ -129,10 +134,10 @@ public final class Extension implements BurpExtension {
         /** Revokes all work, stops UI/watchers, deregisters hooks and closes only extension-owned services. */
         @Override public void close() {
             if (!closed.compareAndSet(false, true)) return;
-            handler.close(); ui.shutdown();
+            handler.close(); recorder.close(); ui.shutdown();
             for (Registration registration : List.copyOf(registrations)) try { registration.deregister(); } catch (RuntimeException ignored) { /* continue mandatory resource cleanup */ }
-            coordinator.close(); guard.close(); recovery.close(); diagnostics.close();
-            Runnable finish = () -> { ui.awaitSaves(5000); coordinator.awaitWorkers(2500); identities.close(); runtime.close(); secrets.close(); };
+            coordinator.close(); recovery.close(); diagnostics.close();
+            Runnable finish = () -> { ui.awaitSaves(5000); coordinator.awaitWorkers(2500); recorder.awaitClosed(5000); guard.close(); identities.close(); runtime.close(); secrets.close(); };
             if (SwingUtilities.isEventDispatchThread()) { var thread = new Thread(finish, "bpsh-unload-cleanup"); thread.setDaemon(true); thread.start(); } else finish.run();
         }
     }

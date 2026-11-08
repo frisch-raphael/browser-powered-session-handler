@@ -1,6 +1,6 @@
 package bpsh.browser;
 
-import bpsh.model.AuthenticationFailure;
+import bpsh.authentication.AuthenticationFailure;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.LinkedHashMap;

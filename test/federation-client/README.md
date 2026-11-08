@@ -9,13 +9,13 @@ Prepare and check the isolated module from the repository root:
 .\bapp\gradlew.bat -p bapp :federation-client:test --offline
 ```
 
-The fixture decoder uses maintained Spring/Nimbus validation, scoped TLS trust and bounded key fetching. One local check qualifies our API-specific audience/type configuration using already validated claims. The previous fourteen-case signed-token mutation matrix and its signing helper were removed; library signature, algorithm and time validation do not add extension coverage. These changes remain subject to the [required final relevance audit](../../docs/designs/authentication-test-lab/test-relevance-audit.md).
+The fixture decoder uses maintained Spring/Nimbus validation, scoped TLS trust and bounded key fetching. One local check qualifies our API-specific audience/type configuration using already validated claims. Library signature, algorithm and time validation do not add extension coverage. Review each selected test for a concrete extension failure or a necessary harness purpose.
 
 Additional harness checks cover bounded private launch settings, redaction, control authentication/versioning, one actual resource child JVM, and exact cookie/token-byte association even when every identity claim matches. That child serves HTTPS, rejects unauthenticated access, keeps controls on a separate listener, and retains CLOSED before exiting after Stop. Default checks use scoped Java trust and explicit peer hostnames, so they do not depend on Windows hosts/root installation. Both client and resource roles are executable. The client uses Spring's maintained confidential OIDC exchange, the locally pinned official browser adapter and Spring/OpenSAML for real SAML login.
 
 The isolated checks qualify only the harness: private settings, resource proof boundaries, HTTPS/control wiring and retirement of the one backend-failure checkpoint. They do not establish extension coverage or test the IdP's protocol correctness. The explicit `federationContractTest` reuses its prior infrastructure owner to check our parent controls, child startup, reset and stale-generation rejection. Redundant issuer/asset/protocol bootstrap assertions were removed. It never creates an alternate IdP or signed-message validator suite.
 
-The product scope is actual production-runner OAuth/SAML login, usable captured credentials for the expected account, fresh attempts, selected IdP-cookie SSO verification, accurate failure reporting and cleanup. Nine former OAuth protocol-validation cases and five signed SAML validator cases are EXCLUDED from the catalog. Historical results are retained without counting them as product acceptance. A final whole-suite redundancy/relevance audit is required before completion.
+The product scope is actual production-runner OAuth/SAML login, usable captured credentials for the expected account, fresh attempts, selected IdP-cookie SSO verification, accurate failure reporting and cleanup. Provider protocol-validator checks are excluded from product acceptance. Review the complete selected suite for duplicate and irrelevant coverage before claiming completion.
 
 Explicit operational entry points, after [Windows preparation](../authentication-lab/Windows-Federation-Setup.md) and local image/adapter preparation:
 
@@ -54,6 +54,34 @@ Reset retires the old client/API pair and provider login state. Preparation star
 
 `prepareFederationRuntime` freezes all 105 local runtime JARs in a directory identified by their hashes. Each child validates the manifest and every artifact before launch. This prevents a parallel rebuild from changing a live server. Client/API settings, control keys and launch files stay private in the owning run directory. OS process identity, authenticated readiness, graceful Stop and terminal CLOSED are checked; case reset retires the previous pair before recreating provider state. Ordinary tests never install trust, pull images or download the browser adapter.
 
-The pinned provider image and official browser adapter are recorded in `provider-assets.lock.json`. Their preparation records are under `build/p3/preparation/`. The original worktree's [Windows hosts/trust setup](../authentication-lab/Windows-Federation-Setup.md) was verified with its own generated material: all four named HTTPS origins passed in bundled Chromium, a wrong hostname failed and all ten observed probe processes closed. Normal tests never install trust or alter hosts, and this preparation does not establish successful provider login.
+The pinned provider image and official browser adapter are recorded in `provider-assets.lock.json`. Their preparation records are under `build/p3/preparation/`. Use the [Windows hosts/trust setup](../authentication-lab/Windows-Federation-Setup.md) to prepare and qualify dedicated material for this checkout. Normal tests never install trust or alter hosts. Preparation alone does not establish successful provider login.
 
 The complete ESM import set is verified, including the official adapter's `deprecations.js`. SAML requests follow the actual owned client policy; provider responses/assertions retain maintained signature validation. The seed explicitly includes the provider session statement. Unknown client routes return an error, and transaction sessions use cookies only, so errors cannot silently initiate a different login protocol or put session IDs in URLs.
+
+## Source contract
+
+### Overview
+
+Source contracts below supplement the operational guidance above. Test-only trees are outside this contract index.
+
+### Interface
+
+- [Source tree](./src/README.md): Java, browser resources.
+
+### Invariants
+
+- Private validated settings select distinct named HTTPS client/resource roles. [`FederationApplication.java:FederationApplication.main`](./src/main/java/lab/federation/FederationApplication.java)
+
+### Side Effects
+
+- Role startup opens HTTPS and private control listeners. [`FederationApplication.java:FederationApplication.main`](./src/main/java/lab/federation/FederationApplication.java)
+
+### Verification
+
+From the repository root, with Java 21:
+
+```powershell
+.\bapp\gradlew.bat -p bapp :federation-client:test --offline
+```
+
+The evidence inventory includes every regular file under `src/main`, including these contracts. Adding or editing one changes the federation configuration fingerprint used by future acceptance; existing reviewed bindings must be intentionally refreshed and reviewed before a new acceptance invocation. Ordinary compilation has no such evidence gate. See [`LabProductionEvidence.java:federationInputs`](../authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java) and [`LabProductionEvidence.java:collect`](../authentication-lab/src/main/java/lab/auth/LabProductionEvidence.java).

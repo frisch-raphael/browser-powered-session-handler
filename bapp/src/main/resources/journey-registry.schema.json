@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:bpsh:journey-registry:v1",
   "title": "BPSH native journey documents v1",
-  "$comment": "ConfigManager validates document structure, stable UUIDs and secret ownership. Unfinished journeys and alias collisions can be saved; execution rejects invalid or ambiguous settings. Runtime scopes, generations, tokens and browser profiles are never serialized.",
+  "$comment": "JourneyJson validates document structure, stable UUIDs and secret ownership. Unfinished journeys and alias collisions can be saved; execution rejects invalid or ambiguous settings. Runtime scopes, generations, tokens and browser profiles are never serialized.",
   "oneOf": [
     {
       "type": "object",
@@ -194,6 +194,14 @@
           },
           "maxItems": 64,
           "default": []
+        },
+        "requestPolicy": {
+          "type": "string",
+          "enum": [
+            "wait_for_login",
+            "do_not_wait"
+          ],
+          "default": "wait_for_login"
         }
       },
       "required": [],

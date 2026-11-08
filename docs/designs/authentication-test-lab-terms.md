@@ -1,6 +1,6 @@
 # Authentication test lab: terms and examples
 
-> Integrated into main on 2026-11-07. This document preserves the reviewed design and historical phase terminology. Current commands and implementation status are in [the lab guide](../../test/authentication-lab/README.md). Production capture now defaults to this checkout; reviewed owner selection is portable, while exact source manifests and evidence are generated per invocation.
+Current commands are in [the lab guide](../../test/authentication-lab/README.md). Production captures use this checkout and record exact source manifests and observed results for each invocation.
 
 This explains the [implementation contracts](authentication-test-lab-contracts.md). The examples illustrate the proposed tests; they are not claims that the implementation already exists or passes. You do not need to read this whole file first: follow the relevant section when a term is unclear.
 
@@ -65,7 +65,7 @@ The same distinction applies to success: extracting a cookie is one fact; using 
 
 **Baseline or smoke test.** A small first check intended to catch obvious breakage quickly. Example: the proposed 12-entry baseline includes bearer login, cookie login, a cookie-dependent redirect, repeated-tag selection and two contrasting error messages. It does not establish that the whole suite passes.
 
-**Revised contract/profile.** The behavior requiring the agreed changes beyond the predecessor's design. Example: one journey publishes both a cookie and bearer, or a rejected original request is replayed after recovery. The `revised` profile selects those cases; it cannot silently pass while those capabilities are missing.
+**Revised contract/profile.** The combined-credential and recovery behavior selected by the `revised` profile. Example: one journey publishes both a cookie and bearer, or a rejected original request is replayed after recovery. The `revised` profile selects those cases; it cannot silently pass while those capabilities are missing.
 
 **Matrix, axis and domain.** A matrix lists the combinations to test. An axis is one choice that varies; its domain is the allowed choices. Example: location has four values—header, path, query and text body—and reference count has three—1, 2 and 3.
 
@@ -231,7 +231,7 @@ The same distinction applies to success: extracting a cookie is one fact; using 
 
 **Replay control and assertion cache.** A replay control submits already-used material again. An assertion cache is one possible mechanism remembering prior IDs. Example: observing denial of the second submission establishes rejection of that replay, but does not prove whether the receiver used a cache or consumed request correlation. The report must not claim the internal mechanism without evidence.
 
-## Java tooling, shared code and the EGM review
+## Java tooling and shared code
 
 **JDK, JVM and child JVM.** The JDK supplies Java development tools/libraries; a JVM is a running Java process; a child JVM is a separate process started by the test owner. Example: the federation client runs separately so its Spring dependencies/settings do not replace the extension's dependencies in the test process.
 
@@ -245,12 +245,4 @@ The same distinction applies to success: extracting a cookie is one fact; using 
 
 **PKCS#11 and SoftHSM.** PKCS#11 is the interface for cryptographic tokens such as smart cards. SoftHSM is a software token used for repeatable tests. Example: a SoftHSM mTLS result can establish the software-token case; it does not establish that the user's physical card works.
 
-**Predecessor and P2 audit.** The predecessor is the work being developed in java-playwright. The P2 audit rechecks its actual integrated code/tests before extending them. Example: if its retry test already uses three attempts by then, we reuse it instead of “fixing” an obsolete four-attempt observation.
-
-**Canonical implementation, facade and delegation.** Canonical means the single shared implementation we choose to keep. A facade preserves an existing calling interface; delegation has it call the shared code. Example: P1 builds the lab server; after the P2 audit, an existing Origin test helper can call that server's shared machinery instead of retaining a second copy.
-
-**P0–P5 versus EGM stages.** P0–P5 are proposed future implementation phases: P0 setup/catalog, P1 controlled targets, P2 predecessor integration/audit, P3 federation/transport, P4 revised recovery and Burp acceptance, P5 documentation cutover. EGM Stages 5–9 are reviews of the documents happening now. Example: reaching EGM Stage 9 does not mean P4 has been implemented.
-
-**EGM, fresh reviewer and round.** EGM is the Elephant–Goldfish Model: the drafting assistant retains context, while a fresh reviewer reads explicit documents without the drafting conversation. A round is one set of those reviews plus resolution. Example: three reviewers independently examine the detailed plan, then their duplicate findings are combined.
-
-**Implementation readiness, zero-decision rule and severity.** Readiness asks whether the plan specifies enough to implement without inventing important behavior. The zero-decision rule concerns those design choices, not every variable name. Example: deciding whether two cookies may come from different logins must already be documented. A Blocker prevents proceeding, a Major is a substantial gap to resolve, and a Nit is a minor correction. These document findings are not claims of existing runtime bugs. The review loop needs two consecutive rounds without unresolved Blocker/Major findings; it is not a requirement for zero editorial nits.
+**Canonical implementation, facade and delegation.** Canonical means the single shared implementation we choose to keep. A facade preserves an existing calling interface; delegation has it call the shared code. Example: an Origin test helper delegates shared server/lifecycle behavior to the canonical Java lab.

@@ -35,7 +35,7 @@ class CatalogContractTest {
         var catalog = ScenarioCatalog.load();
         for (var row : catalog.requirements()) if (row.group().equals("CORE.tag-matrix")) {
             assertEquals("one-snapshot-per-journey", fact(row, "publication")); assertEquals(2, row.revision());
-            assertEquals("test/authentication-lab/production-tests/bpsh/http/NativeTagPipelineTest.java", row.binding().witnesses().getFirst().sourcePath());
+            assertEquals("test/authentication-lab/production-tests/bpsh/burp/http/NativeTagPipelineTest.java", row.binding().witnesses().getFirst().sourcePath());
         }
         var literal = catalog.requirement("CORE.encoding.literal-prefix").binding();
         assertEquals("wrapperLiteralTextWorksWithoutStartingAnyAuthenticationAndTagOutputIsNeverReparsed()", literal.methodSignature());

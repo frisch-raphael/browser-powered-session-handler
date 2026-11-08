@@ -1,7 +1,7 @@
 package bpsh.browser;
 
-import bpsh.model.AuthStep;
-import bpsh.model.AuthenticationFailure;
+import bpsh.journey.AuthStep;
+import bpsh.authentication.AuthenticationFailure;
 import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.TimeoutError;
 import java.time.*;
@@ -18,10 +18,26 @@ public final class BrowserFailureClassifier {
      * @return Typed positive transport/trust observation, or null for an unmapped outcome.
      */
     public static AuthenticationFailure networkFailure(String symbol) {
+        return networkFailure(symbol, false);
+    }
+    /** Classifies actual connection evidence using the current certificate configuration. */
+    public static AuthenticationFailure networkFailure(String symbol, boolean clientCertificateConfigured) {
         if (symbol == null) return null;
         String code = symbol.startsWith("net::") ? symbol.substring(5) : symbol;
         if (!code.matches("ERR_[A-Z0-9_]{1,100}")) return null;
         switch (code) {
+            case "ERR_SSL_CLIENT_AUTH_CERT_NEEDED" -> {
+                return new AuthenticationFailure(AuthenticationFailure.Phase.NAVIGATION, AuthenticationFailure.Cause.CLIENT_CERTIFICATE_REQUIRED,
+                        clientCertificateConfigured ? "This server requires a client certificate. Check the selected certificate and allowed authentication servers in Client certificate."
+                                : "This server requires a client certificate. Enable Client certificate in Setup, then choose a certificate and enter its PIN.")
+                        .atInput(AuthenticationFailure.Input.CERTIFICATE);
+            }
+            case "ERR_BAD_SSL_CLIENT_AUTH_CERT" -> {
+                return new AuthenticationFailure(AuthenticationFailure.Phase.NAVIGATION, AuthenticationFailure.Cause.CLIENT_CERTIFICATE_FAILED,
+                        clientCertificateConfigured ? "Client-certificate authentication failed. Check the selected certificate and allowed authentication servers in Client certificate."
+                                : "Client-certificate authentication failed. Enable Client certificate in Setup and configure a certificate and PIN.")
+                        .atInput(AuthenticationFailure.Input.CERTIFICATE);
+            }
             case "ERR_NAME_NOT_RESOLVED" -> {
                 return navigationFailure(AuthenticationFailure.Cause.UNKNOWN, code,
                         "The login server's hostname could not be resolved");
@@ -81,7 +97,7 @@ public final class BrowserFailureClassifier {
                             : "The browser rejected authentication (" + code + ").").atInput(AuthenticationFailure.Input.PROXY_URL);
         if (code.equals("ERR_SSL_PROTOCOL_ERROR") || code.equals("ERR_SSL_VERSION_OR_CIPHER_MISMATCH"))
             return navigationFailure(AuthenticationFailure.Cause.UNKNOWN, code,
-                    "The browser could not establish an HTTPS connection to the login server");
+                    "Could not establish a secure connection. Check the server certificate settings and whether a client certificate is required");
         return navigationFailure(AuthenticationFailure.Cause.UNKNOWN, code,
                 "The browser could not open the login page");
     }

@@ -1,6 +1,6 @@
 # Authentication lab
 
-The Java catalog, controlled login applications, protected credential checks and private lifecycle controls are implemented. Scoped component/browser tests exercise captured production code from integrated `main`; the applications and acceptance overlays are maintained here in main. Real federation journeys, software-token transport and foreground serving are implemented. All active automated requirements have bindings. The [main fix verification](../../docs/designs/authentication-test-lab/findings-fix-verification.md) distinguishes current passing fix checks from historical failures. The separate host ledger records artifact-specific Burp observations and remaining manual gaps.
+The Java catalog, controlled login applications, protected credential checks and private lifecycle controls are implemented. Scoped component/browser tests exercise captured production code from integrated `main`; the applications and acceptance overlays are maintained here in main. Real federation journeys, software-token transport and foreground serving are implemented. All active automated requirements have bindings. Each invocation qualifies its own captured source, exact artifact and actual observations. Host/manual checks remain separate gates.
 
 Run these commands from the repository root, using Java 21:
 
@@ -12,7 +12,7 @@ Run these commands from the repository root, using Java 21:
 .\bapp\gradlew.bat -p bapp authLabDoctor -PlabProfiles=baseline
 ```
 
-`matrix` lists historical requirement IDs, owning layers, expected observations and prerequisites. The catalog retains **41 groups / 980 entries**: **389 active product requirements, 523 verification-service checks, 28 excluded entries, 24 manual Burp entries and 16 capability assessments**. All 912 active automated requirements have bindings; they share 851 executions. The full credential matrix validates our custom test server and does not count as extension coverage. Bindings and passing results remain separate. See the [relevance audit](../../docs/designs/authentication-test-lab/relevance-audit.md).
+`matrix` lists current requirement IDs, owning layers, expected observations and prerequisites. The catalog has 41 groups and 980 entries: 912 active automated requirements, 28 explicit exclusions, 24 manual Burp checks and sixteen capability assessments. Active bindings share 851 execution owners. Binding counts are not passing results, and fixture-only checks are not extension coverage.
 
 `doctor` checks prerequisites without logging in. It currently qualifies Java 21 and current fixture bindings only; it does not qualify production-profile prerequisites. Use the actual profile commands below for production execution. The Java exit code for blocked work is 3, which Gradle reports as a failed command. This indicates a missing prerequisite or binding, not a failed login or network connection.
 
@@ -29,7 +29,7 @@ This uses the existing `:auth-lab:test` task, with fresh JUnit XML, safe observe
 
 Focused profiles write `build/authlab/{invocationId}/report-profiles.jsonl`, alongside their component/browser reports. Missing completion, duplicate or foreign requirements, stale sources/context, changed XML and passing labels contradicted by JUnit prevent acceptance. Existing explicit scoped production tasks remain available below. `LabMain` returns 2 for invalid arguments/catalogs, 3 for blocked/incomplete work and 0 for completed metadata/lifecycle operations. No empty selected test suite can pass.
 
-Packaging and offline cold/cache/upgrade/rollback checks are maintained in main with the universal packaging design. The [installation reuse record](../../docs/designs/authentication-test-lab/installation-evidence-reuse.md) links its verified universal artifact and existing Windows/Linux evidence. This lab no longer selects its duplicate packaged-classloader helper. Installation smoke evidence is kept separate from broader authentication acceptance and the A8 artifact used by this lab's recorded product checks.
+Packaging and delivered-artifact cold/cache checks are maintained by the native build. Follow the [packaging contract](../../docs/designs/universal-packaging.md) and qualify the exact JAR independently of broader authentication acceptance.
 
 ## Test the actual extension outside Burp
 
@@ -45,11 +45,9 @@ The reviewed [production policy](src/main/resources/production-policy.json) sele
 
 The current production artifact is universal: Windows x64, Linux x64 and Intel macOS. The browser/native executions recorded here run on Windows; bundled resources alone do not qualify execution on another platform. Prepare production's locked browser assets first. The lab can reuse all required source ZIPs from that cache only after checking their locked sizes and hashes; the offline command downloads no browser sources. Java 21 and the resolved/verified Gradle dependencies are also prerequisites. No Docker, provider or native token store is needed for these scoped component/browser checks.
 
-Use `"-PlabTests=ClassName.methodName"` to investigate a particular owner, for example `"-PlabTests=bpsh.ui.DiagnosticsTest.*"`. This narrows the reviewed allowlist; it cannot select excluded upstream proxy-authentication methods. Such a subset is not full profile acceptance. The `labProfiles` property does not filter these explicit scoped tasks.
+Use `"-PlabTests=ClassName.methodName"` to investigate a particular owner, for example `"-PlabTests=bpsh.burp.ui.DiagnosticsTest.*"`. This narrows the reviewed allowlist; it cannot select excluded upstream proxy-authentication methods. Such a subset is not full profile acceptance. The `labProfiles` property does not filter these explicit scoped tasks.
 
-Each invocation retains a plan with source/test/helper/artifact hashes, resolved production/test dependency graphs, JUnit XML/HTML, safe component observations, protected identities, configured budgets and observed process cleanup under `build/authlab/{invocationId}/{taskHash}/`. The task hash is the full SHA-256 of its Gradle task path. Earlier scoped checkpoints remain under `build/p2/invocations/`. Missing methods, empty discovery, skips or failed assertions cannot yield a successful scoped task. Historical defects and their subsequent corrections retain separate evidence; see [main fix verification](../../docs/designs/authentication-test-lab/findings-fix-verification.md).
-
-An early checkpoint, `aae080da-b7a7-4de5-93f9-90f31b170840`, had 198 component bindings and reported the then-failing missing-cookie feedback; its browser task passed 49 checks. Those counts are historical. The final fix checks pass 569 component, 50 browser and nine native transport tests with zero skips; the linked verification record supplies their exact source identities. Current binding/profile membership comes from the catalog, rather than those older counts. Later application edits receive a fresh source capture when production tasks run.
+Each invocation retains a plan with source/test/helper/artifact hashes, resolved production/test dependency graphs, JUnit XML/HTML, safe component observations, protected identities, configured budgets and observed process cleanup under `build/authlab/{invocationId}/{taskHash}/`. The task hash is the full SHA-256 of its Gradle task path. Missing methods, empty discovery, skips or failed assertions cannot yield a successful scoped task.
 
 The diagnostic owners also check step numbers, action labels, causes, event details, journey state, request feedback, safe step navigation and redaction. Eight native browser observations cover real action failures and missing secure input. Server rejection must keep its own cause instead of being replaced by a later action timeout. These assertions extend existing owners; they do not claim the unbound diagnostic cases are complete.
 
@@ -90,7 +88,7 @@ The private control listener is separate from application traffic. It supports t
 
 ## What the targets provide
 
-A successful JSON login is `POST /cases/{id}/login/json?generation=N` with exactly `username,password`. It returns a bearer and sets `LAB_C1`/`LAB_C2`, all from one new issuance. `/login/jwt` provides the explicit signed scheduling variant. `GET|POST .../protected/{subset}` accepts exactly the requested subset of `b,c1,c2`; success returns the actual account and issuance. Strict combinations require the same issuance. Duplicated, malformed or unrequired auth roles are rejected. `/protected/independent-cookies` separately preserves the legacy same-account/different-login behavior.
+A successful JSON login is `POST /cases/{id}/login/json?generation=N` with exactly `username,password`. It returns a bearer and sets `LAB_C1`/`LAB_C2`, all from one new issuance. `/login/jwt` provides the explicit signed scheduling variant. `GET|POST .../protected/{subset}` accepts exactly the requested subset of `b,c1,c2`; success returns the actual account and issuance. Strict combinations require the same issuance. Duplicated, malformed or unrequired auth roles are rejected. `/protected/independent-cookies` separately accepts matching-account cookies from distinct logins.
 
 Use a fresh proof request carrying only the selected credential roles. An automatic cookie jar can otherwise add unrequired auth cookies to a bearer-only proof. The tests verify the returned identity and actual action counts, not just HTTP 200.
 
@@ -98,7 +96,7 @@ Prepared forms cover username/password, two pages, hidden-token plus cookie CSRF
 
 Cookie targets expose rotation, deletion, tuple ambiguity, path attributes and an IdP/client decoy on distinct `localhost`/`127.0.0.1` hosts. The decoy cannot authenticate at the client endpoint. Response-surface pages expose early/late/nested JSON, popup, frame, CORS and service-worker responses. The late response uses the private `late-token` gate. A missing worker produces no fallback token response.
 
-Fresh-state cases use the unchanged `/fresh/{kind}/start` entry, with PRIME/PROBE selected privately by the driver. Positive prime observation and A's login are required before PROBE; B observes state before login. The application does not pretend to observe production browser creation/closure. P2 must supply those real lifecycle witnesses and execute the page JavaScript through the production runner.
+Fresh-state cases use the unchanged `/fresh/{kind}/start` entry, with PRIME/PROBE selected privately by the driver. Positive prime observation and A's login are required before PROBE; B observes state before login. The application does not pretend to observe production browser creation/closure. The production driver must supply those real lifecycle witnesses and execute the page JavaScript through the production runner.
 
 HTTP fixture checks validate target behavior and emitted headers. Actual browser tests separately establish the selected cookie, popup, worker and redirect behaviors. Prepared named-origin HTTPS and real federation flows have run on this machine; broader browser/platform compatibility is not inferred. `LabTls` creates dedicated material without installing global trust. The ingress sentinel observes connections, handshakes and decrypted bytes separately and closes with its owning case.
 
@@ -117,7 +115,7 @@ python (Join-Path $productionRoot 'test/pkcs11_fixture.py') --output $nativeRoot
 
 That optional Python command only prepares local keys and a private SoftHSM store. The test applications and operational tests are Java. It refuses an existing directory; the native task validates and claims the new store for one invocation. A new invocation needs a fresh store. No user/physical token store is selected or reset.
 
-The allowlist omits the old mixed upstream-authentication method entirely. Its unavailable-route input is tested with an unauthenticated listener. Internal per-attempt credentials on the extension-owned mTLS proxy remain in scope. Software-token results do not qualify physical devices. Eighteen active transport requirements share nine native inputs and three ordinary-browser routing inputs; one Chromium-only requirement is explicitly excluded. The profile command selects only those browser owners and still collects both scopes when an assertion fails; the combined report is `build/authlab/{invocationId}/report-transport.jsonl`. A private store is claimed by one invocation: prepare a fresh directory before another native command. The unavailable-upstream classification and browser-frame failures are corrected in main; historical P3 failures remain recorded separately. The scoped native task alone does not claim full transport acceptance.
+The allowlist omits the old mixed upstream-authentication method entirely. Its unavailable-route input is tested with an unauthenticated listener. Internal per-attempt credentials on the extension-owned mTLS proxy remain in scope. Software-token results do not qualify physical devices. Eighteen active transport requirements share nine native inputs and three ordinary-browser routing inputs; one Chromium-only requirement is explicitly excluded. The profile command selects only those browser owners and still collects both scopes when an assertion fails; the combined report is `build/authlab/{invocationId}/report-transport.jsonl`. A private store is claimed by one invocation: prepare a fresh directory before another native command. The scoped native task alone does not claim full transport acceptance.
 
 For manual transport work, prepare a separate fresh store, then start the shared Java applications:
 
@@ -140,7 +138,7 @@ Revocation and clock controls act on the same store that issued the certificate 
 
 The ten JSON files in `src/main/resources/catalog` implement the [approved contracts](../../docs/designs/authentication-test-lab-contracts.md). `catalog.json` explicitly indexes nine data files and the exact twelve profiles. Every expanded requirement is stored as data; runtime loading uses no expression language or native journey parser.
 
-The Java validator rejects malformed/ambiguous JSON, unknown fields/capabilities, invalid bindings and missing/extra catalog members. The 912 inspected bindings are 523 fixture, 313 component-owned, 41 browser/recovery/subresource, seventeen federation and eighteen transport requirements, sharing 851 executions. No active automated requirement remains unbound. This is not a pass count: actual retained source/configuration-specific results still control acceptance. Excluded entries cannot execute or earn coverage. The [decision ledger](../../docs/designs/authentication-test-lab/relevance-retirements.csv) records the exclusions and the restored fixture checks.
+The Java validator rejects malformed/ambiguous JSON, unknown fields/capabilities, invalid bindings and missing/extra catalog members. The 912 inspected bindings are 523 fixture, 313 component-owned, 41 browser/recovery/subresource, seventeen federation and eighteen transport requirements, sharing 851 executions. No active automated requirement remains unbound. This is not a pass count: actual retained source/configuration-specific results still control acceptance. Excluded entries cannot execute or earn coverage. Exclusion reasons and expected observations are explicit in the current catalog.
 
 Normalized axis labels are fixed in `ScenarioCatalog`: tag locations are `header,path,query,text-body`; tools are `scanner,proxy,repeater,extensions,intruder`; URL modes retain `burp_scope,all_requests,single_url`; boolean axes use `true,false`; limit dimensions use underscore-separated names. Named variant IDs and recipe labels retain the matrix's exact spelling, including `PIN-rejected` and `PIN-unknown`. H01 uses ordered `tool,mode` axes with `automatic-combined-injection,native-tags`. These are lab labels, not new production syntax.
 
@@ -150,31 +148,15 @@ Catalog budgets remain planning estimates. Actual invocation reports record meas
 
 The root build includes `:auth-lab` and `:federation-client` as separate Java modules under `test/`. The root `authLabRuntime` configuration never enters the extension runtime or release JAR. Maintained Spring/OpenSAML clients and the pinned official browser adapter drive real OIDC, SAML and brokered flows. Federation dependencies have their own locked graph; the clients have no production BApp dependency. Isolated fixture-validator checks qualify the harness only and remain subject to the final relevance audit.
 
+Normal extension tests also depend on the lab's main artifact through `testImplementation`. This shares `ControlledApplication.Origin`, `TransportFixtures` and the focused recipes in `LoginFlows`; it does not make the lab a production dependency or run `:auth-lab:test` merely to compile native tests. `bpsh.support.IntegrationFixtures` is the single native adapter used by normal and captured suites. It owns journey/guard adaptation and probe evidence, while the lab owns HTTP/TLS/proxy serving and response recipes. Isolated captures keep the existing `plan.labJar` injection because they deliberately omit the lab subproject. Artifact probes receive parent-hosted fixture URLs; their isolated extension classloader does not gain lab classes.
+
 The lab locks resolved dependency versions in `gradle.lockfile`. Its separate `hostProbe` source set has a compile-only Montoya dependency matching this checkout; building it establishes no Burp integration coverage. Narrow `.gitattributes` rules preserve LF bytes for the source/configuration files recorded in fixture bindings.
 
 The lab uses Gson 2.13.2 and JUnit BOM 6.1.3. Gson's strict reader is combined with explicit duplicate-member and closed-field checks; [Gson's strictness guidance](https://github.com/google/gson/blob/main/Troubleshooting.md) explains why default parsing is insufficient. Gradle verifies the resolved artifacts through `bapp/gradle/verification-metadata.xml`. New dependency checksums were compared with published Maven Central SHA-256 values. Existing older root dependencies retain their checksums observed during resolution; not every older artifact publishes a separate SHA-256 file. See [Gradle dependency verification](https://docs.gradle.org/current/userguide/dependency_verification.html) before updating metadata. Do not disable verification or replace predecessor entries when integrating later work.
 
-## Preserved legacy behavior
+## Acceptance gates
 
-P0/P1 leave the old applications, examples, certificates and token assets intact. The current fixture sources provide these preservation requirements:
-
-Preservation baseline: this checkout at `8accbeab2ba1beb216df3e447842f19ba130a9ff`, with 26 legacy files checked unchanged. SHA-256 of the sorted path-to-file-hash manifest: `c200c7a20b68ee03ca9f957e277477acfdd9da45ac41407f2b683fcf50a94c7c`. The local detailed manifest is `build/p0/preservation-before.json`. This identifies the older fixture assets, not the production revision to be integrated at P2.
-
-| Existing source | Preserve or explicitly reconcile at cutover |
-| --- | --- |
-| `../mock-auth-app/app.py` | Accounts `user`, `user2`, `admin`; the login forms' `#user`, `#pass`, `#login` selectors; JSON/cookie/SSO routes and protected identity behavior. |
-| `../mock-auth-app/saved_steps.json`, `saved_steps_cookie.json`, `saved_steps_cookie_2.json` | Recheck all three real saved-step files against their routes/selectors before replacing advertised examples. |
-| `../mock-auth-app/README.md` | Its `button#cookie-login` example differs from the actual `button#login`; record the correction for later cutover rather than changing legacy behavior now. |
-| `../integration_dual_cookie_tags.py` | Independent C1/C2 cookies may come from different issuances for the same account; keep this distinct from the strict common-issuance routes. |
-| `../mTLS-app` | Preserve existing keys, certificates and token assets. Its static token example does not prove the new dynamic issuer/resource behavior. |
-
-The initial P2 integration used `java-playwright`; production tasks now capture this checkout by default. Historical records retain their original source identity. The generated capture rechecks the complete selected source and Gradle inventory on every invocation. Configured upstream proxy-authentication tests remain excluded; internal mTLS-proxy credentials retain their separate scope.
-
-## Next implementation stage
-
-Each invocation records its exact production boundary in a generated capture audit. Reviewed catalog hashes describe the harness and selected test sources; changing those requires an intentional binding refresh. Profile commands, foreground browser/federation/transport serving and live native exports are implemented. The [current verification record](../../docs/designs/authentication-test-lab/findings-fix-verification.md) distinguishes corrected main behavior from historical P2/P3 failures. Remaining work includes the [sixteen capability assessments](../../docs/designs/authentication-test-lab/capability-assessment-recipes.md), unavailable or incomplete host checks and the legacy cutover gates. The [finalized design](../../docs/designs/authentication-test-lab.md) and [required relevance audit](../../docs/designs/authentication-test-lab/test-relevance-audit.md) define those gates.
-
-Historical named-origin Windows hosts/current-user CA preparation and managed-browser trust probes apply to the original worktree material. Generated certificates and provider assets are not included in this integration; prepare and qualify this checkout before running federation. [Windows federation setup](Windows-Federation-Setup.md) documents preparation/removal for other machines; ordinary tests never install trust or edit hosts. The [federation module](../federation-client/README.md) documents the prepared image/adapter, complete profile command and foreground OIDC/SAML/broker serving commands.
+Each invocation audits the current source and configuration. Manual host checks and the [capability assessments](../../docs/designs/capability-assessments.md) require their own completed observations. Prepare and qualify dedicated HTTPS/provider material for this checkout using [Windows setup](Windows-Federation-Setup.md) and the [federation guide](../federation-client/README.md). Normal tests do not install trust or edit hosts.
 
 ## Manual Extensions-origin probe
 
@@ -188,10 +170,41 @@ The JAR is written to `test/authentication-lab/build/host-probe/authentication-l
 
 Use the protected request for the currently prepared controlled case. For automatic injection, leave credentials out of the request and select its journey in the product. For the native-tag checkpoint, put the saved alias references in the intended bearer/cookie slots. Match the role fields to the endpoint, for example `B,C1` for bearer plus one cookie. A retired case URL cannot qualify a new run. The helper records public account/issuance/role metadata and hashes, never raw requests, responses or credential values. It also records header counts, fixed role labels and tag presence before dispatch and in the request returned by Burp. The same safe JSON is retained beside the selected input as `<input>.<probe UUID>.probe.json`; a file-write failure remains visible in the UI. Its expected tool origin is explicitly labeled as an expectation; verify actual host policy wiring with the H01 procedure and Burp Logger. Its result is one manual checkpoint, not full profile acceptance.
 
-The controlled fixture's credentials expire after 60 seconds. For manual host checks, clear expired cached credentials or use Test login immediately before sending. An expired response is not evidence that tag replacement failed. The product's 2xx-based acceptance message is also not independent authentication proof: qualify positive results using the protected response's expected account, common issuance and accepted roles. Current host observations and feedback findings are recorded in [P4 findings](../../docs/designs/authentication-test-lab/p4-findings.md); the [24-checkpoint ledger](../../docs/designs/authentication-test-lab/p4-host-checkpoints.csv) distinguishes passing, failing, partial and unavailable host checks.
+The controlled fixture's credentials expire after 60 seconds. For manual host checks, clear expired cached credentials or use Test login immediately before sending. An expired response is not evidence that tag replacement failed. The product's 2xx-based acceptance message is also not independent authentication proof: qualify positive results using the protected response's expected account, common issuance and accepted roles. Record each host checkpoint against the exact loaded JAR and the current case definition.
 
 When refreshing an extension already installed in Burp, toggle **Loaded** off before replacing its JAR and on afterward. Keep host/manual results separate from the automated catalog. The helper is absent from the production source set and release artifact.
 
 ## Maintaining source bindings
 
 Acceptance extensions under `production-tests/bpsh/` mirror the native test packages. Select owners by fully qualified JUnit class name. After an intentional reviewed harness refactor, run `:auth-lab:refreshBindings --offline`, review the catalog diff, then run the relevant profiles in a new invocation. This updates fingerprints, preserves nullable contract fields and unbound rows, and grants no acceptance. All launchers and collectors share `src/main/resources/configuration-inputs.json`. See [code structure](../../docs/designs/code-structure.md).
+
+## Source contract
+
+### Overview
+
+Source contracts below supplement the operational guidance above. Test-only trees are outside this contract index.
+
+### Interface
+
+- [Source tree](./src/README.md): Java, browser resources and separate manual host probe.
+- [`Build-HostProbe.ps1:JdkHome`](./Build-HostProbe.ps1): compiles/packages the separate hostProbe source set.
+- [`WindowsFederationHosts.psm1:Update-AuthLabHosts`](./WindowsFederationHosts.psm1): byte-preserving managed hosts-block transformation.
+- [`Setup-WindowsFederation.ps1:Action, Certificate, ExpectedSha256, Preview`](./Setup-WindowsFederation.ps1): explicit install/remove of exact prepared hosts/CA material.
+- [`Recover-WslDocker.ps1:OperationId`](./Recover-WslDocker.ps1): explicit administrator WSL service recovery and retained result.
+
+### Invariants
+
+- Generation-checked leases own target/control lifetime. [`LabRun.java:LabRun.start`](./src/main/java/lab/auth/LabRun.java)
+
+### Side Effects
+
+- Run startup opens local listeners and retains private evidence. [`LabRun.java:LabRun.start`](./src/main/java/lab/auth/LabRun.java)
+- Explicit setup edits the Windows hosts file/current-user root store and clears DNS; recovery restarts WSL services and shuts down distributions. [`Setup-WindowsFederation.ps1:Action`](./Setup-WindowsFederation.ps1); [`Recover-WslDocker.ps1:OperationId`](./Recover-WslDocker.ps1)
+
+### Verification
+
+From the repository root, with Java 21:
+
+```powershell
+.\bapp\gradlew.bat -p bapp :auth-lab:test --offline
+```

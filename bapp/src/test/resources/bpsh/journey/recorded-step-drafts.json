@@ -1,0 +1,86 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "type": "SET_CHECKED",
+    "selector": "#field",
+    "value": "",
+    "state": "",
+    "operation": {
+      "checked": ""
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000012",
+    "type": "SELECT_OPTIONS",
+    "selector": "#field",
+    "value": "",
+    "state": "",
+    "operation": {
+      "values": [
+        "",
+        " admin ",
+        "a,b",
+        "a,b"
+      ]
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000013",
+    "type": "PRESS_KEY",
+    "selector": "#field",
+    "value": "",
+    "state": "",
+    "operation": {
+      "holdCtrl": true
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000014",
+    "type": "EXPECT_POPUP",
+    "selector": "#field",
+    "value": "",
+    "state": "",
+    "operation": {
+      "pageRef": "unfinished page",
+      "triggerStepId": "not a UUID"
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000015",
+    "type": "SWITCH_PAGE",
+    "selector": "#field",
+    "value": "",
+    "state": "",
+    "operation": {
+      "pageRef": "missing page"
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000016",
+    "type": "ENTER_FRAME",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000017",
+    "type": "PARENT_FRAME",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000018",
+    "type": "MAIN_FRAME",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000019",
+    "type": "CLOSE_PAGE",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  }
+]

@@ -1,8 +1,8 @@
 package bpsh.support;
 
-import bpsh.credentials.TokenExtractor;
-import bpsh.model.ConfigurationException;
-import bpsh.model.JourneyDefinition;
+import bpsh.authentication.credentials.TokenExtractor;
+import bpsh.journey.ConfigurationException;
+import bpsh.journey.JourneyDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import java.net.http.*;

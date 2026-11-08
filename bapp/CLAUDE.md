@@ -6,7 +6,7 @@ The native extension is implemented; this is not the Montoya starter template.
 ## Architecture and build
 
 [README.md](README.md) describes the service boundaries, build commands and
-existing verification tasks. The entry point is `src/main/java/Extension.java`.
+existing verification tasks. The entry point is `src/main/java/bpsh/Extension.java`.
 Java compatibility is 21. Dependencies and browser assets are pinned through
 Gradle, lock files, verification metadata and the browser source lock.
 
@@ -17,7 +17,7 @@ or separate Java launcher.
 ## Changes and documentation
 
 Follow [the authentication design](../docs/designs/bapp-owned-authentication.md)
-and its approved [universal packaging amendment](../docs/designs/universal-packaging.md).
+and the [universal packaging contract](../docs/designs/universal-packaging.md).
 Ship one offline Chromium-only JAR for Windows x64, Linux x64 and Intel macOS;
 retain scoped manifests and previous cache identities. Do not restore per-OS
 artifacts, ARM payloads, browser downloads or Burp-browser discovery.
@@ -31,11 +31,12 @@ results from browser/native integration and actual host acceptance.
 
 ## Coordination
 
-The separate `test-suite` worktree owns the broader authentication lab, full
-acceptance suite and stress work. Do not duplicate its fixtures or coverage
-matrix here. Keep changes scoped so its reuse audit can integrate the actual
-production revision.
+The integrated `test/authentication-lab` and `test/federation-client` modules own
+the broader authentication lab and acceptance suite. Reuse their fixtures and
+assertions. Production acceptance overlays run only in isolated captures.
 
 Do not report unfinished or skipped platform/provider/host checks as passing.
-Build a separate candidate while its installed JAR is loaded, then follow the
-Loaded checkbox off/on refresh procedure from root AGENTS.md.
+Use the active worktree's development JAR. Complete checks and build directly
+to that path before Computer Use, then refresh the existing extension through
+the Loaded checkbox. Never create a candidate JAR to preserve the installed file. Remove superseded code, fixtures
+and documentation instead of retaining historical copies.

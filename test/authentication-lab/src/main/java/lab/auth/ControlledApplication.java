@@ -32,7 +32,16 @@ public final class ControlledApplication implements AutoCloseable {
             OWNED_PORTS.merge(server.getAddress().getPort(),1,Integer::sum);
         }
         public static Origin http(String host) throws IOException {
-            return new Origin(HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 64), "http", host);
+            return new Origin(listener(false), "http", host);
+        }
+        /** Keeps browser fixtures above Chromium's restricted service ports, even with a custom OS ephemeral range. */
+        static HttpServer listener(boolean tls) throws IOException {
+            for (int attempt = 0; attempt < 64; attempt++) {
+                var address = new InetSocketAddress("127.0.0.1", ThreadLocalRandom.current().nextInt(16384, 65536));
+                try { return tls ? HttpsServer.create(address, 128) : HttpServer.create(address, 64); }
+                catch (BindException unavailable) { /* Retry only address collisions, without releasing a successfully bound listener. */ }
+            }
+            throw new IOException("The lab could not allocate a browser-compatible local port above 16383.");
         }
         public HttpServer server() { return server; }
         public ExecutorService executor() { return executor; }

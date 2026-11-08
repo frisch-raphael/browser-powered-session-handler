@@ -54,13 +54,9 @@ missing source archives fail before a downloader can run.
 ## Runtime prerequisites and space
 
 The JAR contains browser executables, not an operating system or Java runtime.
-Use Java 21+ in Burp. Burp's normal installer launcher allocates up to half the
-system RAM. A plain `java -jar burpsuite.jar` launch instead inherited this VM's
-Java default of 25% (1.45 GiB), which failed while Burp read the large JAR;
-an explicit 3 GiB test launch succeeded. This does not establish a 3 GiB minimum.
-See the
-[measured validation record](../docs/implementation/universal-packaging-validation.md)
-for the tested setting, disk measurements and evidence limits.
+Use Java 21+ in Burp and allow enough heap to load the complete universal JAR.
+Plan disk space for the JAR, the selected extracted browser and temporary
+verification/extraction files. Package size alone is not the installed footprint.
 
 Linux verification uses Ubuntu 24.04 x64. Install Chromium's shared libraries
 through the OS package manager: `libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64
@@ -94,7 +90,7 @@ when required prerequisites are absent:
 ```
 
 Create a fresh owned PKCS#11 fixture using the
-[middleware fixture instructions](../test/mTLS-app/README.md).
+[software-token fixture instructions](../test/authentication-lab/README.md#disposable-software-token-transport-checks).
 `verifyNativeDocumentation` checks private-member Javadoc too.
 `packagedJar` tests an already delivered artifact without preparing browser
 sources or rebuilding it. The integration JVM loads production classes and
@@ -105,21 +101,20 @@ checks against a compatible previous JAR; if omitted, those checks are explicitl
 recorded as not run. Probe reports are under `build/reports/bpsh-runtime` and
 distinguish logical file bytes from physical allocation and sampled peak usage.
 
-The authentication lab, catalog, host acceptance guide and capability gates are maintained in [the Java lab](../test/authentication-lab/README.md). Reuse its existing assertions and fixtures. [UX evidence](../docs/implementation/ux-test-matrix.md) and older checkpoints apply only to their recorded builds.
+The authentication lab, catalog, host acceptance guide and capability gates are maintained in [the Java lab](../test/authentication-lab/README.md). Reuse its existing assertions and fixtures. Qualify each delivered artifact with its own generated test reports.
+
+Focused native browser tests use the same Java HTTP/TLS/proxy fixtures as isolated acceptance. The lab is a test-only project dependency in normal builds; it is absent from the extension runtime and universal JAR. Requesting `:testClasses` builds the required lab classes, without running its suite or starting providers. Captured builds instead receive their immutable lab JAR through the acceptance plan. Packaging probes keep their isolated classloader free of lab classes: the parent test hosts the shared form and passes only its URL to the probe.
 
 ## Refresh in Burp
 
 Use the development JAR from the active worktree.
 
-For an already installed extension, uncheck **Loaded** and confirm unload before
-replacing its JAR, then check **Loaded** again. Do not remove/re-add it.
-Disposable test drafts do not need preserving before a requested refresh.
-Follow [root AGENTS.md](../AGENTS.md).
-
-Unload the existing extension before building directly to the development JAR
-path, then reload it after the build succeeds. Do not create a candidate JAR to
-preserve the existing JAR. Building, loading and manually checking the extension
-are separate verification steps.
+Complete the required checks and build directly to the development JAR before
+starting Computer Use. Then refresh the existing extension by toggling its
+**Loaded** checkbox off and on. Do not remove/re-add it or create a candidate JAR.
+Disposable test drafts do not need preserving before an authorized refresh.
+Building, loading and manually checking the extension are separate verification
+steps. Follow [root AGENTS.md](../AGENTS.md).
 
 ## Architecture
 
@@ -129,7 +124,7 @@ Production code lives in feature packages under `src/main/java/bpsh`; tests mirr
 | --- | --- |
 | `Extension` | Capability probe, service graph, hook registration and ordered unload |
 | `UiController`, `JourneyDraft`, form panels | Swing editing, unfinished saves, execution validation and background storage |
-| `ConfigManager`, `JourneyRegistry`, `UserLibraryStore`, `SecretStore` | Native documents, scoped identities/generations, revision-checked storage and owned secret buffers |
+| `ProjectStore`, `JourneyWorkspace`, `UserLibraryStore`, `SecretStore` | Native documents, scoped identities/generations, revision-checked storage and owned secret buffers |
 | `BrowserRuntimeManager`, `PlaywrightDriverAdapter` | Verified platform assets, private extraction and browser/driver lifecycle |
 | `BrowserFlowRunner`, `TokenExtractor` | Browser steps and complete JSON/regex/cookie output capture |
 | `Pkcs11IdentityManager`, `JourneyTlsProxy` | Exact certificate selection, shared PIN state and attempt-owned TLS routing |
@@ -155,7 +150,7 @@ diagnostic strings and exports. PINs and secure step inputs have separate
 session ownership and explicit remember/export choices.
 
 Follow the [authentication design](../docs/designs/bapp-owned-authentication.md)
-and subsequent author amendments. Record the tested artifact/revision and keep
+and current interface contract. Record the tested artifact/revision and keep
 component, browser, SoftHSM and actual Burp evidence distinct.
 
 
@@ -176,3 +171,23 @@ when executing the journey, before browser setup.
 ## Authentication lab
 
 The [Java authentication lab](../test/authentication-lab/README.md) provides controlled login applications, protected credential checks, production acceptance profiles and federation fixtures. Run the root Gradle `test` task for native regressions and use the guide for lab commands and prerequisites. Generated runs and reports stay under ignored build directories.
+
+## Directory contract
+
+### Interface
+
+- [Source sets](./src/README.md): production entry point and feature package contracts.
+- [build.gradle.kts:registerIntegrationTest](./build.gradle.kts) registers explicit packaged browser and native verification tasks.
+
+### Invariants
+
+- [gradle/architecture.gradle.kts:verifyArchitecture](./gradle/architecture.gradle.kts) enforces package paths, permitted dependencies and an acyclic graph.
+- [build.gradle.kts:tasks.test](./build.gradle.kts) keeps browser and native execution outside the default unit task.
+
+### Side Effects
+
+Build tasks write ignored `build` outputs; explicit asset preparation can download archives. Runtime host, filesystem, browser and native effects are owned by the [composition root](./src/main/java/bpsh/README.md).
+
+### Verification
+
+From this directory: `.\gradlew.bat check verifyNativeDocumentation --offline`.

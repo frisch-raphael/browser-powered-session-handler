@@ -17,12 +17,15 @@ without interactive PIN or certificate prompts.
 
 ## Confirmed workflow
 
-The user selected a full UX redesign with a guided wizard on 2026-11-04: setup,
+The guided wizard covers setup,
 login steps, token capture, optional PKCS#11 certificate setup, then review/testing
 and tag usage. Existing saved journeys remain editable. Changes autosave after
 500 ms without editing; navigation and execution flush the latest edits first.
 Plus immediately creates a new saved journey. Incomplete settings are retained;
-configuration errors appear when executing the journey. Save activity belongs
+configuration errors appear when executing the journey. Browser recording supports
+Enter, Ctrl+Enter, Tab and Shift+Tab.
+Review explains omitted interactions and allows replacing partial recordings
+so users can finish the steps manually before Test login. Save activity belongs
 only in Event log, with coalesced Info successes, Warning while a temporary
 retry is pending, and Error when saving stops. There are no manual-save controls
 or Save/Discard prompts. Insert tags from the request context menu using a saved, active journey reference. Keep shared Cancel authentication.
@@ -58,10 +61,16 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   export inclusion is a separate unchecked choice. Tokens and private keys are
   never exported. Cached tokens and cookies are visible only in the explicitly
   opened Journey cache inspector; they never enter event logs or saved config.
+- Editing a journey keeps usable cached credentials and their original expiry
+  and refresh times, including while an unfinished edit temporarily blocks
+  execution. Renaming, reordering or removing captured outputs retains matching
+  sources. A newly required capture source needs a fresh login. Clear cache,
+  deletion, unavailability and expiry still discard credentials; a successful
+  new login replaces them.
 - Browser assets for Windows x64, Linux x64 and Intel macOS are bundled in one universal offline JAR. No runtime browser
   download or separate Java executable is required by the extension.
 
-The author subsequently chose Project/User collection tabs and compact icon
+The interface uses Project/User collection tabs and compact icon
 actions, conditional input clearing, automatic saving of injection rules and
 waiting settings (with durations in seconds),
 combined named JSON/cookie credentials and either-condition session recovery.
@@ -86,23 +95,21 @@ filter/search and event details, and follows stable journey identity. Logs are
 session-only and bounded; credential values and raw request/response data are
 excluded. The former phase line, permanent feedback box and separate test-result
 box are removed. Automatic injection is named Session handling in the UI.
+Explicit Test login and Retry finish with a native popup summarizing captured
+credential names and counts or the safe error and failed step. Values remain in
+Journey cache. Automatic authentication does not open completion popups.
 
 ## Evidence and acceptance
 
 The implementation has unit, bundled-browser and owned SoftHSM integration tests.
-The 2026-11-05 control matrix combines manual Burp 2026.10.1 walkthroughs with
-automated Swing/controller boundary and transition checks. It covers responsive
-visible/background login, cancellation, cache actions, project/user storage,
-transfer and secret flows, exact SoftHSM certificate selection, actual tagged and
-automatically authenticated HTTP requests, compact/wide forms and both Burp
-themes. Evidence and the distinction between manual and automated scenarios are
-recorded in `docs/implementation/ux-test-matrix.md`; the UX critique is archived
-under `.impeccable/critique/`. Stress testing and assistive-technology assessment
-remain separate gates. Physical vendor hardware has not been tested. No
-user-study or formal accessibility compliance claim is established.
+Qualify responsive login, cancellation, cache actions, storage, transfer/secrets, certificate selection, tagged/automatic protected access, compact/wide forms and Burp themes against the delivered artifact. Stress, assistive-technology and physical-device checks require their own observations. The lab guide specifies current commands and evidence boundaries.
 
-The author chose multiple ordered automatic journeys on 2026-11-05. Session
+Automatic authentication uses multiple ordered journeys. Session
 handling owns activation, URL scope and expiration detection per rule. Matching
 journeys are acquired sequentially with cache reuse, and later rules overwrite
 earlier destinations. Commit all injections together only after every required
 session succeeds. Explicit tags retain their independent request-wide policy.
+
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
+
+Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).

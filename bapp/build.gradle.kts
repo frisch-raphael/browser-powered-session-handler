@@ -24,6 +24,10 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // Captured acceptance builds receive their immutable lab JAR from the invocation plan.
+    if (System.getProperty("authlab.plan") == null) {
+        testImplementation(project(":auth-lab"))
+    }
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -36,7 +40,7 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
-val integrationClassNames = listOf("bpsh.browser.BrowserJourneyIntegrationTest", "bpsh.mtls.Pkcs11JourneyIntegrationTest")
+val integrationClassNames = listOf("bpsh.browser.BrowserJourneyIntegrationTest", "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest")
 /**
  * Rejects missing browser/native test classes before explicit integration runs can report NO-SOURCE.
  *
@@ -106,7 +110,7 @@ fun registerIntegrationTest(taskName: String, className: String) = tasks.registe
         val artifact = candidate.singleFile.canonicalFile
         check(artifact.isFile) { "The selected packagedJar must be an existing JAR." }
         JarFile(artifact).use { jar ->
-            check(jar.getEntry("bpsh/runtime/BrowserRuntimeManager.class") != null) { "The selected JAR is not the extension artifact." }
+            check(jar.getEntry("bpsh/browser/runtime/BrowserRuntimeManager.class") != null) { "The selected JAR is not the extension artifact." }
         }
         systemProperty("bpsh.packagedJar", artifact.absolutePath)
         systemProperty("bpsh.probeClasspath", classpath.asPath)
@@ -137,7 +141,7 @@ fun registerIntegrationTest(taskName: String, className: String) = tasks.registe
 }
 
 registerIntegrationTest("browserIntegrationTest", "bpsh.browser.BrowserJourneyIntegrationTest")
-registerIntegrationTest("pkcs11IntegrationTest", "bpsh.mtls.Pkcs11JourneyIntegrationTest")
+registerIntegrationTest("pkcs11IntegrationTest", "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest")
 
 
 // Native tests run in their own JVM with an explicitly selected disposable SoftHSM store.
@@ -153,6 +157,20 @@ tasks.named<Test>("pkcs11IntegrationTest") {
 }
 
 apply(from = "gradle/browser-assets.gradle.kts")
+
+// Recording metadata is shipped as source JavaScript; no npm or TypeScript installation is involved.
+tasks.named<Jar>("jar") {
+    val metadata = layout.projectDirectory.file("src/main/resources/bpsh/browser/recorder-action-metadata.js")
+    inputs.file(metadata)
+    doLast {
+        val expected = metadata.asFile.readBytes()
+        check(expected.isNotEmpty() && expected.size <= 64 * 1024) { "Recorder metadata resource is missing or excessive." }
+        JarFile(archiveFile.get().asFile).use { jar ->
+            val entry = jar.getJarEntry("bpsh/browser/recorder-action-metadata.js") ?: error("Recorder metadata is absent from the development JAR.")
+            check(jar.getInputStream(entry).use { it.readNBytes(64 * 1024 + 1) }.contentEquals(expected)) { "Packaged recorder metadata differs from its maintained source." }
+        }
+    }
+}
 
 // Snapshot builds run only production configuration; the outer build owns lab orchestration.
 if (System.getProperty("authlab.plan") == null) {

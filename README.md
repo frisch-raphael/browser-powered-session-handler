@@ -7,16 +7,15 @@ its driver; there is no Python service or Hackvertor dependency.
 
 This branch contains the native development build for Windows x64, Linux x64 and
 Intel macOS. Apple Silicon and other ARM systems are not supported. See the
-[validation record](docs/implementation/universal-packaging-validation.md) for
-the exact build and tested environments; native macOS testing remains outstanding.
+[packaging design](docs/designs/universal-packaging.md) for
+the payload layout and platform contract; native macOS testing remains outstanding.
 
 ## Install
 
 1. Use Burp with Java 21 or newer and the Montoya 2026.4 request-drop and Proxy
    action capabilities. Burp 2026.10.1 has been used for interactive checks.
 2. Build or obtain `bapp/build/libs/browser-powered-session-handler-dev.jar`
-   (about 740 MB). See the validation record for the tested Burp launcher and
-   memory settings.
+   (about 740 MB). See the developer instructions for runtime prerequisites.
 3. In Burp, open **Extensions → Installed → Add**, select **Java**, and choose that JAR.
 4. Open the **Browser Powered Session Handler** tab.
 
@@ -161,10 +160,37 @@ excluded.
 ## Development status
 
 See [build and architecture guidance](bapp/README.md) and
-[implementation evidence](docs/implementation/ux-test-matrix.md).
+[interface contract](docs/designs/interface.md).
 
 The broader authentication lab and acceptance matrix are integrated under `test/authentication-lab`. Run the selected profiles for current evidence; host, capability and full acceptance gates remain explicit. No release or non-Windows acceptance is implied by the development build.
 
 ## Authentication lab
 
 The [Java authentication lab](test/authentication-lab/README.md) provides controlled login applications, protected credential checks, production acceptance profiles and federation fixtures. Run the root Gradle `test` task for native regressions and use the guide for lab commands and prerequisites. Generated runs and reports stay under ignored build directories.
+
+## System Overview
+
+The Java extension composes a shared service graph in `Extension.initialize`; authentication attempts borrow the browser/native services while HTTP hooks acquire and insert credentials through the coordinator. The lab applications provide controlled verification boundaries.
+
+## Subdirectories & System Boundaries
+
+- [bapp](./bapp/README.md): production Montoya extension, build and package contracts.
+- [test](./test/README.md): controlled Java applications and disposable native fixture tooling.
+- [docs](./docs/README.md): maintained product and design documents.
+
+## Interface
+
+The runtime entry point is [Extension.java:Extension.initialize](./bapp/src/main/java/bpsh/Extension.java). Developer and verification interfaces are indexed in the child contracts above.
+
+## Global Invariants
+
+- [Extension.java:Extension.supported](./bapp/src/main/java/bpsh/Extension.java) checks Java and Montoya capabilities before enabling authentication hooks.
+- [architecture.gradle.kts:verifyArchitecture](./bapp/gradle/architecture.gradle.kts) enforces the production feature dependency graph.
+
+## Global Side Effects
+
+[Extension.java:Extension.initialize and Services.close](./bapp/src/main/java/bpsh/Extension.java) own host registrations and resource cleanup. Child contracts describe project/user storage, browser extraction, network authentication and native middleware ownership.
+
+## System Verification
+
+From the repository root: `.\bapp\gradlew.bat -p bapp check verifyNativeDocumentation --offline`. Browser, native middleware and host acceptance require their explicit tasks and prerequisites; see [bapp](./bapp/README.md) and [the lab](./test/authentication-lab/README.md).

@@ -1,70 +1,47 @@
 package bpsh.browser;
 
-import bpsh.config.ConfigManager;
-import bpsh.credentials.AuthenticationResult;
-import bpsh.credentials.TokenExtractor;
-import bpsh.model.AuthStep;
-import bpsh.model.AuthenticationFailure;
-import bpsh.model.AuthenticationStage;
-import bpsh.model.JourneyDefinition;
-import bpsh.mtls.JourneyTlsProxy;
-import bpsh.mtls.Pkcs11IdentityManager;
-import bpsh.runtime.BrowserRuntimeManager;
-import bpsh.runtime.PlaywrightDriverAdapter;
-import bpsh.secrets.SecretStore;
-import com.microsoft.playwright.Browser;
+import bpsh.browser.runtime.BoundedTokenResponses;
+
+import bpsh.journey.JourneySecrets;
+import bpsh.journey.BrowserSetup;
+
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.credentials.TokenExtractor;
+import bpsh.journey.AuthStep;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.authentication.AuthenticationStage;
+import bpsh.journey.JourneyDefinition;
+import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.browser.runtime.BrowserRuntimeManager;
+import bpsh.journey.SecretStore;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.PlaywrightException;
-import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.options.LoadState;
-import com.microsoft.playwright.options.Proxy;
 import java.net.URI;
 import java.time.Clock;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import static bpsh.browser.BrowserFailureClassifier.*;
 
 /**
  * Executes a fresh browser/context on its calling worker, with listeners installed before navigation.
  *
- * This component does not register Burp hooks, cache tokens or perform automatic retries. The future
+ * This component does not register Burp hooks, cache tokens or perform automatic retries. The
  * coordinator owns worker/cycle admission and generation publication. Browser/process/proxy cleanup
  * is scoped to this attempt, while verified binaries and established provider login may be reused.
  */
 public final class BrowserFlowRunner {
-    /** Stable SDK diagnostic marker used only for classification; the raw message is never retained. */
 
 
 
     /** Token-free observation of actual SDK resource creation and successful close completion. */
     public enum ResourceEvent { BROWSER_OPEN, CONTEXT_OPEN, CONTEXT_CLOSED, BROWSER_CLOSED }
     public record Lifecycle(long resourceId, long parentId, JourneyDefinition.Identity identity, ResourceEvent event, boolean bootstrap) {}
-    private final java.util.function.Consumer<Lifecycle> lifecycle;
-    private final java.util.concurrent.atomic.AtomicLong resourceIds = new java.util.concurrent.atomic.AtomicLong();
-    private void observed(Lifecycle event) { try { lifecycle.accept(event); } catch (RuntimeException ignored) { /* diagnostics cannot prevent resource cleanup */ } }
-    private final class OwnedBrowser implements AutoCloseable {
-        final Browser browser; final JourneyDefinition.Identity identity; final long id = resourceIds.incrementAndGet();
-        OwnedBrowser(Browser browser, JourneyDefinition.Identity identity) { this.browser = browser; this.identity = identity; observed(new Lifecycle(id, 0, identity, ResourceEvent.BROWSER_OPEN, false)); }
-        @Override public void close() { browser.close(); observed(new Lifecycle(id, 0, identity, ResourceEvent.BROWSER_CLOSED, false)); }
-    }
-    private final class OwnedContext implements AutoCloseable {
-        final BrowserContext context; final OwnedBrowser owner; final boolean bootstrap; final long id = resourceIds.incrementAndGet();
-        OwnedContext(BrowserContext context, OwnedBrowser owner, boolean bootstrap) { this.context = context; this.owner = owner; this.bootstrap = bootstrap; observed(new Lifecycle(id, owner.id, owner.identity, ResourceEvent.CONTEXT_OPEN, bootstrap)); }
-        @Override public void close() { context.close(); observed(new Lifecycle(id, owner.id, owner.identity, ResourceEvent.CONTEXT_CLOSED, bootstrap)); }
-    }
-
-    private final BrowserRuntimeManager runtime;
-    private final Pkcs11IdentityManager identities;
-    private final AuthTrafficGuard traffic;
+    private final BrowserSessionLauncher launcher;
     private final Clock clock;
 
     /**
@@ -80,7 +57,14 @@ public final class BrowserFlowRunner {
     /** Supplies a nonsecret production lifecycle observation seam without exposing browser/context handles. */
     public BrowserFlowRunner(BrowserRuntimeManager runtime, Pkcs11IdentityManager identities, AuthTrafficGuard traffic, Clock clock,
                              java.util.function.Consumer<Lifecycle> lifecycle) {
-        this.runtime = runtime; this.identities = identities; this.traffic = traffic; this.clock = clock; this.lifecycle = java.util.Objects.requireNonNull(lifecycle);
+        java.util.Objects.requireNonNull(lifecycle); this.clock = clock;
+        this.launcher = new BrowserSessionLauncher(runtime, identities, traffic, clock, event -> lifecycle.accept(new Lifecycle(
+                event.resourceId(), event.parentId(), event.identity(), ResourceEvent.valueOf(event.event().name()), event.bootstrap())));
+    }
+
+    /** Reuses a shared launcher when authentication and recording are wired by the composition root. */
+    public BrowserFlowRunner(BrowserSessionLauncher launcher, Clock clock) {
+        this.launcher = java.util.Objects.requireNonNull(launcher); this.clock = clock;
     }
 
     /**
@@ -118,40 +102,11 @@ public final class BrowserFlowRunner {
                 AuthenticationFailure.Cause.CONFIGURATION, "This journey has incomplete or invalid settings.", "Review the journey settings, then test login.");
         try (SecretStore.Values values = supplied.copy()) {
             validateSecrets(journey, values);
-            BrowserRuntimeManager.Ready ready = runtime.acquire(deadlineNanos, cancelled, observer);
-            char[] pin = values.pin();
-            JourneyTlsProxy local = null;
-            try {
-                if (journey.mtls() != null) {
-                    Pkcs11IdentityManager.Selected selected = identities.select(journey.mtls(), pin, explicitRecovery, deadlineNanos, cancelled);
-                    local = new JourneyTlsProxy(journey.mtls(), selected, journey.browser().proxy(), clock);
-                }
-                boolean proxied = local != null || journey.browser().proxy() != null;
-                BrowserRuntimeManager.observed(observer, AuthenticationStage.STARTING_DRIVER);
-                try (JourneyTlsProxy transport = local;
-                     AuthTrafficGuard.Lease lease = proxied ? traffic.begin() : null;
-                     PlaywrightDriverAdapter.Session driver = PlaywrightDriverAdapter.open(ready, deadlineNanos, cancelled)) {
-                    var options = new BrowserType.LaunchOptions().setExecutablePath(ready.browserExecutable()).setHeadless(journey.browser().headless())
-                            .setTimeout(AuthenticationFailure.remainingMs(journey.browser().navigationTimeoutMs(), deadlineNanos, cancelled));
-                    if (transport != null) options.setProxy(transport.browserProxy()).setArgs(List.of("--ignore-certificate-errors-spki-list=" + transport.spkiSha256()));
-                    else if (journey.browser().proxy() != null) options.setProxy(browserProxy(journey.browser().proxy()));
-                    else options.setArgs(List.of("--no-proxy-server"));
-                    BrowserRuntimeManager.observed(observer, AuthenticationStage.STARTING_BROWSER);
-                    try (var ownedBrowser = new OwnedBrowser(startBrowser(driver, options, deadlineNanos, cancelled), identity)) {
-                        Browser browser = ownedBrowser.browser;
-                        Browser.NewContextOptions contextOptions = new Browser.NewContextOptions();
-                        String original = null;
-                        if (lease != null) {
-                            try (var bootstrap = new OwnedContext(browser.newContext(), ownedBrowser, true)) { original = (String) bootstrap.context.newPage().evaluate("navigator.userAgent"); }
-                            contextOptions.setUserAgent(lease.decorate(original));
-                        }
-                        try (var context = new OwnedContext(browser.newContext(contextOptions), ownedBrowser, false)) {
-                            BrowserRuntimeManager.observed(observer, AuthenticationStage.AUTHENTICATING);
-                            return execute(identity, journey, values, context.context, transport, lease, original, deadlineNanos, cancelled);
-                        }
-                    }
-                }
-            } finally { if (pin != null) Arrays.fill(pin, '\0'); }
+            try (var session = launcher.open(identity, BrowserSetup.from(journey), values, BrowserSessionLauncher.Visibility.CONFIGURED,
+                    explicitRecovery, deadlineNanos, cancelled, observer)) {
+                BrowserRuntimeManager.observed(observer, AuthenticationStage.AUTHENTICATING);
+                return execute(identity, journey, values, session, deadlineNanos, cancelled);
+            }
         } catch (AuthenticationFailure ex) { throw ex; }
         catch (Exception ex) {
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.LIFECYCLE, deadlineNanos, cancelled);
@@ -160,149 +115,114 @@ public final class BrowserFlowRunner {
         }
     }
 
-    /** Starts Chromium with narrow safe setup attribution.
-     * @param driver Attempt-owned Playwright driver.
-     * @param options Exact pinned executable and bounded launch options.
-     * @param deadline Original deadline.
-     * @param cancelled Attempt lifecycle predicate.
-     * @return Owned caller browser.
-     * @throws AuthenticationFailure On startup failure or cancellation.
-     */
-    private static Browser startBrowser(PlaywrightDriverAdapter.Session driver, BrowserType.LaunchOptions options,
-                                        long deadline, BooleanSupplier cancelled) throws AuthenticationFailure {
-        try { return driver.playwright().chromium().launch(options); }
-        catch (RuntimeException error) {
-            AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled);
-            throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.UNKNOWN,
-                    "Chromium could not start.", "Check the documented operating-system and browser-library prerequisites.");
-        }
-    }
-
     /**
-     * Installs per-context routing/listeners, executes steps and pumps the event loop until completion.
+     * Installs capture listeners in the shared session, executes steps and pumps the event loop until completion.
      * @param identity Captured generation to attach to success.
      * @param journey Validated flow/extraction definition.
      * @param values Attempt-owned secret copies.
-     * @param context Fresh context owned by the current worker.
-     * @param transport mTLS transport, or null for ordinary journeys.
-     * @param lease Marker for proxied traffic, or null for direct traffic.
-     * @param defaultAgent Actual bootstrap agent, used when worker-script routing omits the header.
+     * @param session Shared launch/resource/traffic ownership on this worker.
      * @param deadline Original budget.
      * @param cancelled Epoch/cancellation predicate.
      * @return Valid token outcome after final cancellation/expiry checks.
      * @throws AuthenticationFailure If no valid result succeeds within the configured budget.
      */
     private AuthenticationResult execute(JourneyDefinition.Identity identity, JourneyDefinition journey, SecretStore.Values values,
-                            BrowserContext context, JourneyTlsProxy transport, AuthTrafficGuard.Lease lease, String defaultAgent,
+                            BrowserSessionLauncher.Session session,
                             long deadline, BooleanSupplier cancelled) throws AuthenticationFailure {
+        BrowserContext context = session.context();
         TokenExtractor extractor = new TokenExtractor(journey.extraction(), clock);
-        AtomicReference<AuthenticationFailure> routingFailure = new AtomicReference<>();
-        if (lease != null) context.route("**/*", route -> {
-            try {
-                Request request = route.request();
-                if (AuthTrafficGuard.containsNativeTag(request.url()) || AuthTrafficGuard.containsNativeTag(request.postData())
-                        || request.headers().entrySet().stream().anyMatch(e -> AuthTrafficGuard.containsNativeTag(e.getKey()) || AuthTrafficGuard.containsNativeTag(e.getValue())))
-                    throw new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.CONFIGURATION,
-                            "A login request contains authentication tags.", "Remove authentication tags from the requests made during login.");
-                Map<String, String> headers = new HashMap<>(request.headers());
-                // Service-worker script requests can omit User-Agent in Playwright's header map.
-                // Preserve the real browser agent rather than forwarding only the marker.
-                headers.put("user-agent", lease.decorate(headers.getOrDefault("user-agent", defaultAgent)));
-                route.resume(new com.microsoft.playwright.Route.ResumeOptions().setHeaders(headers));
-            } catch (AuthenticationFailure ex) { routingFailure.compareAndSet(null, ex); route.abort(); }
-        });
+        boolean requiresAllSteps = !journey.steps().isEmpty() && capturesCookies(journey.extraction());
         context.onResponse(response -> {
             observeStatus(response, journey, extractor);
-            if (extractor.matchesResponse(response.url()) && !extractor.hasToken()) {
-                try { TokenExtractor.checkDeclaredLength(response.headerValue("content-length")); extractor.considerResponse(response.url(), response.body(), response.status() >= 200 && response.status() < 300); }
-                catch (AuthenticationFailure ex) { extractor.observe(ex); }
-                catch (PlaywrightException ex) { extractor.observe(new AuthenticationFailure(AuthenticationFailure.Phase.EXTRACTION, AuthenticationFailure.Cause.EXTRACTION,
-                        "The token response could not be read.", "")); }
-            }
+
         });
+        try (var responses = BoundedTokenResponses.install(context, new BoundedTokenResponses.Capture() {
+            @Override public boolean matches(String url) { return extractor.matchesResponse(url); }
+            @Override public boolean complete() { return extractor.hasToken(); }
+            @Override public void declaredLength(String value) throws AuthenticationFailure { TokenExtractor.checkDeclaredLength(value); }
+            @Override public void response(String url, byte[] body, boolean success) { extractor.considerResponse(url, body, success); }
+            @Override public void failure(AuthenticationFailure error) { extractor.observe(error); }
+        })) {
         context.onRequestFailed(request -> {
             if (mainFrameNavigation(request)) {
-                AuthenticationFailure observed = networkFailure(request.failure()); if (observed != null) extractor.observe(observed);
+                AuthenticationFailure observed = networkFailure(request.failure(), journey.mtls() != null); if (observed != null) extractor.observe(observed);
             }
         });
         Page page = context.newPage();
-        int stepsStarted = 0;
-        try {
-            applyTimeouts(page, journey, deadline, cancelled); page.navigate(journey.authenticationUrl().toString()); cookies(context, journey, extractor);
-            for (int i = 0; i < journey.steps().size() && !extractor.hasToken(); i++) {
-                var action = journey.steps().get(i); stepsStarted = i + 1;
-                try {
-                    AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.STEP, deadline, cancelled);
-                    if (routingFailure.get() != null) throw routingFailure.get();
-                    applyTimeouts(page, journey, deadline, cancelled); step(page, action, values, deadline, cancelled);
+        try (var executor = new BrowserStepExecutor(context, page, journey.steps())) {
+            int stepsStarted = 0;
+            boolean executionFailed = false;
+            try {
+                applyTimeouts(page, journey, deadline, cancelled); page.navigate(journey.authenticationUrl().toString()); cookies(context, journey, extractor);
+                for (int i = 0; i < journey.steps().size() && (requiresAllSteps || !extractor.hasToken()); i++) {
+                    var action = journey.steps().get(i); stepsStarted = i + 1;
+                    try {
+                        AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.STEP, deadline, cancelled);
+                        session.checkTraffic();
+                        executor.execute(action, values, journey.browser().navigationTimeoutMs(), deadline, cancelled);
+                    }
+                    catch (PlaywrightException ex) {
+                        var failure = stepFailure(ex, action, i + 1);
+                        if (requiresAllSteps) throw failure;
+                        executionFailed = true; extractor.observe(failure); break;
+                    }
+                    catch (AuthenticationFailure ex) { throw ex.atStep(new AuthenticationFailure.Step(action.id(), i + 1, action.type())); }
+                    cookies(context, journey, extractor);
                 }
-                catch (PlaywrightException ex) {
-                    extractor.observe(stepFailure(ex, action, i + 1)); break;
+                if (requiresAllSteps) {
+                    executor.finish(deadline, cancelled, () -> false);
+                    cookies(context, journey, extractor);
                 }
-                catch (AuthenticationFailure ex) { throw ex.atStep(new AuthenticationFailure.Step(action.id(), i + 1, action.type())); }
-                cookies(context, journey, extractor);
+            } catch (PlaywrightException ex) {
+                var failure = stepFailure(ex, null, 0);
+                if (requiresAllSteps) throw failure;
+                executionFailed = true; extractor.observe(failure);
             }
-        } catch (PlaywrightException ex) { extractor.observe(stepFailure(ex, null, 0)); }
-        catch (AuthenticationFailure ex) {
-            if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT) throw ex;
-            extractor.observe(ex);
-        }
-        long waitEnd = Math.min(deadline, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(journey.browser().tokenWaitTimeoutMs()));
-        while (!extractor.hasToken() && waitEnd - System.nanoTime() > 0) {
+            catch (AuthenticationFailure ex) {
+                if (requiresAllSteps || ex.reason() != AuthenticationFailure.Cause.TIMEOUT) throw ex;
+                extractor.observe(ex);
+            }
+            long waitEnd = Math.min(deadline, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(journey.browser().tokenWaitTimeoutMs()));
+            while (!extractor.hasToken() && waitEnd - System.nanoTime() > 0) {
+                try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.EXTRACTION, deadline, cancelled); }
+                catch (AuthenticationFailure ex) {
+                    if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT) throw ex;
+                    extractor.observe(ex); break;
+                }
+                session.checkTraffic();
+                cookies(context, journey, extractor);
+                if (!extractor.hasToken()) try { executor.pump(Math.min(50.0, Math.max(0.001, (waitEnd - System.nanoTime()) / 1_000_000.0))); }
+                catch (PlaywrightException ex) {
+                    extractor.observe(new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
+                            "The browser stopped before credentials could be captured."));
+                    break;
+                }
+            }
+            if (!executionFailed && !extractor.hasToken()) executor.finish(deadline, cancelled, extractor::hasToken);
+            session.checkTraffic();
+            if (session.transportFailure() != null) extractor.observe(session.transportFailure());
             try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.EXTRACTION, deadline, cancelled); }
             catch (AuthenticationFailure ex) {
-                if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT) throw ex;
-                extractor.observe(ex); break;
+                if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT || extractor.hasToken()) throw ex;
+                // Preserve a positively observed PIN/trust/status/extraction cause over a generic timeout.
+                extractor.observe(ex);
             }
-            if (routingFailure.get() != null) throw routingFailure.get();
-            cookies(context, journey, extractor);
-            if (!extractor.hasToken()) try { page.waitForTimeout(Math.min(50.0, Math.max(0.001, (waitEnd - System.nanoTime()) / 1_000_000.0))); }
-            catch (PlaywrightException ex) {
-                extractor.observe(new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
-                        "The browser stopped before credentials could be captured."));
-                break;
-            }
+            return new AuthenticationResult(identity, extractor.result(), clock.instant(), System.nanoTime(), extractor.cookieValues(), extractor.namedValues(), extractor.expirySeconds(), journey.steps().size() - stepsStarted);
         }
-        if (routingFailure.get() != null) throw routingFailure.get();
-        if (transport != null && transport.failure() != null) extractor.observe(transport.failure());
-        try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.EXTRACTION, deadline, cancelled); }
-        catch (AuthenticationFailure ex) {
-            if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT || extractor.hasToken()) throw ex;
-            // Preserve a positively observed PIN/trust/status/extraction cause over a generic timeout.
-            extractor.observe(ex);
         }
-        return new AuthenticationResult(identity, extractor.result(), clock.instant(), System.nanoTime(), extractor.cookieValues(), extractor.namedValues(), extractor.expirySeconds(), journey.steps().size() - stepsStarted);
     }
 
     /**
-     * Executes one retained step using only its own secret association and current remaining budget.
-     * @param page Owned primary page.
-     * @param step Validated immutable step.
-     * @param values Attempt-owned values.
-     * @param deadline Original budget.
-     * @param cancelled Epoch/cancellation predicate.
-     * @throws AuthenticationFailure If cancelled/expired or a required secure value is absent.
+     * Identifies captures that can match an anonymous session cookie before login has completed.
+     * @param extraction Validated single or combined capture definition.
+     * @return Whether configured login steps must finish before accepting the captured credentials.
      */
-    private static void step(Page page, AuthStep.Definition step, SecretStore.Values values, long deadline,
-                              BooleanSupplier cancelled) throws AuthenticationFailure {
-        switch (step.type()) {
-            case CLICK -> page.locator(step.selector()).click();
-            case INPUT -> page.locator(step.selector()).fill(step.value());
-            case SECURE_INPUT -> {
-                char[] value = values.stepValue(step.id());
-                if (value == null) throw missing("secure-input value");
-                try { page.locator(step.selector()).fill(new String(value)); } finally { Arrays.fill(value, '\0'); }
-            }
-            case WAIT_LOAD_STATE -> page.waitForLoadState(switch (step.state()) { case "domcontentloaded" -> LoadState.DOMCONTENTLOADED; case "networkidle" -> LoadState.NETWORKIDLE; default -> LoadState.LOAD; });
-            case WAIT_URL -> { if ("exact".equals(step.state())) page.waitForURL(url -> url.equals(step.urlPattern())); else page.waitForURL(step.urlPattern()); }
-            case WAIT_SELECTOR -> page.locator(step.selector()).waitFor(new com.microsoft.playwright.Locator.WaitForOptions().setState(
-                    switch (step.state() == null ? "visible" : step.state()) { case "hidden" -> com.microsoft.playwright.options.WaitForSelectorState.HIDDEN; case "attached" -> com.microsoft.playwright.options.WaitForSelectorState.ATTACHED; case "detached" -> com.microsoft.playwright.options.WaitForSelectorState.DETACHED; default -> com.microsoft.playwright.options.WaitForSelectorState.VISIBLE; }));
-            case WAIT_TIME -> {
-                long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(step.durationMs());
-                while (end - System.nanoTime() > 0) { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.STEP, deadline, cancelled); page.waitForTimeout(Math.min(50, Math.max(0.001, (end - System.nanoTime()) / 1_000_000.0))); }
-            }
-        }
+    private static boolean capturesCookies(JourneyDefinition.Extraction extraction) {
+        if (extraction instanceof JourneyDefinition.CookieExtraction) return true;
+        return extraction instanceof JourneyDefinition.CombinedExtraction combined
+                && combined.tokens().stream().anyMatch(token -> capturesCookies(token.selector()));
     }
+
 
     /**
      * Caps both page defaults by the original attempt budget before another browser operation.
@@ -325,7 +245,7 @@ public final class BrowserFlowRunner {
      * @param extractor Attempt collector.
      */
     private static void cookies(BrowserContext context, JourneyDefinition journey, TokenExtractor extractor) {
-        extractor.collectCookies(url -> context.cookies(url));
+        extractor.collectCookies(url -> context.cookies(url).stream().map(c -> new bpsh.authentication.credentials.CapturedCookie(c.name, c.value, c.domain, c.path, c.expires)).toList());
     }
 
     /**
@@ -377,16 +297,6 @@ public final class BrowserFlowRunner {
 
 
     /**
-     * Binds an explicit HTTP proxy to this owned browser, preventing Chromium's implicit loopback bypass.
-     *
-     * @param proxy Explicit validated HTTP proxy.
-     * @return Owned-browser proxy binding.
-     */
-    private static Proxy browserProxy(JourneyDefinition.Proxy proxy) {
-        return new Proxy(proxy.url().toString()).setBypass("<-loopback>");
-    }
-
-    /**
      * Checks required secret availability and stable step ownership before launching browser or native work.
      *
      * @param journey Validated definition.
@@ -394,7 +304,7 @@ public final class BrowserFlowRunner {
      * @throws AuthenticationFailure If a configured runtime secret is missing or ownership invalid.
      */
     private static void validateSecrets(JourneyDefinition journey, SecretStore.Values values) throws AuthenticationFailure {
-        try { ConfigManager.validateSecretOwnership(journey, values); }
+        try { JourneySecrets.validateSecretOwnership(journey, values); }
         catch (IllegalArgumentException ex) { throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION, "The saved login values no longer match this journey's configuration.", "Save the journey and re-enter the required passwords or PIN."); }
         char[] pin = values.pin();
         try {

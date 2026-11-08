@@ -1,15 +1,15 @@
 {
   "version": 1,
   "additionalComponentMethods": [
-    "bpsh.http.NativeTagPipelineTest.missingRepresentableLocationEncodingAndReferenceCombinations",
-    "bpsh.http.NativeTagPipelineTest$ProductionHooks.ordinaryAndTaggedPolicyAcrossEveryBaselineTool",
-    "bpsh.ui.DiagnosticsTest.missingCookieNamesTheSelectedOutputWithoutClaimingAConnectionFailure",
-    "bpsh.ui.DiagnosticsTest.observedConnectionFailureKeepsItsMeaningAndOrdinaryForwardingFeedback",
-    "bpsh.ui.DiagnosticsTest.actualFailuresStayCoherentAcrossEventRowsDetailsStateAndRequestFeedback",
-    "bpsh.ui.DiagnosticsTest.combinedOutputsRetainObservedStepFailureBeforeReportingMissingCredentials",
-    "bpsh.http.NativeTagPipelineTest.journeyTagsRetainTheirOwnLoginAcrossAccountSwitchesAndIndependentRefresh",
-    "bpsh.ui.JourneyRegistryTest$NativeUi.externalLibraryChangeCannotBeOverwrittenByAnOlderVisibleDraft",
-    "bpsh.ui.JourneyRegistryTest$NativeUi.malformedNativeProjectStaysPreservedAndVisibleInsteadOfFallingBackToOldData"
+    "bpsh.burp.http.NativeTagPipelineTest.missingRepresentableLocationEncodingAndReferenceCombinations",
+    "bpsh.burp.http.NativeTagPipelineTest$ProductionHooks.ordinaryAndTaggedPolicyAcrossEveryBaselineTool",
+    "bpsh.burp.ui.DiagnosticsTest.missingCookieNamesTheSelectedOutputWithoutClaimingAConnectionFailure",
+    "bpsh.burp.ui.DiagnosticsTest.observedConnectionFailureKeepsItsMeaningAndOrdinaryForwardingFeedback",
+    "bpsh.burp.ui.DiagnosticsTest.actualFailuresStayCoherentAcrossEventRowsDetailsStateAndRequestFeedback",
+    "bpsh.burp.ui.DiagnosticsTest.combinedOutputsRetainObservedStepFailureBeforeReportingMissingCredentials",
+    "bpsh.burp.http.NativeTagPipelineTest.journeyTagsRetainTheirOwnLoginAcrossAccountSwitchesAndIndependentRefresh",
+    "bpsh.burp.ui.JourneyRegistryTest$NativeUi.externalLibraryChangeCannotBeOverwrittenByAnOlderVisibleDraft",
+    "bpsh.burp.ui.JourneyRegistryTest$NativeUi.malformedNativeProjectStaysPreservedAndVisibleInsteadOfFallingBackToOldData"
   ],
   "federationMethods": [
     "bpsh.browser.FederationJourneyIntegrationTest.realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",
@@ -37,14 +37,21 @@
     "bpsh.browser.BrowserJourneyIntegrationTest.controlledResponseSurfacesProduceUsableCredentials",
     "bpsh.browser.BrowserJourneyIntegrationTest.controlledRedirectFailuresPublishNoCredentialAndCloseTheirProcesses",
     "bpsh.browser.BrowserJourneyIntegrationTest.controlledRepeatedAttemptsDoNotReuseBrowserCookiesOrStorage",
-    "bpsh.browser.BrowserJourneyIntegrationTest.sessionLossRecoveryUsesThreeSequentialFreshBrowsersAndReplaysEightActualRequestsOnce"
+    "bpsh.browser.BrowserJourneyIntegrationTest.sessionLossRecoveryUsesThreeSequentialFreshBrowsersAndReplaysEightActualRequestsOnce",
+    "bpsh.browser.BrowserJourneyIntegrationTest.pinnedPrivateRecorderReceivesStructuredUpdatesAndFlushesFinalValue",
+    "bpsh.browser.BrowserJourneyIntegrationTest.maintainedMetadataTracksPasswordHistoryAndActualNestedFrameSources",
+    "bpsh.browser.BrowserJourneyIntegrationTest.recordingWorkerProtectsReplacementTargetsAndStopsAfterTheFinalNestedFill",
+    "bpsh.browser.BrowserJourneyIntegrationTest.rapidSubmitRecordingReplaysWithTheRetainedPasswordInAFreshContext",
+    "bpsh.browser.BrowserJourneyIntegrationTest.recordedControlsFramesAndPopupReplayInAFreshContext",
+    "bpsh.browser.BrowserJourneyIntegrationTest.closingAPopupImmediatelyAfterTypingRetainsTheFinalValueAndCloseOrder",
+    "bpsh.browser.BrowserJourneyIntegrationTest.recordingCancellationClosesItsWorkerWithoutPublishingAReview"
   ],
   "transportMethods": [
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt",
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials",
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed",
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.localEndpointRejectsMissingAndIncorrectAttemptCredentials",
-    "bpsh.mtls.Pkcs11JourneyIntegrationTest.certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel"
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt",
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects",
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials",
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed",
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.localEndpointRejectsMissingAndIncorrectAttemptCredentials",
+    "bpsh.browser.mtls.Pkcs11JourneyIntegrationTest.certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel"
   ]
 }

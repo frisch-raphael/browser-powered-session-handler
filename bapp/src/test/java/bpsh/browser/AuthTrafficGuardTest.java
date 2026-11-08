@@ -1,6 +1,6 @@
 package bpsh.browser;
 
-import bpsh.model.AuthenticationFailure;
+import bpsh.authentication.AuthenticationFailure;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

@@ -2,84 +2,53 @@ package bpsh.support;
 
 import bpsh.browser.AuthTrafficGuard;
 import bpsh.browser.BrowserFlowRunner;
-import bpsh.credentials.TokenExtractor;
-import bpsh.model.AuthStep;
-import bpsh.model.AuthenticationFailure;
-import bpsh.model.JourneyDefinition;
-import bpsh.mtls.Pkcs11IdentityManager;
-import bpsh.runtime.BrowserRuntimeManager;
-import bpsh.secrets.SecretStore;
+import bpsh.authentication.credentials.TokenExtractor;
+import bpsh.journey.AuthStep;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.journey.JourneyDefinition;
+import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.browser.runtime.BrowserRuntimeManager;
+import bpsh.journey.SecretStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpsConfigurator;
-import com.sun.net.httpserver.HttpsParameters;
-import com.sun.net.httpserver.HttpsServer;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponse;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyFactory;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Clock;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
-import org.littleshoot.proxy.HttpFilters;
-import org.littleshoot.proxy.HttpFiltersAdapter;
-import org.littleshoot.proxy.HttpFiltersSourceAdapter;
-import org.littleshoot.proxy.HttpProxyServer;
-import org.littleshoot.proxy.ProxyAuthenticator;
-import org.littleshoot.proxy.impl.DefaultHttpProxyServer;
-import org.littleshoot.proxy.impl.ThreadPoolConfiguration;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Hosts disposable local HTTP/TLS services and validated developer fixture paths, never Burp factories. */
+/** Adapts canonical lab fixtures to native journeys, traffic observation and isolated artifact probes. */
 public final class IntegrationFixtures {
     /** Prevents instantiation of test-boundary factories. */
     private IntegrationFixtures() {}
 
-    /** Owns one ephemeral local origin and its daemon handler pool. */
+    /** Borrows the canonical origin interface and delegates its complete lifecycle to the lab. */
     public static final class Origin implements AutoCloseable {
-        public final HttpServer server;
-        public final ExecutorService executor;
-        public final String scheme;
-        /** @param server Bound HTTP/HTTPS server. @param scheme URL scheme used by this fixture. */
-        public Origin(HttpServer server, String scheme) {
-            this.server = server; this.scheme = scheme;
-            executor = Executors.newCachedThreadPool(r -> { Thread t = new Thread(r, "bpsh-fixture"); t.setDaemon(true); return t; }); server.setExecutor(executor);
+        public final lab.auth.ControlledApplication.Origin owner;
+        /** @param owner Canonical lab origin whose serving and cleanup remain in the lab. */
+        public Origin(lab.auth.ControlledApplication.Origin owner) {
+            this.owner = owner;
         }
         /** @param path Context path. @param handler Local test service. @return This origin for fluent fixture setup. */
-        public Origin route(String path, HttpHandler handler) { server.createContext(path, handler); return this; }
+        public Origin route(String path, HttpHandler handler) { owner.route(path, handler); return this; }
         /** @return Started origin with no global/shared listener modifications. */
-        public Origin start() { server.start(); return this; }
+        public Origin start() { owner.start(); return this; }
         /** @param path Absolute fixture path/query. @return Actual ephemeral localhost URL. */
-        public URI url(String path) { return URI.create(scheme + "://localhost:" + server.getAddress().getPort() + path); }
+        public URI url(String path) { return owner.url(path); }
         /** Stops only the fixture-owned listener/handler pool. */
-        @Override public void close() { server.stop(0); executor.shutdownNow(); }
+        @Override public void close() { owner.close(); }
     }
 
     /** @return Fresh unstarted loopback HTTP origin. @throws IOException If binding fails. */
-    public static Origin http() throws IOException { return new Origin(HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 64), "http"); }
+    public static Origin http() throws IOException { return new Origin(lab.auth.ControlledApplication.Origin.http("localhost")); }
 
     /**
      * Creates a strict TLS origin from the fresh SoftHSM fixture's software server key and CA.
@@ -90,36 +59,24 @@ public final class IntegrationFixtures {
      * @throws Exception If software fixture PEM/JDK TLS setup fails.
      */
     public static Origin https(Path root, boolean wrongHost, boolean clientAuth) throws Exception {
-        KeyStore store = KeyStore.getInstance("JKS"); store.load(null, null);
-        String pem = Files.readString(root.resolve("server.key")).replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "");
-        var key = KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(pem)));
-        var factory = CertificateFactory.getInstance("X.509"); java.security.cert.Certificate certificate, ca;
-        try (var input = Files.newInputStream(root.resolve(wrongHost ? "wrong-host.crt" : "server.crt"))) { certificate = factory.generateCertificate(input); }
-        try (var input = Files.newInputStream(root.resolve("ca.crt"))) { ca = factory.generateCertificate(input); }
-        char[] password = "disposable-fixture-key".toCharArray(); KeyManagerFactory keys = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        try { store.setKeyEntry("fixture-server", key, password, new java.security.cert.Certificate[]{certificate, ca}); keys.init(store, password); } finally { Arrays.fill(password, '\0'); }
-        KeyStore trusted = KeyStore.getInstance("JKS"); trusted.load(null, null); trusted.setCertificateEntry("fixture-ca", ca);
-        TrustManagerFactory trust = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()); trust.init(trusted);
-        SSLContext context = SSLContext.getInstance("TLS"); context.init(keys.getKeyManagers(), trust.getTrustManagers(), null);
-        HttpsServer server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 128);
-        server.setHttpsConfigurator(new HttpsConfigurator(context) {
-            /** @param parameters Per-connection TLS parameters with explicit client-auth policy. */
-            @Override public void configure(HttpsParameters parameters) { var ssl = context.getDefaultSSLParameters(); ssl.setNeedClientAuth(clientAuth); parameters.setSSLParameters(ssl); }
-        });
-        return new Origin(server, "https");
+        return new Origin(lab.auth.TransportFixtures.https(root,wrongHost,clientAuth));
     }
 
     /** @param exchange Owned local request. @param status Fixture status. @param type Content type. @param text UTF-8 body. @throws IOException On local connection failure. */
     public static void respond(HttpExchange exchange, int status, String type, String text) throws IOException {
-        byte[] bytes = text.getBytes(StandardCharsets.UTF_8); exchange.getResponseHeaders().set("Content-Type", type); exchange.sendResponseHeaders(status, bytes.length);
-        try (var out = exchange.getResponseBody()) { out.write(bytes); } finally { exchange.close(); }
+        lab.auth.ControlledApplication.Origin.reply(exchange,status,type,text);
     }
 
     /** @param origin Local server whose token endpoint is selected. @param steps Ordered native test steps. @return Validated-shape ordinary headless JSON journey. */
     public static JourneyDefinition journey(Origin origin, List<AuthStep.Definition> steps) {
-        return new JourneyDefinition(UUID.randomUUID(), "Fixture journey", "fixture", origin.url("/login"), false, steps,
+        return journey(origin.url("/login"), steps);
+    }
+
+    /** Builds a journey from a parent-owned fixture URL without loading lab code in an isolated probe. */
+    public static JourneyDefinition journey(URI login, List<AuthStep.Definition> steps) {
+        return new JourneyDefinition(UUID.randomUUID(), "Fixture journey", "fixture", login, false, steps,
                 new JourneyDefinition.Browser(true, null, 5000, 1000),
-                new JourneyDefinition.JsonExtraction(TokenExtractor.origin(origin.url("/")), "/token", "access_token"),
+                new JourneyDefinition.JsonExtraction(TokenExtractor.origin(login), "/token", "access_token"),
                 JourneyDefinition.Injection.perToken(List.of(new JourneyDefinition.TokenInjection(null, JourneyDefinition.InjectionType.BEARER, null))), new JourneyDefinition.Cache(1800, 10), null);
     }
 
@@ -135,53 +92,25 @@ public final class IntegrationFixtures {
 
     /** Owns an explicit HTTP/CONNECT fixture proxy; optional guard emulates global suffix stripping. */
     public static final class ForwardProxy implements AutoCloseable {
-        public final HttpProxyServer server;
         public final List<Seen> seen = new CopyOnWriteArrayList<>();
-        public final AtomicLong accepted = new AtomicLong();
-        public final AtomicLong rejectedCredentials = new AtomicLong();
-        public final AtomicLong authenticationChallenges = new AtomicLong();
-        /** @param guard Marker validator, or null for an ordinary upstream tunnel. @param user Optional Basic username. @param password Test password. */
-        public ForwardProxy(AuthTrafficGuard guard, String user, String password) {
-            var bootstrap = DefaultHttpProxyServer.bootstrap().withName("BPSH-fixture-proxy").withAddress(new InetSocketAddress("127.0.0.1", 0))
-                    .withAllowLocalOnly(true).withThreadPoolConfiguration(new ThreadPoolConfiguration().withAcceptorThreads(1).withClientToProxyWorkerThreads(2).withProxyToServerWorkerThreads(2))
-                    .withFiltersSource(new HttpFiltersSourceAdapter() {
-                        /** @param request Test proxy request. @param ctx Client channel. @return Scoped mock host boundary. */
-                        @Override public HttpFilters filterRequest(HttpRequest request, ChannelHandlerContext ctx) {
-                            return new HttpFiltersAdapter(request, ctx) {
-                                /** @param object Outbound HTTP frame. @return Rejection for invalid markers, otherwise null. */
-                                @Override public HttpResponse proxyToServerRequest(HttpObject object) {
-                                    if (object instanceof HttpRequest outgoing) {
-                                        String agent = outgoing.headers().get("User-Agent"); long id = accepted.incrementAndGet();
-                                        var decision = guard == null ? new AuthTrafficGuard.Decision(AuthTrafficGuard.Classification.NORMAL, agent, null)
-                                                : guard.classify(agent, AuthTrafficGuard.Family.GLOBAL, id);
-                                        if (guard != null && decision.classification() == AuthTrafficGuard.Classification.INVALID)
-                                            return new io.netty.handler.codec.http.DefaultFullHttpResponse(io.netty.handler.codec.http.HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST);
-                                        if (guard != null && decision.classification() == AuthTrafficGuard.Classification.OWNED) outgoing.headers().set("User-Agent", decision.userAgent());
-                                        String path; try { URI uri = URI.create(outgoing.uri()); path = uri.getRawPath(); } catch (RuntimeException ex) { path = "CONNECT"; }
-                                        if (!outgoing.method().equals(io.netty.handler.codec.http.HttpMethod.CONNECT)) seen.add(new Seen(path, decision.userAgent(), decision.classification()));
-                                        outgoing.headers().remove("Proxy-Authorization");
-                                    }
-                                    return null;
-                                }
-                            };
-                        }
-                    });
-            if (user != null) bootstrap.withProxyAuthenticator(new ProxyAuthenticator() {
-                /** @param candidateUser Test username. @param candidatePassword Test password. @return Exact disposable fixture credential match. */
-                @Override public boolean authenticate(String candidateUser, String candidatePassword) {
-                    boolean valid = user.equals(candidateUser) && password.equals(candidatePassword);
-                    if (!valid) rejectedCredentials.incrementAndGet();
-                    return valid;
-                }
-                /** @return Test-only realm. */
-                @Override public String getRealm() { authenticationChallenges.incrementAndGet(); return "BPSH fixture"; }
-            });
-            server = bootstrap.start();
+        public final AtomicLong accepted;
+        private final lab.auth.TransportFixtures.UnauthenticatedProxy owner;
+        /** @param guard Marker validator, or null for an ordinary unauthenticated upstream tunnel. */
+        public ForwardProxy(AuthTrafficGuard guard) {
+            owner=new lab.auth.TransportFixtures.UnauthenticatedProxy((method,path,agent,id)->{
+                var decision=guard==null?new AuthTrafficGuard.Decision(AuthTrafficGuard.Classification.NORMAL,agent,null):guard.classify(agent,AuthTrafficGuard.Family.GLOBAL,id);
+                if(decision.classification()==AuthTrafficGuard.Classification.INVALID)return new lab.auth.TransportFixtures.ProxyDecision(false,null);
+                if(!method.equals("CONNECT"))seen.add(new Seen(path,decision.userAgent(),decision.classification()));
+                return new lab.auth.TransportFixtures.ProxyDecision(true,decision.userAgent());
+            },uri->lab.auth.ControlledApplication.Origin.ownsPort(uri.getPort()));
+            accepted=owner.requestCounter();
         }
         /** @return Explicit loopback proxy URI for the fixture listener. */
-        public URI url() { return URI.create("http://127.0.0.1:" + server.getListenAddress().getPort()); }
+        public URI url() { return owner.url(); }
+        /** @return Number of proxy-credential headers observed at the canonical fixture boundary. */
+        public long credentialHeaders(){return owner.credentialHeaders();}
         /** Stops only this fixture endpoint/pools. */
-        @Override public void close() { server.abort(); }
+        @Override public void close() { owner.close(); }
     }
 
     /**
@@ -210,7 +139,7 @@ public final class IntegrationFixtures {
         Path path = Path.of(value).toRealPath();
         if (!Files.isRegularFile(path)) throw new IllegalArgumentException("The packaged JAR must be a regular file.");
         try (var jar = new java.util.jar.JarFile(path.toFile())) {
-            if (jar.getEntry("bpsh/runtime/BrowserRuntimeManager.class") == null) throw new IllegalArgumentException("The supplied JAR is not this extension.");
+            if (jar.getEntry("bpsh/browser/runtime/BrowserRuntimeManager.class") == null) throw new IllegalArgumentException("The supplied JAR is not this extension.");
         }
         return path;
     }
@@ -294,9 +223,10 @@ public final class IntegrationFixtures {
         if (replaced != 1) throw new AssertionError("The candidate must occur exactly once in the probe classpath.");
         String javaName = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).startsWith("windows") ? "java.exe" : "java";
         Path jvmExecutable = Path.of(System.getProperty("java.home"), "bin", javaName);
+        try (var origin = lab.auth.LoginFlows.probeForm(lab.auth.ControlledApplication.Origin.http("localhost"), "probe-ready", null).start()) {
         Process process = new ProcessBuilder(jvmExecutable.toString(), "-Duser.home=" + home,
                 "-Dbpsh.packagedJar=" + artifact, "-cp", String.join(java.io.File.pathSeparator, entries),
-                "bpsh.support.IntegrationFixtures$RuntimeProbe", mode, result.toString())
+                "bpsh.support.IntegrationFixtures$RuntimeProbe", mode, result.toString(), origin.url("/login").toString())
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         try {
             if (!process.waitFor(90, java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("Runtime probe exceeded its parent wall limit.");
@@ -312,6 +242,7 @@ public final class IntegrationFixtures {
                 var children = process.descendants().toList(); children.forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly(); process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
             }
+        }
         }
     }
 
@@ -350,10 +281,10 @@ public final class IntegrationFixtures {
 
     /** New JVM entry point; intentionally uses the retained runtime/runner signatures for old-artifact comparison. */
     public static final class RuntimeProbe {
-        /** @param args Probe mode and result path; the owned-home marker supplies the run identity. */
+        /** @param args Probe mode, result path and parent-owned login URL; the owned-home marker supplies the run identity. */
         public static void main(String[] args) throws Exception {
-            if (args.length != 2 || !List.of("cold-probe", "cache-probe", "upgrade-probe").contains(args[0]))
-                throw new IllegalArgumentException("Expected a supported mode and result file.");
+            if (args.length != 3 || !List.of("cold-probe", "cache-probe", "upgrade-probe").contains(args[0]))
+                throw new IllegalArgumentException("Expected a supported mode, result file and fixture URL.");
             Path home = Path.of(System.getProperty("user.home")).toRealPath(), result = Path.of(args[1]).toAbsolutePath();
             var json = new ObjectMapper(); JsonNode marker = json.readTree(Files.readAllBytes(home.resolve(".bpsh-probe-owned.json")));
             if (!"isolated-bpsh-runtime-probe".equals(marker.path("purpose").asText()) || !home.equals(Path.of(marker.path("home").asText()).toRealPath())
@@ -375,14 +306,11 @@ public final class IntegrationFixtures {
                 var before = cacheInventory(home);
                 if (args[0].equals("cold-probe") && !before.isEmpty()) throw new AssertionError("Cold cache was already prepared.");
                 evidence.set("beforeBundles", json.valueToTree(before));
-                try (var origin = http(); var runtime = new BrowserRuntimeManager(); var identities = new Pkcs11IdentityManager();
+                try (var runtime = new BrowserRuntimeManager(); var identities = new Pkcs11IdentityManager();
                      var guard = new AuthTrafficGuard(); var values = SecretStore.Values.empty()) {
-                    origin.route("/login", e -> respond(e, 200, "text/html", "<form method='POST' action='/token'><input id='user' name='user'><button id='submit'>Sign in</button></form>"));
-                    origin.route("/token", e -> { e.getRequestBody().readAllBytes(); respond(e, 200, "application/json", "{\"access_token\":\"probe-ready\"}"); });
-                    origin.start();
                     var steps = List.of(new AuthStep.Definition(UUID.randomUUID(), AuthStep.Type.INPUT, "#user", "fixture", null, null, null),
                             new AuthStep.Definition(UUID.randomUUID(), AuthStep.Type.CLICK, "#submit", null, null, null, null));
-                    var journey = journey(origin, steps); var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
+                    var journey = journey(URI.create(args[2]), steps); var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
                     long started = System.nanoTime(), deadline = started + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
                     var ready = runtime.acquire(deadline, () -> false); long prepared = System.nanoTime();
                     if (args[0].equals("cache-probe") && !before.containsKey(ready.bundleDigest())) throw new AssertionError("Cache probe created a new identity.");

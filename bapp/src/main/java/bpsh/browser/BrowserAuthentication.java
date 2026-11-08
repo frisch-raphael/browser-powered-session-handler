@@ -1,26 +1,26 @@
 package bpsh.browser;
 
-import bpsh.config.Config;
-import bpsh.config.JourneyRegistry;
-import bpsh.credentials.AuthenticationResult;
-import bpsh.model.AuthenticationFailure;
-import bpsh.model.AuthenticationStage;
-import bpsh.mtls.Pkcs11IdentityManager;
-import bpsh.secrets.SecretStore;
-import bpsh.session.AuthenticationCoordinator;
+import bpsh.authentication.AuthenticationPolicy;
+import bpsh.journey.JourneyCatalog;
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.authentication.AuthenticationStage;
+import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.journey.SecretStore;
+import bpsh.authentication.session.AuthenticationCoordinator;
 import java.util.function.BooleanSupplier;
 
 /** Wires the real browser and native PIN gate to the independently testable session policy. */
 public final class BrowserAuthentication {
     private BrowserAuthentication() {}
-    public static AuthenticationCoordinator coordinator(JourneyRegistry registry, SecretStore secrets, BrowserFlowRunner runner,
-            Pkcs11IdentityManager identities, Config.Controls controls) {
+    public static AuthenticationCoordinator coordinator(JourneyCatalog registry, SecretStore secrets, BrowserFlowRunner runner,
+            Pkcs11IdentityManager identities, AuthenticationPolicy controls) {
         return new AuthenticationCoordinator(registry, controls, new AuthenticationCoordinator.Attempt() {
-            @Override public AuthenticationResult run(JourneyRegistry.Entry entry, boolean recovery, long deadline,
+            @Override public AuthenticationResult run(JourneyCatalog.Entry entry, boolean recovery, long deadline,
                     BooleanSupplier cancelled) throws AuthenticationFailure {
                 return run(entry, recovery, deadline, cancelled, stage -> {});
             }
-            @Override public AuthenticationResult run(JourneyRegistry.Entry entry, boolean recovery, long deadline,
+            @Override public AuthenticationResult run(JourneyCatalog.Entry entry, boolean recovery, long deadline,
                     BooleanSupplier cancelled, java.util.function.Consumer<AuthenticationStage> observer) throws AuthenticationFailure {
                 try (var values = secrets.snapshot(entry.identity().key())) {
                     return runner.run(entry.identity(), entry.definition(), values, recovery, deadline, cancelled, observer);

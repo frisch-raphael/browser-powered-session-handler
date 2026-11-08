@@ -1,16 +1,6 @@
 # Authentication test lab: implementation contracts
 
-> Integrated into main on 2026-11-07. This document preserves the reviewed design and historical phase terminology. Current commands and implementation status are in [the lab guide](../../test/authentication-lab/README.md). Production capture now defaults to this checkout; reviewed owner selection is portable, while exact source manifests and evidence are generated per invocation.
-
-* **Date:** 2026-11-05.
-* **Status:** Finalized author-approved contracts after independent EGM review on 2026-11-05. The design’s implementation prerequisites remain required. No implementation or passing-test claim.
-* **Parent:** [Design](authentication-test-lab.md#detailed-implementation-plan).
-* **Requirements:** [Case matrix](authentication-test-lab-cases.md); 41 groups / 980 entries.
-* **Definitions:** [Terms with concrete examples](authentication-test-lab-terms.md).
-
-This companion specifies the selected lab formats and behavior. Native journey serialization and production authentication-policy amendments remain separately owned.
-
-**Author scope correction (2026-11-06):** The extension is the product under test. Keycloak, Spring Security and OpenSAML are infrastructure. Do not test their protocol implementations or count their validator checks as extension coverage. Keep fixture sanity checks only where needed to trust an extension result. Real OAuth/SAML journeys must prove that outputs captured by the extension authenticate the intended identity, and failed journeys must prove accurate extension feedback and resource cleanup. Fourteen former protocol-validation entries are retained as EXCLUDED metadata, never executable acceptance or passing coverage. Before declaring the suite complete, audit every test for duplicate coverage, third-party behavior and fixture-only claims; retain a concrete extension failure it can detect or an explicitly necessary harness purpose.
+Current data/execution contracts for the [Java lab](authentication-test-lab.md) and [case matrix](authentication-test-lab-cases.md). Provider libraries are infrastructure, not the product under test. Explicit scope exclusions cannot execute or earn passing coverage.
 
 ## Reading guide and definitions
 
@@ -21,7 +11,7 @@ The six sections answer these practical questions:
 1. How do we describe a check, connect it to a real test, control the test application and record the result?
 2. Which checks run when you choose baseline, diagnostics or another named selection?
 3. What exactly do the prepared applications return, including when we deliberately introduce a failure?
-4. Which shared server code do we build now, and how do existing tests use it after the predecessor is integrated?
+4. Which module owns shared server code, and how do native test facades delegate to it?
 5. Which application issues each cookie/token, and how do we check that valid and deliberately invalid OAuth/SAML messages are handled correctly?
 6. Which command examples and short explanations need correcting?
 
@@ -164,7 +154,7 @@ Outcomes are PASS/FAIL/BLOCKED/NOT_RUN/INTERRUPTED/EXCLUDED. Classification is S
 
 A **profile** is a named selection of checks, not a saved browser profile. The **baseline/smoke** selection is a small first check for obvious breakage. A **predicate** is simply the selection rule in the table, such as “all BROW cases.” Combining profiles takes their **union**: include each requirement once. **Deduplication** means the same actual test is not rerun merely because two selected profiles need it.
 
-All active profile members are mandatory requirements. Historical EXCLUDED entries remain visible but cannot execute or enter required-coverage counts. Missing active prerequisites produce BLOCKED; they are never silently filtered into a pass. Manual entries remain NOT_RUN until recorded. `all` can report its automated subset separately, with host/manual/assessment work still outstanding. Selecting several profiles takes the union and deduplicates execution IDs.
+All active profile members are mandatory requirements. Explicit scope exclusions cannot execute or enter required-coverage counts. Missing active prerequisites produce BLOCKED; they are never silently filtered into a pass. Manual entries remain NOT_RUN until recorded. `all` can report its automated subset separately, with host/manual/assessment work still outstanding. Selecting several profiles takes the union and deduplicates execution IDs.
 
 | Profile | Exact requirement predicate |
 | --- | --- |
@@ -271,19 +261,13 @@ All table routes below are relative to `/cases/{caseId}` and use the common obse
 | session-storage | Same sequence using sessionStorage on the same page context in A. | New attempt sees null before writing. This alone does not prove a new BrowserContext, because a new page can have fresh sessionStorage; require the separate context-creation evidence too. |
 | service-worker | Register the case-scoped worker, wait for control and confirm its exact scope via getRegistrations. | Probe registration/control before registering or unregistering anything; no registration for that scope and no controller. Check fresh context IDs; cleanup retires only owned state. |
 
-Each requirement has one owner. Its existing owning execution records these observations; no cross-test evidence dependency is implied. The safe page outcome markers contain no raw tokens. Browser/fixture contract checks verify that the prime stages actually stored the state, so an always-empty probe cannot pass. Missing required surface/observation support stays visible as BLOCKED. The P2 audit still selects actual callable production definitions and witnesses.
+Each requirement has one owner. Its existing owning execution records these observations; no cross-test evidence dependency is implied. The safe page outcome markers contain no raw tokens. Browser/fixture contract checks verify that the prime stages actually stored the state, so an always-empty probe cannot pass. Missing required surface/observation support stays visible as BLOCKED. Current source bindings select actual callable production definitions and witnesses.
 
-## 4. Canonical fixture ownership and phase ordering
+## 4. Canonical fixture ownership
 
-**Canonical** means the single shared implementation we intend to keep. A **facade** keeps an existing calling interface; **delegation** means it calls the shared implementation. For example, P1 builds the lab server; after the P2 audit, an existing test helper can call that server's shared machinery instead of retaining another copy. The **predecessor** is the work being developed in java-playwright, which is integrated and audited at P2. These P0–P5 implementation phases are different from the EGM review stages happening now.
+`ControlledApplication`, `LoginFlows` and `LabRun` own the shared purpose-specific servers. Native integration facades delegate common serving/lifecycle behavior to those implementations and retain only test-specific callbacks. `TransportFixtures` owns shared unauthenticated HTTP/CONNECT and mTLS mechanics. Keep one maintained implementation for each responsibility.
 
-P1 owns the canonical purpose-specific controlled server implementation in `ControlledApplication`, `LoginFlows` and `LabRun`, using JDK HttpServer/HttpsServer. It is buildable without obtaining sibling source, and it is retained after integration. Do not add a second generic server utility or import predecessor helpers before the P2 audit.
-
-At P2, after the fresh full audit, adapt the predecessor's `IntegrationFixtures.Origin` test facade to delegate common serving/lifecycle behavior to this canonical lab implementation where its current assertions require it. Keep JUnit-specific callbacks, test interfaces and excluded legacy assertions in the test facade. If some Origin behavior is not common to the lab, retain that test-specific behavior rather than cloning the generic server. Publish the actual mapping and run its existing retained assertions before replacing their ownership. This moves the applicable `IntegrationFixtures.java` inventory action to P2–P3 and makes delegation of common machinery the selected transition, rather than an unspecified optional future move.
-
-P3 extracts the audited existing unauthenticated HTTP/CONNECT and mTLS fixture machinery into `TransportFixtures` where standalone serving needs it. Existing callers delegate to that one implementation. Preserve exact retained assertions and keep configured upstream-authentication behavior outside the lab selection. P1 does not depend on this transport extraction. No production source seam is implemented by this proposal.
-
-The main design uses this P1/P2/P3 order. P1 exits with :auth-lab:test passing without Python, production, Docker or Burp; P2 includes retained fixture parity and current bindings. The full predecessor audit stays at P2.
+Reuse existing assertions and current source bindings before adding tests. The standalone fixture module must remain independent of production runtime, Python, Docker and Burp. Production acceptance overlays run only in isolated captures; configured upstream authentication stays outside the selected product scope.
 
 ## 5. Federation seed, session binding and negative controls
 
@@ -313,7 +297,7 @@ Use one case-private immediate backend rejection to establish extension failure 
 
 The valid comparison must first yield an extension-captured cookie that actually accesses the client as the expected identity. For the controlled rejection, the extension must publish no cookie, preserve the available extraction failure, avoid a misleading connection error, and close its resources. The backend error page may identify its known simulated cause; the extension must not invent that cause when its approved observation is only the missing cookie. A bounded private `before-token-exchange` checkpoint coordinates the driver and retires on Stop/reset.
 
-Do not implement a provider/client protocol regression suite for state, verifier, callback, client binding, code reuse, token kind or resource audience. Do not build or alter signed SAML responses to test Spring/OpenSAML signature, time, recipient or replay validation. The nine other `FED.negative` entries and all five former `FED.saml` entries are EXCLUDED by the author's scope correction. Earlier definitions and execution records are historical, not acceptance obligations.
+Do not implement a provider/client protocol regression suite for state, verifier, callback, client binding, code reuse, token kind or resource audience. Do not build or alter signed SAML responses to test Spring/OpenSAML signature, time, recipient or replay validation. The out-of-scope `FED.negative` and `FED.saml` entries are explicit exclusions. Only the active case definitions establish acceptance obligations.
 
 Real SAML acceptance uses an actual Keycloak login through the production runner, then proves that the captured client cookie accesses the expected identity. The real flow must be identified as SAML, so an accidental OAuth fallback cannot pass. Maintained validation stays enabled; its implementation is not retested here.
 
@@ -323,8 +307,8 @@ Generated registrations, provider configuration, client secrets and keys live un
 
 Run verification commands from the repository root using `.\bapp\gradlew.bat -p bapp`.
 
-After the fresh P2 audit, update any remaining four-attempt assertion in place to the amended three-total-attempt/pause expectation; reuse existing shared-caller/admission/cancellation tests and add only verified missing policy assertions.
+Recovery assertions require three total attempts and the current pause policy. Reuse shared-caller, admission and cancellation owners; add only verified missing policy assertions.
 
-The self-traffic marker is a short-lived, attempt-owned User-Agent suffix used on explicitly proxied authentication traffic. Its early guard recognizes owned traffic before acquisition, prevents recursion, strips its carrier as specified, excludes correlated responses from recovery and preserves ordinary interception. Native-tag handling and stale/unknown markers follow the preserved [Selected self-traffic policy](authentication-test-lab/sources/bapp-owned-authentication-baseline.md#technical-plan-architecture) and [Detailed Implementation item 7](authentication-test-lab/sources/bapp-owned-authentication-baseline.md#detailed-implementation). Refresh the reference when production changes it. Detailed guard/carrier combinations stay below Burp.
+The self-traffic marker is a short-lived, attempt-owned User-Agent suffix used on explicitly proxied authentication traffic. Its early guard recognizes owned traffic before acquisition, prevents recursion, strips its carrier as specified, excludes correlated responses from recovery and preserves ordinary interception. Native-tag handling and stale/unknown markers follow the current [self-traffic policy](bapp-owned-authentication.md#self-traffic-policy). Detailed guard/carrier combinations stay below Burp.
 
 The documentation artifact set comprises the [main design](authentication-test-lab.md), [case matrix](authentication-test-lab-cases.md), this contract and the [terms companion](authentication-test-lab-terms.md). These are excluded from runtime packaging. Implementation follows the main design's stage gates and source-file boundary.

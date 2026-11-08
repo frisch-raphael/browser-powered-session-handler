@@ -1,32 +1,32 @@
 package bpsh.browser;
 
-import bpsh.config.Config;
-import bpsh.config.JourneyRegistry;
-import bpsh.credentials.AuthenticationResult;
-import bpsh.http.NativeTagResolver;
-import bpsh.http.SessionRecovery;
-import bpsh.model.AuthStep;
-import bpsh.model.AuthenticationFailure;
-import bpsh.model.JourneyDefinition;
-import bpsh.mtls.Pkcs11IdentityManager;
-import bpsh.runtime.BrowserRuntimeManager;
-import bpsh.runtime.PlaywrightDriverAdapter;
-import bpsh.secrets.SecretStore;
-import bpsh.session.AuthenticationCoordinator;
-import bpsh.session.CoordinatorFixtures;
+import lab.auth.LoginFlows;
+
+import bpsh.request.RequestSettings;
+import bpsh.journey.editing.JourneyWorkspace;
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.burp.http.NativeTagResolver;
+import bpsh.burp.http.SessionRecovery;
+import bpsh.journey.AuthStep;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.journey.JourneyDefinition;
+import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.browser.runtime.BrowserRuntimeManager;
+import bpsh.browser.runtime.PlaywrightDriverAdapter;
+import bpsh.journey.SecretStore;
+import bpsh.authentication.session.AuthenticationCoordinator;
+import bpsh.authentication.session.CoordinatorFixtures;
 import bpsh.support.AuthLabSupport;
 import bpsh.support.IntegrationFixtures;
 import bpsh.support.ProductionLabAdapter;
-import bpsh.ui.DiagnosticsTest;
+import bpsh.burp.ui.DiagnosticsTest;
 import com.microsoft.playwright.BrowserType;
 import java.lang.reflect.Field;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -74,28 +74,366 @@ public class BrowserJourneyIntegrationTest {
                 type == AuthStep.Type.WAIT_TIME ? Integer.parseInt(value) : null);
     }
 
+    private static AuthStep.Definition operation(AuthStep.Type type, String selector, AuthStep.Operation payload) {
+        return new AuthStep.Definition(UUID.randomUUID(), type, selector, null, null, null, null, payload);
+    }
+
+    public @Test void explicitControlsNestedCrossOriginFramesAndPopupReplayProduceVerifiedOutput() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            var observed = LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            var open = step(AuthStep.Type.CLICK, "#open", null);
+            var steps = List.of(
+                    operation(AuthStep.Type.SET_CHECKED, "#check", new AuthStep.Checked(true)),
+                    operation(AuthStep.Type.SET_CHECKED, "#check", new AuthStep.Checked(false)),
+                    operation(AuthStep.Type.SET_CHECKED, "#radio", new AuthStep.Checked(true)),
+                    operation(AuthStep.Type.SELECT_OPTIONS, "#single", new AuthStep.Options(List.of("admin"))),
+                    operation(AuthStep.Type.SELECT_OPTIONS, "#multi", new AuthStep.Options(List.of())),
+                    operation(AuthStep.Type.SELECT_OPTIONS, "#multi", new AuthStep.Options(List.of("", "blue,green"))),
+                    operation(AuthStep.Type.PRESS_KEY, "#enter", new AuthStep.Key("Control+Enter")),
+                    operation(AuthStep.Type.ENTER_FRAME, "#outer", new AuthStep.Context()),
+                    operation(AuthStep.Type.ENTER_FRAME, "#inner", new AuthStep.Context()),
+                    step(AuthStep.Type.INPUT, "#nested", "nested value"), step(AuthStep.Type.CLICK, "#framebutton", null),
+                    new AuthStep.Definition(UUID.randomUUID(), AuthStep.Type.WAIT_URL, null, null, "exact", origin.url("/controls/inner?done").toString(), null),
+                    step(AuthStep.Type.WAIT_SELECTOR, "#frame-done", null),
+                    operation(AuthStep.Type.PARENT_FRAME, null, new AuthStep.Context()), step(AuthStep.Type.WAIT_SELECTOR, "#outer-marker", null),
+                    operation(AuthStep.Type.MAIN_FRAME, null, new AuthStep.Context()),
+                    operation(AuthStep.Type.EXPECT_POPUP, null, new AuthStep.Popup("popup-1", open.id())), open,
+                    operation(AuthStep.Type.SWITCH_PAGE, null, new AuthStep.PageTarget("popup-1")),
+                    step(AuthStep.Type.INPUT, "#popup-text", "popup value"), operation(AuthStep.Type.PRESS_KEY, "#popup-text", new AuthStep.Key("Enter")),
+                    step(AuthStep.Type.WAIT_SELECTOR, "#submitted", null), operation(AuthStep.Type.CLOSE_PAGE, null, new AuthStep.Context()),
+                    operation(AuthStep.Type.SWITCH_PAGE, null, new AuthStep.PageTarget("main")), step(AuthStep.Type.CLICK, "#finish", null));
+            var result = run(IntegrationFixtures.journey(origin, steps), values);
+            assertEquals("controls-token", result.token()); assertEquals("nested value", observed.nested.get());
+            assertEquals("popup value", observed.popup.get()); assertEquals(1, observed.completed.get());
+        }
+    }
+
+    public @Test void competingClosedAndMissingPopupsFailWithoutChoosingAnotherPage() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            for (String scenario : List.of("double", "closed", "missing")) {
+                var trigger = step(AuthStep.Type.CLICK, scenario.equals("missing") ? "#enter" : "#" + scenario, null);
+                var steps = List.of(operation(AuthStep.Type.EXPECT_POPUP, null, new AuthStep.Popup("popup-1", trigger.id())), trigger,
+                        step(AuthStep.Type.WAIT_TIME, null, scenario.equals("missing") ? "0" : "400"),
+                        operation(AuthStep.Type.SWITCH_PAGE, null, new AuthStep.PageTarget("popup-1")));
+                var base = IntegrationFixtures.journey(origin, steps);
+                var journey = new JourneyDefinition(base.id(), base.displayName(), base.alias(), base.authenticationUrl(), false, steps,
+                        new JourneyDefinition.Browser(true, null, 1000, 100), base.extraction(), base.injection(), base.cache(), null);
+                var failure = assertThrows(AuthenticationFailure.class, () -> run(journey, values), scenario);
+                assertEquals(scenario.equals("double") ? AuthenticationFailure.Cause.POPUP_AMBIGUOUS
+                        : scenario.equals("closed") ? AuthenticationFailure.Cause.PAGE_CLOSED : AuthenticationFailure.Cause.POPUP_TIMEOUT, failure.reason(), scenario);
+                assertFalse(failure.getMessage().contains(origin.url("/login").toString()));
+            }
+        }
+    }
+
+    public @Test void radioClearingAndMultipleValuesOnSingleSelectGiveActionableErrors() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            for (var action : List.of(operation(AuthStep.Type.SET_CHECKED, "#radio", new AuthStep.Checked(false)),
+                    operation(AuthStep.Type.SELECT_OPTIONS, "#single", new AuthStep.Options(List.of("guest", "admin"))))) {
+                var failure = assertThrows(AuthenticationFailure.class, () -> run(IntegrationFixtures.journey(origin, List.of(action)), values));
+                assertEquals(AuthenticationFailure.Cause.CONFIGURATION, failure.reason()); assertEquals(action.id(), failure.step().id());
+                assertTrue(failure.getMessage().contains(action.type() == AuthStep.Type.SET_CHECKED ? "Radio buttons can only be selected" : "requires one option value"));
+                assertFalse(failure.getMessage().contains(action.selector()));
+            }
+        }
+    }
+
+    public @Test void detachedFrameRequiresExplicitRecoveryAndWrongOpenerCannotSatisfyPopup() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin, List.of());
+            var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
+            var launcher = new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC());
+            try (var session = launcher.open(identity, bpsh.journey.BrowserSetup.from(base), values, BrowserSessionLauncher.Visibility.HEADLESS,
+                    false, deadline, () -> false, ignored -> {})) {
+                var context = session.context(); var main = context.newPage();
+                try (var executor = new BrowserStepExecutor(context, main, List.of())) {
+                    main.navigate(origin.url("/login").toString());
+                    executor.execute(operation(AuthStep.Type.ENTER_FRAME, "#outer", new AuthStep.Context()), values, 2000, deadline, () -> false);
+                    executor.execute(operation(AuthStep.Type.ENTER_FRAME, "#inner", new AuthStep.Context()), values, 2000, deadline, () -> false);
+                    main.evaluate("document.querySelector('#outer').remove()");
+                    var detached = assertThrows(AuthenticationFailure.class, () -> executor.execute(step(AuthStep.Type.INPUT, "#nested", "must not reach main"), values, 1000, deadline, () -> false));
+                    assertEquals(AuthenticationFailure.Cause.FRAME_DETACHED, detached.reason());
+                    executor.execute(operation(AuthStep.Type.MAIN_FRAME, null, new AuthStep.Context()), values, 1000, deadline, () -> false);
+                    var trigger = step(AuthStep.Type.CLICK, "#enter", null);
+                    executor.execute(operation(AuthStep.Type.EXPECT_POPUP, null, new AuthStep.Popup("popup-1", trigger.id())), values, 2000, deadline, () -> false);
+                    executor.execute(trigger, values, 2000, deadline, () -> false);
+                    var other = context.newPage(); other.navigate(origin.url("/login").toString()); other.locator("#open").click();
+                    var wrong = assertThrows(AuthenticationFailure.class, () -> executor.execute(operation(AuthStep.Type.SWITCH_PAGE, null,
+                            new AuthStep.PageTarget("popup-1")), values, 2000, deadline, () -> false));
+                    assertEquals(AuthenticationFailure.Cause.POPUP_TIMEOUT, wrong.reason());
+                    assertFalse(main.isClosed());
+                }
+            }
+        }
+    }
+
+    public @Test void pinnedPrivateRecorderReceivesStructuredUpdatesAndFlushesFinalValue() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin, List.of()); long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
+            var launcher = new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC());
+            try (var session = launcher.open(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), bpsh.journey.BrowserSetup.from(base),
+                    values, BrowserSessionLauncher.Visibility.HEADLESS, false, deadline, () -> false, ignored -> {});
+                 var adapter = session.driver().recorder(session.context())) {
+                adapter.start(5000); var page = session.context().newPage(); page.navigate(origin.url("/login").toString());
+                page.waitForCondition(() -> Boolean.TRUE.equals(page.evaluate("async () => typeof window.__pw_recorderState === 'function' && (await window.__pw_recorderState()).mode === 'recording'")),
+                        new com.microsoft.playwright.Page.WaitForConditionOptions().setTimeout(5000));
+                page.locator("#enter").fill("first value"); page.locator("#enter").fill("final value");
+                page.locator("#check").check(); page.locator("#single").selectOption("admin");
+                page.locator("#enter").fill("tail draft"); page.locator("#enter").fill("last without blur");
+                adapter.stop(5000); assertNull(adapter.failure());
+                var names = new java.util.ArrayList<String>(); boolean updated = false; String lastFill = null;
+                bpsh.browser.runtime.PlaywrightRecorderAdapter.Event event;
+                while ((event = adapter.poll()) != null) {
+                    try {
+                        names.add(event.action().name());
+                        if (event.action().name().equals("fill")) {
+                            char[] text = event.action().value(); try { lastFill = new String(text); } finally { java.util.Arrays.fill(text, '\0'); }
+                        }
+                        updated |= event.kind() == bpsh.browser.runtime.PlaywrightRecorderAdapter.Kind.UPDATED;
+                    } finally { event.close(); }
+                }
+                assertTrue(names.containsAll(List.of("fill", "check", "select"))); assertTrue(updated); assertEquals("last without blur", lastFill);
+                page.locator("#enter").fill("after stop"); page.waitForTimeout(100); assertNull(adapter.poll());
+            }
+        }
+    }
+
+    public @Test void maintainedMetadataTracksPasswordHistoryAndActualNestedFrameSources() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(40);
+            var launcher = new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC());
+            try (var session = launcher.open(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), bpsh.journey.BrowserSetup.from(base),
+                    values, BrowserSessionLauncher.Visibility.HEADLESS, false, deadline, () -> false, ignored -> {})) {
+                var context = session.context(); var sources = new java.util.HashMap<String, com.microsoft.playwright.Frame>();
+                bpsh.browser.runtime.PlaywrightRecorderAdapter.installMetadata(context, (source, args) -> {
+                    assertSame(context, source.context()); assertEquals(1, args.length); sources.put((String) args[0], source.frame()); return null;
+                });
+                try (var adapter = session.driver().recorder(context)) {
+                    adapter.start(5000); var page = context.newPage(); page.navigate(base.authenticationUrl().toString());
+                    page.waitForCondition(() -> Boolean.TRUE.equals(page.evaluate("async () => typeof window.__pw_recorderState === 'function' && (await window.__pw_recorderState()).mode === 'recording'")),
+                            new com.microsoft.playwright.Page.WaitForConditionOptions().setTimeout(5000));
+                    page.locator("#username").fill("ordinary-first"); page.locator("#password").fill("secret-first");
+                    page.locator("#show").click(); page.locator("#password").fill("secret-revealed");
+                    page.locator("#replace-same").click(); page.locator("#password").fill("replacement-needs-logical-protection");
+                    page.locator("#add-text").click(); page.locator("#later-text").fill("unknown-new-target");
+                    page.locator("#username").fill("ordinary-existing");
+                    page.locator("#reveal-before-fill").click(); page.locator("#reveal-first").fill("secret-before-first-fill");
+                    page.locator("#add-shadow").click(); page.locator("#shadow-password").fill("secret-shadow");
+                    page.locator("#shadow-text").fill("unknown-late-shadow");
+                    var nested = page.frameLocator("#outer").frameLocator("#inner").locator("#nested");
+                    nested.fill("nested-final-source");
+                    for (var frame : List.copyOf(page.frames())) {
+                        var status = bpsh.browser.runtime.PlaywrightRecorderAdapter.metadataStatus(frame, true);
+                        assertTrue(status.available()); assertFalse(status.failed()); assertEquals(0, status.pending());
+                    }
+                    adapter.stop(5000); assertNull(adapter.failure());
+                    var classifications = new java.util.HashMap<String, bpsh.browser.runtime.PlaywrightRecorderAdapter.Classification>();
+                    boolean nestedSource = false;
+                    bpsh.browser.runtime.PlaywrightRecorderAdapter.Event event;
+                    while ((event = adapter.poll()) != null) {
+                        try {
+                            if (!event.action().name().equals("fill")) continue;
+                            char[] text = event.action().value();
+                            try {
+                                String value = new String(text); classifications.put(value, event.action().metadata().classification());
+                                var actual = sources.get(event.action().metadata().sourceKey()); assertNotNull(actual);
+                                if (value.equals("nested-final-source")) {
+                                    var target = BrowserTargets.resolve(event.action().selector(), actual);
+                                    assertEquals(2, target.frames().size()); assertFalse(target.anyFrame()); nestedSource = true;
+                                }
+                            } finally { java.util.Arrays.fill(text, '\0'); }
+                        } finally { event.close(); }
+                    }
+                    for (String value : List.of("secret-first", "secret-revealed", "secret-before-first-fill", "secret-shadow"))
+                        assertEquals(bpsh.browser.runtime.PlaywrightRecorderAdapter.Classification.SECRET, classifications.get(value));
+                    for (String value : List.of("ordinary-first", "ordinary-existing", "nested-final-source"))
+                        assertEquals(bpsh.browser.runtime.PlaywrightRecorderAdapter.Classification.ORDINARY, classifications.get(value));
+                    for (String value : List.of("replacement-needs-logical-protection", "unknown-new-target", "unknown-late-shadow"))
+                        assertEquals(bpsh.browser.runtime.PlaywrightRecorderAdapter.Classification.UNKNOWN, classifications.get(value));
+                    assertTrue(nestedSource);
+                }
+            }
+        }
+    }
+
+    private static bpsh.journey.JourneyRecording.Request recordingRequest(JourneyDefinition base) {
+        var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1);
+        return new bpsh.journey.JourneyRecording.Request(identity,
+                new bpsh.journey.JourneyRecording.Stamp(identity.key(), 1, UUID.randomUUID()), bpsh.journey.BrowserSetup.from(base));
+    }
+
+    private static java.util.function.Consumer<bpsh.journey.JourneyRecording.Event> recordingResult(
+            java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result> result) {
+        return event -> {
+            if (event.state() == bpsh.journey.JourneyRecording.State.REVIEW) result.complete(event.result());
+            if (event.state() == bpsh.journey.JourneyRecording.State.CLOSED) result.completeExceptionally(new AssertionError(event.problem() == null ? "Recording closed without review" : event.problem().message()));
+        };
+    }
+
+    public @Test void recordingWorkerProtectsReplacementTargetsAndStopsAfterTheFinalNestedFill() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
+            LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
+            var lifecycle = new java.util.concurrent.CopyOnWriteArrayList<BrowserSessionLauncher.Lifecycle>();
+            var launcher = new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC(), lifecycle::add);
+            try (var recorder = new BrowserJourneyRecorder(launcher, BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+                var page = context.pages().getFirst();
+                page.locator("#username").fill("record-user"); page.locator("#password").fill("first-secret");
+                page.locator("#show").click(); page.locator("#password").fill("revealed-secret");
+                page.locator("#replace-same").click(); page.locator("#password").fill("replacement-secret");
+                page.frameLocator("#outer").frameLocator("#inner").locator("#nested").fill("last nested value"); control.stop();
+            })) {
+                var frozen = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result>(); var setup = SecretStore.Values.empty();
+                recorder.start(recordingRequest(base), setup, recordingResult(frozen));
+                try (var result = frozen.get(45, TimeUnit.SECONDS); var values = result.copySecrets()) {
+                    assertTrue(result.complete(), () -> result.problems().toString()); assertThrows(IllegalStateException.class, setup::pin);
+                    var secrets = result.candidates().stream().filter(c -> c.step().type() == AuthStep.Type.SECURE_INPUT).toList();
+                    assertEquals(3, secrets.size()); assertTrue(secrets.stream().noneMatch(bpsh.journey.JourneyRecording.Candidate::passwordUnclassified));
+                    assertEquals(3, values.stepIds().size()); var captured = new java.util.HashSet<String>();
+                    for (var step : secrets) {
+                        char[] value = values.stepValue(step.step().id()); try { captured.add(new String(value)); } finally { java.util.Arrays.fill(value, '\0'); }
+                    }
+                    assertEquals(Set.of("first-secret", "revealed-secret", "replacement-secret"), captured);
+                    assertTrue(result.candidates().stream().anyMatch(c -> c.step().type() == AuthStep.Type.INPUT && "last nested value".equals(c.step().value())));
+                    bpsh.journey.AuthStepSequence.validate(result.candidates().stream().map(bpsh.journey.JourneyRecording.Candidate::step).toList());
+                    assertEquals(BrowserSessionLauncher.ResourceEvent.BROWSER_CLOSED, lifecycle.getLast().event());
+                    var rejected = SecretStore.Values.empty();
+                    assertThrows(IllegalStateException.class, () -> recorder.start(recordingRequest(base), rejected, ignored -> {}));
+                    assertThrows(IllegalStateException.class, rejected::pin);
+                }
+            }
+        }
+    }
+
+    public @Test void rapidSubmitRecordingReplaysWithTheRetainedPasswordInAFreshContext() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
+            var observed = LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+                var page = context.pages().getFirst(); page.locator("#username").fill("record-user"); page.locator("#password").fill("record-secret");
+                page.locator("#submit").click(); control.stop();
+            })) {
+                var frozen = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result>();
+                recorder.start(recordingRequest(base), SecretStore.Values.empty(), recordingResult(frozen));
+                try (var result = frozen.get(45, TimeUnit.SECONDS); var values = result.copySecrets()) {
+                    assertTrue(result.complete(), () -> result.problems().toString()); var steps = result.candidates().stream().map(bpsh.journey.JourneyRecording.Candidate::step).toList();
+                    assertEquals(List.of(AuthStep.Type.INPUT, AuthStep.Type.SECURE_INPUT, AuthStep.Type.CLICK), steps.stream().map(AuthStep.Definition::type).toList());
+                    var replay = new JourneyDefinition(base.id(), base.displayName(), base.alias(), base.authenticationUrl(), false, steps, base.browser(),
+                            new JourneyDefinition.JsonExtraction(base.extraction() instanceof JourneyDefinition.JsonExtraction json ? json.responseOrigin() : origin.url("/"), "/recording-submit", "access_token"),
+                            base.injection(), base.cache(), null);
+                    observed.recordedSubmission.set(null); assertEquals("recording-token", run(replay, values).token());
+                    String body = java.net.URLDecoder.decode(observed.recordedSubmission.get(), java.nio.charset.StandardCharsets.UTF_8);
+                    assertTrue(body.contains("username=record-user")); assertTrue(body.contains("password=record-secret"));
+                }
+            }
+        }
+    }
+
+    public @Test void recordedControlsFramesAndPopupReplayInAFreshContext() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var proxy = new IntegrationFixtures.ForwardProxy(guard)) {
+            var observed = LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            var initial = IntegrationFixtures.journey(origin, List.of());
+            var base = IntegrationFixtures.configured(initial, initial.authenticationUrl(), new JourneyDefinition.Browser(true,
+                    new JourneyDefinition.Proxy(proxy.url()), 5000, 1000), initial.extraction(), null);
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+                var page = context.pages().getFirst();
+                page.locator("#check").check(); page.locator("#check").uncheck(); page.locator("#radio").check();
+                page.locator("#single").selectOption("admin"); page.locator("#multi").selectOption(new String[0]);
+                page.locator("#multi").selectOption(new String[]{"", "blue,green"}); page.locator("#enter").press("Control+Enter");
+                var nested = page.frameLocator("#outer").frameLocator("#inner");
+                nested.locator("#nested").fill("nested value"); nested.locator("#framebutton").click(); nested.locator("#frame-done").waitFor();
+                var popup = page.waitForPopup(() -> page.locator("#open").click());
+                popup.waitForCondition(() -> Boolean.TRUE.equals(popup.evaluate("async () => typeof window.__pw_recorderState === 'function' && (await window.__pw_recorderState()).mode === 'recording'")));
+                popup.locator("#popup-text").fill("popup value"); popup.locator("#popup-text").press("Enter"); popup.locator("#submitted").waitFor();
+                popup.close(); page.locator("#finish").click();
+                page.waitForCondition(() -> observed.completed.get() == 1); control.stop();
+            })) {
+                var frozen = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result>();
+                recorder.start(recordingRequest(base), SecretStore.Values.empty(), recordingResult(frozen));
+                try (var result = frozen.get(45, TimeUnit.SECONDS); var values = result.copySecrets()) {
+                    assertTrue(result.complete(), () -> result.problems().toString()); assertEquals(1, result.popups().size());
+                    var popup = result.popups().getFirst();
+                    var opening = result.candidates().stream().filter(c -> popup.openingSteps().contains(c.step().id())
+                            && c.step().type() == AuthStep.Type.CLICK && c.frames().isEmpty()).toList();
+                    assertEquals(1, opening.size(), "The actual opener must remain eligible for explicit review");
+                    var raw = result.candidates().stream().map(c -> bpsh.journey.JourneyDraft.StepInput.fromDefinition(c.step())).toList();
+                    var corrected = bpsh.journey.editing.JourneyDraftCompiler.placePopup(raw, popup.declarationId(), popup.pageRef(), opening.getFirst().step().id());
+                    var steps = bpsh.journey.editing.JourneyDraftCompiler.executableSteps(corrected);
+                    assertEquals(List.of(List.of(), List.of("", "blue,green")), steps.stream().filter(s -> s.type() == AuthStep.Type.SELECT_OPTIONS
+                            && ((AuthStep.Options) s.operation()).values().size() != 1).map(s -> ((AuthStep.Options) s.operation()).values()).toList());
+                    assertTrue(steps.stream().anyMatch(s -> s.type() == AuthStep.Type.CLOSE_PAGE));
+                    var replay = new JourneyDefinition(base.id(), base.displayName(), base.alias(), base.authenticationUrl(), false, steps,
+                            base.browser(), base.extraction(), base.injection(), base.cache(), null);
+                    assertEquals(1, observed.popupSubmissions.get(), "One Enter gesture submits exactly once during recording");
+                    assertEquals("controls-token", run(replay, values).token()); assertEquals(2, observed.completed.get());
+                    assertEquals(2, observed.popupSubmissions.get(), "Replay must not duplicate Enter's implicit submit click");
+                    assertTrue(proxy.seen.stream().map(IntegrationFixtures.Seen::path).toList().containsAll(List.of("/login", "/controls/outer", "/controls/inner", "/controls/popup")));
+                    assertTrue(proxy.seen.stream().allMatch(s -> s.classification() == AuthTrafficGuard.Classification.OWNED));
+                    assertTrue(proxy.seen.stream().allMatch(s -> s.agent().startsWith("Mozilla/") && !s.agent().contains("BPSHAuth/")));
+                }
+            }
+        }
+    }
+
+    public @Test void closingAPopupImmediatelyAfterTypingRetainsTheFinalValueAndCloseOrder() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
+            LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin, List.of());
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+                var page = context.pages().getFirst(); var popup = page.waitForPopup(() -> page.locator("#open").click());
+                popup.waitForCondition(() -> Boolean.TRUE.equals(popup.evaluate("async () => typeof window.__pw_recorderState === 'function' && (await window.__pw_recorderState()).mode === 'recording'")));
+                popup.locator("#popup-text").fill("last popup value"); popup.close(); control.stop();
+            })) {
+                var frozen = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result>();
+                recorder.start(recordingRequest(base), SecretStore.Values.empty(), recordingResult(frozen));
+                try (var result = frozen.get(45, TimeUnit.SECONDS); var values = result.copySecrets()) {
+                    assertTrue(result.complete(), () -> result.problems().toString());
+                    var steps = result.candidates().stream().map(bpsh.journey.JourneyRecording.Candidate::step).toList();
+                    int fill = java.util.stream.IntStream.range(0, steps.size()).filter(i -> steps.get(i).type().requiresInputValue()).findFirst().orElseThrow();
+                    var input = steps.get(fill); char[] captured = input.type() == AuthStep.Type.SECURE_INPUT ? values.stepValue(input.id()) : input.value().toCharArray();
+                    try { assertArrayEquals("last popup value".toCharArray(), captured); } finally { java.util.Arrays.fill(captured, '\0'); }
+                    assertEquals(AuthStep.Type.CLOSE_PAGE, steps.get(fill + 1).type()); assertEquals(1, result.popups().size());
+                }
+            }
+        }
+    }
+
+    public @Test void recordingCancellationClosesItsWorkerWithoutPublishingAReview() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
+            LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
+            var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
+            var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> control.cancel());
+            try (recorder) {
+                var finished = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Event>(); var setup = SecretStore.Values.empty();
+                recorder.start(recordingRequest(base), setup, event -> {
+                    if (event.state() == bpsh.journey.JourneyRecording.State.REVIEW || event.state() == bpsh.journey.JourneyRecording.State.CLOSED) finished.complete(event);
+                });
+                var event = finished.get(30, TimeUnit.SECONDS); assertEquals(bpsh.journey.JourneyRecording.State.CLOSED, event.state());
+                assertNull(event.result()); assertNull(event.problem()); assertThrows(IllegalStateException.class, setup::pin);
+            }
+            assertTrue(recorder.awaitClosed(5000));
+        }
+    }
+
     public @Test void sessionLossRecoveryUsesThreeSequentialFreshBrowsersAndReplaysEightActualRequestsOnce() throws Exception {
         long caseBegan=System.nanoTime();var processes=new ProductionLabAdapter.BrowserProcesses();Map<String,Object> observed;
         try {
-        var loginAttempts = new AtomicInteger(); var issuances = new AtomicInteger(); var protectedIngress = new AtomicInteger(); var acceptedActions = new AtomicInteger();
-        var acceptedToken = new java.util.concurrent.atomic.AtomicReference<String>();
         var lifecycle = new java.util.concurrent.CopyOnWriteArrayList<BrowserFlowRunner.Lifecycle>();
         try (var origin = IntegrationFixtures.http(); var secrets = new SecretStore()) {
-            origin.route("/login", e -> {
-                int attempt = loginAttempts.incrementAndGet();
-                IntegrationFixtures.respond(e, attempt == 2 || attempt == 3 ? 503 : 200, "text/html",
-                        attempt == 2 || attempt == 3 ? "temporarily unavailable" : "<script>fetch('/token')</script>");
-            });
-            origin.route("/token", e -> { String token = "browser-recovery-" + issuances.incrementAndGet(); acceptedToken.set(token); IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"" + token + "\"}"); });
-            origin.route("/protected", e -> {
-                protectedIngress.incrementAndGet(); boolean accepted = acceptedToken.get() != null && ("Bearer " + acceptedToken.get()).equals(e.getRequestHeaders().getFirst("Authorization"));
-                if (accepted) acceptedActions.incrementAndGet(); IntegrationFixtures.respond(e, accepted ? 200 : 401, "text/plain", accepted ? "fixture-account" : "session lost");
-            });
-            origin.start(); var definition = IntegrationFixtures.journey(origin, List.of()); var registry = new JourneyRegistry(secrets); CoordinatorFixtures.load(registry, List.of(definition));
+            var fixture = LoginFlows.recovery(origin.owner);
+            var loginAttempts = fixture.loginAttempts; var issuances = fixture.issuances; var protectedIngress = fixture.protectedIngress; var acceptedActions = fixture.acceptedActions;
+            var acceptedToken = fixture.acceptedToken; origin.start(); var definition = IntegrationFixtures.journey(origin, List.of()); var registry = new JourneyWorkspace(secrets); CoordinatorFixtures.load(registry, List.of(definition));
             var observedRunner = new BrowserFlowRunner(runtime, identities, guard, Clock.systemUTC(), lifecycle::add);
             var clock = new CoordinatorFixtures.ManualRuntime(); clock.now = System.nanoTime(); clock.wall = java.time.Instant.now();
             // Advance only coordinator scheduling. Actual Chromium keeps its real monotonic deadline and cleanup.
-            try (var coordinator = new AuthenticationCoordinator(registry, Config.Controls.defaults(), clock, (entry, recover, deadline, cancelled) -> {
+            try (var coordinator = new AuthenticationCoordinator(registry, RequestSettings.Controls.defaults(), clock, (entry, recover, deadline, cancelled) -> {
                 long remaining = deadline - clock.nanos(); long began = System.nanoTime();
                 try (var values = SecretStore.Values.empty()) {
                     return observedRunner.run(entry.identity(), entry.definition(), values, recover, began + remaining, cancelled);
@@ -154,15 +492,9 @@ public class BrowserJourneyIntegrationTest {
     }
 
     public @Test void retainedStepsAndSecureInputProduceNormalizedToken() throws Exception {
-        var secure = step(AuthStep.Type.SECURE_INPUT, "#password", null); AtomicInteger posted = new AtomicInteger();
+        var secure = step(AuthStep.Type.SECURE_INPUT, "#password", null);
         try (var origin = IntegrationFixtures.http()) {
-            origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", """
-                <input id='name'><input id='password' type='password'><button id='submit'>Sign in</button>
-                <script>submit.onclick=async()=>{await fetch('/credentials',{method:'POST',body:JSON.stringify({user:document.querySelector('#name').value,password:document.querySelector('#password').value})});location.href='/done'};</script>
-                """));
-            origin.route("/credentials", e -> { String body = new String(e.getRequestBody().readAllBytes()); if (body.contains("fixture-user") && body.contains("fixture-password")) posted.incrementAndGet(); IntegrationFixtures.respond(e, 200, "text/plain", "ok"); });
-            origin.route("/done", e -> IntegrationFixtures.respond(e, 200, "text/html", "<div id='done'>Ready</div><script>setTimeout(()=>fetch('/token'),1200)</script>"));
-            origin.route("/token", e -> IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"  Bearer fixture-token  \"}")); origin.start();
+            var posted = LoginFlows.normalizedForm(origin.owner); origin.start();
             var steps = List.of(step(AuthStep.Type.WAIT_LOAD_STATE, null, "load"), step(AuthStep.Type.INPUT, "#name", "fixture-user"), secure,
                     step(AuthStep.Type.WAIT_SELECTOR, "#submit", null), step(AuthStep.Type.WAIT_TIME, null, "10"), step(AuthStep.Type.CLICK, "#submit", null),
                     step(AuthStep.Type.WAIT_URL, null, "**/done"), step(AuthStep.Type.WAIT_LOAD_STATE, null, "domcontentloaded"),
@@ -176,14 +508,7 @@ public class BrowserJourneyIntegrationTest {
     }
     public @Test void namedJsonAndSeveralCookiesAreAcquiredTogether() throws Exception {
         try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
-            origin.route("/login", e -> {
-                e.getResponseHeaders().add("Set-Cookie", "sid=session-value; Path=/; HttpOnly");
-                IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/token')</script>");
-            });
-            origin.route("/token", e -> {
-                e.getResponseHeaders().add("Set-Cookie", "tenant=tenant-value; Path=/; HttpOnly");
-                IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"access-value\"}");
-            }); origin.start();
+            LoginFlows.combinedOutputs(origin.owner, true, false).start();
             var base = IntegrationFixtures.journey(origin, List.of());
             var selection = new JourneyDefinition.CombinedExtraction(List.of(
                     new JourneyDefinition.NamedExtraction("access", base.extraction()),
@@ -386,30 +711,20 @@ public class BrowserJourneyIntegrationTest {
                 }));
     }
     public @Test void earlyJsonAndCookieAttemptsStartWithFreshContextState() throws Exception {
-        AtomicInteger oldCookies = new AtomicInteger(), visits = new AtomicInteger();
         try (var origin = IntegrationFixtures.http(); var empty = SecretStore.Values.empty()) {
-            origin.route("/login", e -> {
-                if (e.getRequestHeaders().getFirst("Cookie") != null) oldCookies.incrementAndGet();
-                e.getResponseHeaders().add("Set-Cookie", "session=fresh-" + visits.incrementAndGet() + "; Path=/; HttpOnly");
-                IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/token')</script>");
-            });
-            origin.route("/token", e -> IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"early-token\"}")); origin.start();
+            var observation = LoginFlows.freshCookie(origin.owner); origin.start();
             JourneyDefinition j = IntegrationFixtures.journey(origin, List.of()); assertEquals("early-token", run(j, empty).token());
             JourneyDefinition cookie = IntegrationFixtures.configured(j, j.authenticationUrl(), j.browser(), new JourneyDefinition.CookieExtraction(origin.url("/"), "session", null, "/"), null);
             cookie = new JourneyDefinition(cookie.id(), cookie.displayName(), cookie.alias(), cookie.authenticationUrl(), false,
                     List.of(step(AuthStep.Type.CLICK, "#CANARY_SELECTOR", null), step(AuthStep.Type.WAIT_SELECTOR, "#CANARY_SELECTOR", null)), cookie.browser(), cookie.extraction(), cookie.injection(), cookie.cache(), null);
             var first = run(cookie, empty); var second = run(cookie, empty);
-            assertEquals("fresh-2", first.token()); assertEquals("fresh-3", second.token()); assertEquals(0, oldCookies.get());
+            assertEquals("fresh-2", first.token()); assertEquals("fresh-3", second.token()); assertEquals(0, observation.oldCookies());
             assertEquals(2, first.skippedSteps()); assertEquals(2, second.skippedSteps());
         }
     }
     public @Test void responseBodyRegexJsonAndCookiesCompleteOneBrowserLogin() throws Exception {
         try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
-            origin.route("/login", e -> {
-                e.getResponseHeaders().add("Set-Cookie", "sid=session-value; Path=/; HttpOnly");
-                IntegrationFixtures.respond(e, 200, "text/html; charset=utf-8", "<meta name='csrf' content='csrf-value'><script>fetch('/token')</script>");
-            });
-            origin.route("/token", e -> IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"access-value\"}")); origin.start();
+            LoginFlows.combinedOutputs(origin.owner, false, true).start();
             var base = IntegrationFixtures.journey(origin, List.of());
             var selection = new JourneyDefinition.CombinedExtraction(List.of(
                     new JourneyDefinition.NamedExtraction("access", base.extraction()),
@@ -425,10 +740,9 @@ public class BrowserJourneyIntegrationTest {
     public @Test void productionCoordinatorPublishesOwnedBrowserResultWithOriginalAcquisitionClocks() throws Exception {
         var providers = java.util.Arrays.stream(java.security.Security.getProviders()).map(java.security.Provider::getName).toList();
         try (var origin = IntegrationFixtures.http(); var secrets = new SecretStore()) {
-            origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/token')</script>"));
-            origin.route("/token", e -> IntegrationFixtures.respond(e, 200, "application/json", "{\"access_token\":\"coordinator-token\"}")); origin.start();
-            var registry = new JourneyRegistry(secrets); var journey = IntegrationFixtures.journey(origin, List.of()); CoordinatorFixtures.load(registry, List.of(journey));
-            try (var coordinator = BrowserAuthentication.coordinator(registry, secrets, runner, identities, Config.Controls.defaults())) {
+            LoginFlows.tokenFetch(origin.owner, "coordinator-token", LoginFlows.TokenResponse.SUCCESS).start();
+            var registry = new JourneyWorkspace(secrets); var journey = IntegrationFixtures.journey(origin, List.of()); CoordinatorFixtures.load(registry, List.of(journey));
+            try (var coordinator = BrowserAuthentication.coordinator(registry, secrets, runner, identities, RequestSettings.Controls.defaults())) {
                 var entry = registry.snapshot().resolve(journey.alias()); var ticket = coordinator.acquire(List.of(entry));
                 var snapshot = ticket.future().get(25, TimeUnit.SECONDS).get(entry.identity());
                 assertEquals("coordinator-token", snapshot.value()); assertSame(snapshot, coordinator.peek(entry.identity()));
@@ -440,8 +754,7 @@ public class BrowserJourneyIntegrationTest {
     }
     public @Test void relevantStatusesAndMalformedResponsesHaveDistinctDispositions() throws Exception {
         for (int status : List.of(503, 401, 200)) try (var origin = IntegrationFixtures.http(); var empty = SecretStore.Values.empty()) {
-            origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/token')</script>"));
-            origin.route("/token", e -> { e.getResponseHeaders().set("Retry-After", "7"); IntegrationFixtures.respond(e, status, "application/json", "{}"); }); origin.start();
+            LoginFlows.tokenFetch(origin.owner, "unused", status == 503 ? LoginFlows.TokenResponse.TEMPORARY_SERVICE : status == 401 ? LoginFlows.TokenResponse.AUTH_REJECTED : LoginFlows.TokenResponse.MISSING_OUTPUT).start();
             var ex = assertThrows(AuthenticationFailure.class, () -> run(IntegrationFixtures.journey(origin, List.of()), empty));
             assertEquals(status == 503 ? AuthenticationFailure.Cause.TEMPORARY_SERVICE : status == 401 ? AuthenticationFailure.Cause.AUTH_REJECTED : AuthenticationFailure.Cause.EXTRACTION, ex.reason());
             assertEquals(status == 503, ex.retryable()); if (status == 503) assertNotNull(ex.retryAfter());
@@ -456,14 +769,8 @@ public class BrowserJourneyIntegrationTest {
                 "step-timeout-detached-WAIT_SELECTOR", "step-timeout-exact-WAIT_URL"));
         variants.addAll(List.of("step-ambiguous-CLICK", "step-missing-secret-SECURE_INPUT"));
         for (String variant : variants) {
-            var release = new java.util.concurrent.CountDownLatch(1);
             try (var origin = IntegrationFixtures.http()) {
-                origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", "<input><input>"
-                        + (variant.contains("-hidden-") || variant.contains("-detached-") ? "<input id=CANARY_SELECTOR>" : "")
-                        + "<button id=begin-busy onclick=\"fetch('/busy')\">Begin</button>"));
-                origin.route("/busy", e -> { try { release.await(5, TimeUnit.SECONDS); IntegrationFixtures.respond(e, 200, "text/plain", "ready"); }
-                    catch (InterruptedException error) { Thread.currentThread().interrupt(); e.close(); } });
-                origin.start(); var actions = new ArrayList<>(DiagnosticsTest.presentationSteps(variant));
+                var held = LoginFlows.stepFailure(origin.owner, variant.contains("-hidden-") || variant.contains("-detached-")); origin.start(); var actions = new ArrayList<>(DiagnosticsTest.presentationSteps(variant));
                 String waitMode = variant.contains("-hidden-") ? "hidden" : variant.contains("-attached-") ? "attached"
                         : variant.contains("-detached-") ? "detached" : variant.contains("-exact-") ? "exact" : null;
                 if (waitMode != null) {
@@ -493,15 +800,14 @@ public class BrowserJourneyIntegrationTest {
                             "variant", variant, "stepNumber", failure.step().number(), "stepType", failure.step().type().name(), "stepIdentityMatched", true,
                             "phase", failure.phase().name(), "cause", failure.reason().name(), "redacted", true, "presentationChecked", variant.equals("step-timeout-CLICK"))) + "\n",
                             java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-                } finally { release.countDown(); }
+                } finally { held.release(); }
             }
         }
     }
     public @Test void unconfiguredSubresource503DoesNotBecomeAnAuthenticationRetry() throws Exception {
         long began=System.nanoTime();var processes=new ProductionLabAdapter.BrowserProcesses();int first=resourceEvents.size();var logins=new AtomicInteger();var assets=new AtomicInteger();AuthenticationFailure failure;
         try(var origin=IntegrationFixtures.http();var empty=SecretStore.Values.empty()) {
-            origin.route("/login",e->{logins.incrementAndGet();IntegrationFixtures.respond(e,200,"text/html","<body><script>fetch('/unrelated').then(()=>{let done=document.createElement('div');done.id='asset-observed';done.textContent='Asset observed';document.body.append(done)})</script>");});
-            origin.route("/unrelated",e->{assets.incrementAndGet();IntegrationFixtures.respond(e,503,"text/plain","temporary third-party asset");});origin.start();
+            LoginFlows.unrelatedFailure(origin.owner, logins::incrementAndGet, assets::incrementAndGet); origin.start();
             var initial=IntegrationFixtures.journey(origin,List.of(step(AuthStep.Type.WAIT_SELECTOR,"#asset-observed",null)));
             var journey=IntegrationFixtures.configured(initial,initial.authenticationUrl(),new JourneyDefinition.Browser(true,null,10_000,100),initial.extraction(),null);
             failure=assertThrows(AuthenticationFailure.class,()->run(journey,empty));assertEquals(AuthenticationFailure.Cause.EXTRACTION,failure.reason());assertFalse(failure.retryable());assertEquals(1,assets.get());assertEquals(1,logins.get());
@@ -515,8 +821,7 @@ public class BrowserJourneyIntegrationTest {
     }
     public @Test void elapsedAttemptPreservesRelevantServiceAndAuthenticationErrors() throws Exception {
         for (int status : List.of(503, 401)) try (var origin = IntegrationFixtures.http(); var empty = SecretStore.Values.empty()) {
-            origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/token')</script>"));
-            origin.route("/token", e -> IntegrationFixtures.respond(e, status, "application/json", "{}")); origin.start();
+            LoginFlows.tokenFetch(origin.owner, "unused", status == 503 ? LoginFlows.TokenResponse.TEMPORARY_SERVICE : LoginFlows.TokenResponse.AUTH_REJECTED).start();
             var j = IntegrationFixtures.journey(origin, List.of(step(AuthStep.Type.WAIT_SELECTOR, "#never-present", null)));
             j = IntegrationFixtures.configured(j, j.authenticationUrl(), new JourneyDefinition.Browser(true, null, 1000, 10_000), j.extraction(), null);
             JourneyDefinition journey = j;
@@ -535,44 +840,12 @@ public class BrowserJourneyIntegrationTest {
     }
     private static void ordinaryProxyCoversOwnedBrowserSurfaces() throws Exception {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var proxy = new IntegrationFixtures.ForwardProxy(guard); var empty = SecretStore.Values.empty()) {
-            var requiredPaths=Set.of("/redirect","/redirected","/frame-fetch","/popup-fetch","/cross","/dedicated-fetch","/sw-fetch","/ws");
-            Set<String> reachedPaths=java.util.concurrent.ConcurrentHashMap.newKeySet();
-            java.util.function.Consumer<String> reached=path->{if(requiredPaths.contains(path))reachedPaths.add(path);};
-            cross.route("/cross", e -> { reached.accept("/cross");e.getResponseHeaders().set("Access-Control-Allow-Origin", "*"); IntegrationFixtures.respond(e, 200, "text/plain", "cross"); }); cross.start();
-            origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", """
-                <body><script>
-                (async()=>{
-                const signal=name=>new Promise(resolve=>{const listener=e=>{if(e.data===name){window.removeEventListener('message',listener);resolve();}};window.addEventListener('message',listener);});
-                await fetch('/redirect');await fetch('%s');
-                const frameReady=signal('frame-ready'),frame=document.createElement('iframe');frame.src='/frame';document.body.append(frame);await frameReady;
-                const popupReady=signal('popup-ready');window.open('/popup');await popupReady;
-                const worker=new Worker('/worker.js');await new Promise(resolve=>worker.onmessage=()=>resolve());
-                const swReady=new Promise(resolve=>navigator.serviceWorker.addEventListener('message',e=>{if(e.data==='sw-ready')resolve();}));
-                const registration=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;registration.active.postMessage('go');
-                await swReady;await new Promise(resolve=>{const ws=new WebSocket('ws://'+location.host+'/ws');ws.onopen=()=>{ws.close();resolve();};});
-                await fetch('/token');
-                })().catch(()=>fetch('/fixture-error'));</script>
-                """.formatted(cross.url("/cross"))));
-            origin.route("/redirect", e -> { reached.accept("/redirect");e.getResponseHeaders().set("Location", "/redirected"); e.sendResponseHeaders(302, -1); e.close(); });
-            for (String path : List.of("/redirected", "/frame-fetch", "/popup-fetch", "/dedicated-fetch", "/sw-fetch")) origin.route(path, e -> {reached.accept(path);IntegrationFixtures.respond(e, 200, "text/plain", "ok");});
-            origin.route("/frame", e -> IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/frame-fetch').then(()=>parent.postMessage('frame-ready','*'))</script>"));
-            origin.route("/popup", e -> IntegrationFixtures.respond(e, 200, "text/html", "<script>fetch('/popup-fetch').then(()=>opener.postMessage('popup-ready','*'))</script>"));
-            origin.route("/worker.js", e -> IntegrationFixtures.respond(e, 200, "application/javascript", "fetch('/dedicated-fetch').then(()=>postMessage('worker-ready'))"));
-            origin.route("/sw.js", e -> IntegrationFixtures.respond(e, 200, "application/javascript", "self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('message',e=>e.waitUntil(fetch('/sw-fetch').then(()=>e.source.postMessage('sw-ready'))));"));
-            origin.route("/ws", e -> {
-                reached.accept("/ws");
-                // LittleProxy's CONNECT tunnel is opaque to its HTTP filter. Inspect the actual
-                // upgrade request at this owned fixture boundary; real-Burp stripping remains P5.
-                var decision = guard.classify(e.getRequestHeaders().getFirst("User-Agent"), AuthTrafficGuard.Family.GLOBAL, 9_000_000);
+            var surfaces = LoginFlows.ownedBrowserSurfaces(origin.owner, cross.owner, exchange -> {
+                var decision = guard.classify(exchange.getRequestHeaders().getFirst("User-Agent"), AuthTrafficGuard.Family.GLOBAL, 9_000_000);
                 proxy.seen.add(new IntegrationFixtures.Seen("/ws", decision.userAgent(), decision.classification()));
-                try { String accept = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-1").digest((e.getRequestHeaders().getFirst("Sec-WebSocket-Key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes()));
-                    e.getResponseHeaders().set("Upgrade", "websocket"); e.getResponseHeaders().set("Connection", "Upgrade"); e.getResponseHeaders().set("Sec-WebSocket-Accept", accept); e.sendResponseHeaders(101, -1); e.close();
-                } catch (Exception ex) { e.close(); }
             });
-            origin.route("/token", e -> {
-                if(reachedPaths.containsAll(requiredPaths))IntegrationFixtures.respond(e,200,"application/json","{\"access_token\":\"marked-token\"}");
-                else IntegrationFixtures.respond(e,500,"text/plain","owned browser surfaces incomplete");
-            }); origin.start();
+            var requiredPaths = surfaces.requiredPaths(); var reachedPaths = surfaces.reachedPaths();
+            cross.start(); origin.start();
             JourneyDefinition j = IntegrationFixtures.journey(origin, List.of());
             j = IntegrationFixtures.configured(j, j.authenticationUrl(), new JourneyDefinition.Browser(true, new JourneyDefinition.Proxy(proxy.url()), 10_000, 5000), j.extraction(), null);
             try{assertTrue("marked-token".equals(run(j,empty).token()),"The configured proxy must return the expected output.");}
@@ -595,9 +868,10 @@ public class BrowserJourneyIntegrationTest {
     private static void ordinaryDirectJourneyDoesNotReuseThePreviousProxy() throws Exception {
         var requests=new AtomicInteger();var directHadMarker=new java.util.concurrent.atomic.AtomicBoolean();
         try(var origin=IntegrationFixtures.http();var proxy=new IntegrationFixtures.ForwardProxy(guard);var values=SecretStore.Values.empty()) {
-            origin.route("/login",exchange->IntegrationFixtures.respond(exchange,200,"text/html","<script>fetch('/token')</script>"));
-            origin.route("/token",exchange->{requests.incrementAndGet();if(requests.get()>1&&java.util.Objects.toString(exchange.getRequestHeaders().getFirst("User-Agent"),"").contains("BPSHAuth/"))directHadMarker.set(true);
-                IntegrationFixtures.respond(exchange,200,"application/json","{\"access_token\":\"direct-route-proof\"}");});origin.start();
+            LoginFlows.tokenFetch(origin.owner, "direct-route-proof", LoginFlows.TokenResponse.SUCCESS, exchange -> {
+                requests.incrementAndGet();
+                if (requests.get() > 1 && java.util.Objects.toString(exchange.getRequestHeaders().getFirst("User-Agent"), "").contains("BPSHAuth/")) directHadMarker.set(true);
+            }).start();
             var first=IntegrationFixtures.journey(origin,List.of());first=IntegrationFixtures.configured(first,first.authenticationUrl(),new JourneyDefinition.Browser(true,new JourneyDefinition.Proxy(proxy.url()),10000,3000),first.extraction(),null);
             assertTrue("direct-route-proof".equals(run(first,values).token()),"The proxy comparison must return the expected output.");long before=proxy.accepted.get();assertTrue(before>0);
             var direct=IntegrationFixtures.journey(origin,List.of());direct=IntegrationFixtures.configured(direct,direct.authenticationUrl(),new JourneyDefinition.Browser(true,null,10000,3000),direct.extraction(),null);
@@ -609,7 +883,7 @@ public class BrowserJourneyIntegrationTest {
     private static void unavailableOrdinaryProxyDoesNotFallBackToTheOrigin() throws Exception {
         var reached=new AtomicInteger();
         try(var origin=IntegrationFixtures.http();var proxy=new IntegrationFixtures.ForwardProxy(null);var values=SecretStore.Values.empty()) {
-            origin.route("/login",exchange->{reached.incrementAndGet();IntegrationFixtures.respond(exchange,200,"application/json","{\"access_token\":\"must-not-arrive\"}");});origin.start();
+            lab.auth.TransportFixtures.countingTarget(origin.owner, reached::incrementAndGet).start();
             var unavailable=proxy.url();proxy.close();var initial=IntegrationFixtures.journey(origin,List.of());
             var journey=IntegrationFixtures.configured(initial,initial.authenticationUrl(),new JourneyDefinition.Browser(true,new JourneyDefinition.Proxy(unavailable),5000,500),initial.extraction(),null);
             var failure=assertThrows(AuthenticationFailure.class,()->run(journey,values));assertEquals(0,reached.get());
@@ -621,7 +895,7 @@ public class BrowserJourneyIntegrationTest {
     public @Test void cancellationKillsOnlyTheOwnedDriverAndReturnsTypedCancellation() throws Exception {
         AtomicInteger requests = new AtomicInteger(); java.util.concurrent.atomic.AtomicBoolean cancel = new java.util.concurrent.atomic.AtomicBoolean();
         try (var origin = IntegrationFixtures.http(); var empty = SecretStore.Values.empty(); var timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()) {
-            origin.route("/login", e -> { requests.incrementAndGet(); cancel.set(true); IntegrationFixtures.respond(e, 200, "text/html", "never emits token"); }); origin.start();
+            LoginFlows.noOutput(origin.owner, () -> { requests.incrementAndGet(); cancel.set(true); }).start();
             JourneyDefinition j = IntegrationFixtures.journey(origin, List.of(step(AuthStep.Type.WAIT_SELECTOR, "#never", null)));
             var ex = assertThrows(AuthenticationFailure.class, () -> runner.run(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, j.id(), 1), j, empty, false,
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(20), cancel::get));
@@ -636,15 +910,17 @@ public class BrowserJourneyIntegrationTest {
 
     public @Test void packagedClassloaderUsesExactResourcesWithoutSharedDriverCacheOrJvmMutation() throws Exception {
         Path jar = IntegrationFixtures.packagedJar();
-        try (var loader = new URLClassLoader(new java.net.URL[]{jar.toUri().toURL(), Path.of("build/classes/java/test").toUri().toURL()}, ClassLoader.getPlatformClassLoader())) {
-            loader.loadClass("bpsh.browser.BrowserJourneyIntegrationTest$PackagedProbe").getMethod("exercise").invoke(null);
+        try (var origin = LoginFlows.probeForm(lab.auth.ControlledApplication.Origin.http("localhost"), "packaged-owned-token", "packaged-owned-cookie").start();
+             var loader = new URLClassLoader(new java.net.URL[]{jar.toUri().toURL(), Path.of("build/classes/java/test").toUri().toURL()}, ClassLoader.getPlatformClassLoader())) {
+            loader.loadClass("bpsh.browser.BrowserJourneyIntegrationTest$PackagedProbe").getMethod("exercise", String.class).invoke(null, origin.url("/login").toString());
+            assertThrows(ClassNotFoundException.class, () -> loader.loadClass("lab.auth.ControlledApplication"));
         }
     }
 
     /** Runs only against the candidate JAR, this test probe and JDK platform modules. */
     public static class PackagedProbe {
         /** Verifies actual scoped resources, pinned versions, form/JSON/cookies and fresh contexts. */
-        public static void exercise() throws Exception {
+        public static void exercise(String loginUrl) throws Exception {
             ClassLoader loader = PlaywrightDriverAdapter.class.getClassLoader();
             String scope = "META-INF/bpsh/" + BrowserRuntimeManager.hostPlatform() + "/";
             if (loader.getResource(scope + "browser-assets.json") == null || loader.getResource(scope + "browser-assets.zip") == null)
@@ -656,20 +932,6 @@ public class BrowserJourneyIntegrationTest {
             try (var in = loader.getResourceAsStream(scope + "browser-assets.json")) { metadata = json.readTree(in); }
             Class<?> driver = loader.loadClass("com.microsoft.playwright.impl.driver.Driver"); Field instance = driver.getDeclaredField("instance"); instance.setAccessible(true); Object before = instance.get(null);
             Map<Object, Object> properties = new java.util.HashMap<>(System.getProperties());
-            var origin = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
-            origin.createContext("/login", exchange -> {
-                byte[] bytes = "<form method='POST' action='/token'><input id='user' name='user'><button id='submit'>Sign in</button></form>".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().set("Content-Type", "text/html"); exchange.sendResponseHeaders(200, bytes.length);
-                try (var out = exchange.getResponseBody()) { out.write(bytes); } finally { exchange.close(); }
-            });
-            origin.createContext("/token", exchange -> {
-                exchange.getRequestBody().readAllBytes();
-                byte[] bytes = "{\"access_token\":\"packaged-owned-token\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().set("Content-Type", "application/json"); exchange.getResponseHeaders().add("Set-Cookie", "session=packaged-owned-cookie; Path=/; HttpOnly");
-                exchange.sendResponseHeaders(200, bytes.length);
-                try (var out = exchange.getResponseBody()) { out.write(bytes); } finally { exchange.close(); }
-            });
-            origin.start();
             try (var runtime = new BrowserRuntimeManager()) {
                 var ready = runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false);
                 if (!Files.isRegularFile(ready.nodeExecutable()) || !Files.isRegularFile(ready.driverEntryPoint()) || !Files.isRegularFile(ready.browserExecutable()))
@@ -687,14 +949,14 @@ public class BrowserJourneyIntegrationTest {
                      var browser = session.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setTimeout(20000).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
                      var context = browser.newContext()) {
                     if (!browser.version().equals(metadata.path("browserVersion").asText())) throw new AssertionError("Pinned Chromium version differs.");
-                    var page = context.newPage(); page.navigate("http://127.0.0.1:" + origin.getAddress().getPort() + "/login");
+                    var page = context.newPage(); page.navigate(loginUrl);
                     page.fill("#user", "fixture"); page.click("#submit");
                     if (!page.textContent("body").contains("packaged-owned-token")) throw new AssertionError("Packaged form/JSON flow failed.");
                     if (context.cookies().stream().noneMatch(cookie -> cookie.name.equals("session") && cookie.value.equals("packaged-owned-cookie")))
                         throw new AssertionError("Packaged cookie capture failed.");
                     try (var fresh = browser.newContext()) { if (!fresh.cookies().isEmpty()) throw new AssertionError("Browser contexts shared cookies."); }
                 }
-            } finally { origin.stop(0); }
+            }
             if (instance.get(null) != before || !properties.equals(new java.util.HashMap<>(System.getProperties()))) throw new AssertionError("Driver singleton or JVM properties changed.");
         }
     }

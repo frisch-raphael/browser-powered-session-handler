@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Controlled browser recording fixture</title>
+<form action="/recording-submit" method="post">
+  <label>Username <input id="username" name="username" autocomplete="username"></label>
+  <section id="password-group"><label>Password <input id="password" name="password" type="password" autocomplete="current-password"></label></section>
+  <button id="show" type="button">Show password</button>
+  <button id="replace-same" type="button">Replace password at the same target</button>
+  <button id="replace-other" type="button">Replace password at another target</button>
+  <button id="replace-subtree" type="button">Replace password section</button>
+  <button id="detach-password" type="button">Detach password</button>
+  <button id="reattach-password" type="button">Reattach password</button>
+  <label>Reveal before typing <input id="reveal-first" type="password"></label>
+  <button id="reveal-before-fill" type="button">Reveal the unused field</button>
+  <label>Notes <textarea id="notes"></textarea></label>
+  <div id="editable" contenteditable="true" role="textbox" aria-label="Editable text"></div>
+  <label>Email <input id="email" type="email"></label>
+  <label>Number <input id="number" type="number"></label>
+  <label>Date <input id="date" type="date"></label>
+  <label>Time <input id="time" type="time"></label>
+  <label>Month <input id="month" type="month"></label>
+  <label>Week <input id="week" type="week"></label>
+  <label>Color <input id="color" type="color"></label>
+  <label>Range <input id="range" type="range"></label>
+  <label><input id="remember" type="checkbox">Remember</label>
+  <select id="role"><option value="guest">Guest</option><option value="admin">Administrator</option></select>
+  <select id="roles" multiple><option value="">Empty value</option><option value="blue,green">Two colors</option></select>
+  <button id="submit">Sign in</button>
+</form>
+<button id="add-text">Add an unrelated text field</button>
+<button id="add-shadow">Create an open shadow root</button>
+<button id="event-autofill">Fill fields with input events</button>
+<button id="silent-autofill">Change fields without input events</button>
+<button id="exhaust">Exceed the field-history budget</button>
+<button id="open" onclick="window.open('/controls/popup')">Open popup</button>
+<a id="navigate" href="/recording?next=1">Navigate to a fresh document</a>
+<iframe id="outer" src="{{OUTER}}"></iframe>
+<div id="extra"></div><div id="shadow-host"></div>
+<script>
+  const find = id => document.getElementById(id);
+  const textInput = id => { const input = document.createElement('input'); input.id = id; return input; };
+  let detached;
+  find('show').onclick = () => { find('password').type = 'text'; };
+  find('replace-same').onclick = () => find('password').replaceWith(textInput('password'));
+  find('replace-other').onclick = () => find('password').replaceWith(textInput('replacement'));
+  find('replace-subtree').onclick = () => find('password-group').replaceChildren(textInput('password'));
+  find('detach-password').onclick = () => { detached = find('password'); detached.remove(); };
+  find('reattach-password').onclick = () => { if (detached) find('password-group').append(detached); };
+  find('reveal-before-fill').onclick = () => { find('reveal-first').type = 'text'; };
+  find('add-text').onclick = () => find('extra').append(textInput('later-text'));
+  find('add-shadow').onclick = () => {
+    const root = find('shadow-host').attachShadow({mode: 'open'});
+    root.innerHTML = '<label>Shadow password <input id="shadow-password" type="password"></label><input id="shadow-text">';
+  };
+  const autofill = events => {
+    for (const [id, value] of [['username', 'fixture-user'], ['password', 'fixture-password']]) {
+      find(id).value = value;
+      if (events) find(id).dispatchEvent(new InputEvent('input', {bubbles: true, composed: true, inputType: 'insertReplacementText'}));
+    }
+  };
+  find('event-autofill').onclick = () => autofill(true);
+  find('silent-autofill').onclick = () => autofill(false);
+  find('exhaust').onclick = () => {
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < 4097; i++) fragment.append(textInput('budget-' + i));
+    find('extra').append(fragment);
+  };
+</script>

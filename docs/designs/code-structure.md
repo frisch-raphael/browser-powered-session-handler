@@ -1,63 +1,60 @@
-# Java code structure
+# Java architecture
 
-The extension uses feature packages under `bpsh`, with one composition root and a directed dependency graph. Production and native tests use matching directory/package paths. The Gradle `verifyArchitecture` task enforces package locations, permitted dependencies and the absence of package cycles; `check` includes that task.
+The tree follows application responsibilities. Domain contracts sit with their feature; concrete browser, filesystem and Burp integrations sit at explicit outer boundaries. Java packages are not split merely to give every class a directory.
 
 ```text
-bapp/src/main/java/bpsh/
-  Extension.java        Montoya registration, service composition and unload
-  model/                Journey/step/draft values, identity, failures and progress
-  secrets/              Owned session secret buffers
-  events/               Bounded, credential-free journey history
-  credentials/          Output capture, normalization, lifetime and use provenance
-  config/               Native codecs, storage, registry, draft compilation and transfer
-  io/                   Shared private-file ownership and creation permissions
-  runtime/              Verified bundled assets, immutable cache and driver processes
-  mtls/                 PKCS#11 discovery/selection and attempt-owned TLS proxy
-  session/              Admission, shared acquisition, refresh and recovery policy
-  browser/              Browser execution, failure classification and runner wiring
-  diagnostics/          Safe classification and host logging
-  http/                 Request tags, Burp HTTP hooks and attributed replay delivery
-  ui/                   Swing forms, controller, dialogs and validation presentation
-
-bapp/src/test/java/bpsh/                  Native tests grouped by owner
-test/authentication-lab/production-tests/bpsh/  Isolated acceptance extensions
+bpsh/
+  Extension.java             Composition and host lifecycle
+  journey/                   Definitions, drafts, identity, secrets, read-only catalog
+    editing/                 Workspace, draft compiler, transfer and storage orchestration
+    persistence/             Strict JSON, document envelopes and concrete stores
+  authentication/            Failures, progress and scheduling policy
+    credentials/             Extraction observations, results and lifetimes
+    session/                 Coordinator, executors and event history
+  request/                   Automatic rules and request-origin settings
+  browser/                   Real browser attempts and traffic provenance
+    runtime/                 Bundled browser assets and driver lifecycle
+    mtls/                    Device discovery and attempt TLS transport
+  burp/
+    http/                    Montoya hooks, tags, injection, recovery and diagnostics
+    ui/                      Swing editor and explicit user actions
+  platform/files/            Restricted file creation attributes
 ```
 
-## Dependency ownership
+## Boundary decisions
 
-`model` and `session` must not import Swing, AWT, Montoya or Playwright. Host-specific controls live in `config`, not the domain model. Acquisition results, progress and credential-use provenance are explicit contracts. `BrowserAuthentication` wires real browser execution and native PIN suppression into the coordinator's existing attempt/retry interfaces. The session policy does not construct a browser or native backend.
+`JourneyCatalog` is the read-only publication contract. Its immutable entries and snapshots expose saved definitions and generation/availability checks. Authentication, tag resolution, HTTP processing and request menus cannot mutate the workspace or call its storage methods. `JourneyWorkspace` implements the contract and owns editable collections, generation changes and publication. It is an authoring service, not configuration data.
 
-Configuration and credentials cannot depend on the editor or HTTP hooks. The limited JSON-path grammar and bounded recovery-pattern compilation belong below both configuration and execution. A draft owns immutable nonsecret input records; `JourneyDraftCompiler` converts those records through the strict native codec without constructing Swing components.
+`JourneyStorage` owns observed storage revisions and external-load epochs. It loads and saves through the existing conflict-checked stores, distinguishes watcher echoes from external changes and merges final captured edits during unload. The UI captures input and presents outcomes; it no longer owns project revisions, library hashes or final document merging. Ordinary saves persist before publication, while final saves deliberately avoid live runtime publication.
 
-`ConfigManager` owns project persistence and revision checks. `NativeDocumentCodec` owns envelopes and controls, `NativeJourneyCodec` owns journey/credential/secret encoding, and `NativeJson` owns common strict field readers. `NativeJourneyFiles` owns bounded transfer I/O. Remember/export consent and secret-buffer ownership retain their existing contracts.
+`JourneyDocument` is the owned storage/transfer envelope. `JourneyJson` owns the strict shared serialization boundary; `ProjectStore` only reads/writes Burp project persistence. `NativeDocumentCodec`, `NativeJourneyCodec` and `NativeJson` remain package-private format implementation details. Domain naming and typed secret validation belong to `JourneyNames` and `JourneySecrets`, so browser execution and diagnostics do not call a persistence facade.
 
-`BrowserManifestCodec` validates metadata and paths; `BrowserRuntimeManager` owns cache locking, extraction, verification and publication. Driver watchdogs remain in `PlaywrightDriverAdapter`. Shared creation permissions and Windows principal lookup live in `PrivateFiles`, so native export and user-library storage do not call browser-specific helpers.
+`AuthenticationPolicy` exposes only deadlines and admission limits. `AuthenticationCoordinator` cannot depend on tool selection, automatic injection rules, editor state or concrete journey storage. Its existing attempt/retry ports bind real browser and native behavior in `BrowserAuthentication`. Policy and catalog substitution are exercised directly by `AuthenticationBoundaryTest`.
 
-`UiController` coordinates editor state and asynchronous actions. Modal presentation, form layout and validation wording have separate owners: `JourneyDialogs`/`SwingJourneyDialogs`, `JourneyForms` and `JourneyValidationMessages`. Keep their helpers package-private. Public types and members should express an actual package boundary or injectable backend contract; moving a file is not a reason to expose every implementation detail.
+`RequestSettings` owns automatic request rules. Its `Tool` enum is independent of Montoya and retains existing persisted names. The Burp HTTP adapter matches host tool names at its boundary. `CapturedCookie` similarly carries browser-independent cookie observations; only `BrowserFlowRunner` translates Playwright cookies.
 
-## Working rules
+## Dependency rules
 
-- Put a class with the feature that owns its state and behavior. Keep the package path identical to its directory. Avoid a general-purpose utility bucket.
-- Reuse the strict codecs and draft compiler for imports, saved drafts and execution. Preserve native JSON field names, schema versions, storage keys, tags, cancellation and retry limits during structural changes.
-- Keep browser, native, file and network work off Swing's event thread. Preserve captured generations, revision checks and bounded ownership; do not hide shared state behind a global service locator.
-- Use the existing attempt/runtime/native/dialog interfaces at effect boundaries. Add an interface when a distinct implementation or ownership boundary needs it, rather than one per class.
-- Retain exact source/artifact and observed-result checks in acceptance reporting. File movement does not prove a passing requirement.
-- Run `verifyArchitecture`, relevant regressions and documentation lint after changing boundaries. Review dependency changes and use the smallest meaningful verification scope before the final full check.
+- `journey` uses JDK types only and imports no application or adapter packages.
+- Authentication contracts and request settings may use journey values. Session policy depends on the read-only catalog and credential contracts, never editing, persistence, UI, browser or Montoya.
+- Credential extraction may use Jackson/RE2 for bounded parsing, but does not import Playwright, Montoya or Swing.
+- Editing depends on journey values, request settings and the explicit persistence boundary. Concrete storage owns document validation and I/O; the catalog never exposes those operations.
+- Browser execution adapts core attempt contracts. Runtime/native resources are grouped beneath the browser that owns their lifecycle.
+- Burp UI/HTTP adapters depend on core contracts. Only the composition root wires the complete graph.
+- Package paths, permitted edges, framework exclusions and absence of cycles are enforced by `verifyArchitecture`, included in `check`.
 
-## Acceptance source bindings
+Public types represent boundaries consumed by another package. Internal JSON helpers, UI forms and process details stay package-private. A new interface must support a real substitution or ownership boundary; do not introduce one per class.
 
-The broader lab keeps its acceptance extensions separate from normal native tests and applies them only in isolated production captures. Those sources now mirror package paths. Invocation hashing, source exclusion and JUnit selection use relative paths and fully qualified class names, including nested classes.
+## Review and verification
 
-The Gradle launchers and Java collectors read one configuration inventory from `test/authentication-lab/src/main/resources/configuration-inputs.json`. After an intentional reviewed harness change, run from the repository root:
+The structure applies the [Java architecture review principles](https://github.com/decebals/claude-code-java/blob/main/skills/architecture-review/SKILL.md): cohesive feature ownership, explicit APIs, inward dependencies, framework-free domain code and enforceable boundaries. Tests mirror owning packages. Shared integration fixtures remain shared, and isolated production acceptance extensions stay under `test/authentication-lab/production-tests`.
+
+Run from the repository root:
 
 ```powershell
-.\bapp\gradlew.bat -p bapp :auth-lab:refreshBindings --offline
+.\bapp\gradlew.bat -p bapp check verifyNativeDocumentation --offline
 ```
 
-Review the catalog diff before running acceptance. This command updates source/configuration fingerprints, preserves required nullable fields and unbound requirements, and claims no passing coverage. Run acceptance in a subsequent invocation so it consumes rebuilt catalog resources. Source/configuration inputs use LF to make their checked-in bytes portable.
+Browser and PKCS#11 tasks exercise the actual universal development JAR; they require their explicit prerequisites. Native JSON schemas, project keys, tag syntax, deadlines, credential ownership and browser-cache identity are compatibility contracts, independent of Java package layout. The Montoya entry point remains `bpsh.Extension`.
 
-The acceptance overlays still extend several same-named native test classes. They are an explicit snapshot-testing boundary, not a second production implementation. Consolidating those overlapping test owners is separate work; the refactor does not claim that every repository duplication or design tradeoff has disappeared.
-
-## Delivery compatibility
-
-The Montoya entry point is `bpsh.Extension`. The universal JAR verifier checks that entry and rejects stale classes in the default package. Existing native documents, user libraries, request tags, browser payloads and immutable browser-cache identities retain their formats. No migration or Python runtime environment is introduced. The unsupported historical `api` sources and legacy fixture assets remain in their existing locations.
+After intentional source/package or harness changes, refresh reviewed binding fingerprints with `:auth-lab:refreshBindings --offline`, inspect the diff, then run selected acceptance profiles in a new invocation. This grants no acceptance itself. READMEs under the federation source tree participate in its evidence fingerprint.

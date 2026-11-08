@@ -1,20 +1,23 @@
 package bpsh.support;
 
+import bpsh.journey.persistence.JourneyDocument;
+import bpsh.journey.persistence.JourneyJson;
+
 import bpsh.browser.BrowserAuthentication;
 import bpsh.browser.BrowserFlowRunner;
 import bpsh.browser.BrowserJourneyIntegrationTest;
-import bpsh.config.Config;
-import bpsh.config.ConfigManager;
-import bpsh.config.JourneyRegistry;
-import bpsh.credentials.AuthenticationResult;
-import bpsh.credentials.TokenExtractor;
-import bpsh.http.NativeTagResolver;
-import bpsh.model.AuthStep;
-import bpsh.model.JourneyDefinition;
-import bpsh.model.JourneyKey;
-import bpsh.secrets.SecretStore;
-import bpsh.session.AuthenticationCoordinator;
-import bpsh.session.CoordinatorFixtures;
+import bpsh.request.RequestSettings;
+import bpsh.journey.persistence.ProjectStore;
+import bpsh.journey.editing.JourneyWorkspace;
+import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.credentials.TokenExtractor;
+import bpsh.burp.http.NativeTagResolver;
+import bpsh.journey.AuthStep;
+import bpsh.journey.JourneyDefinition;
+import bpsh.journey.JourneyKey;
+import bpsh.journey.SecretStore;
+import bpsh.authentication.session.AuthenticationCoordinator;
+import bpsh.authentication.session.CoordinatorFixtures;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -30,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Builds real native definitions and calls the existing runner; contains no login/recovery engine. */
 public final class ProductionLabAdapter {
-    public static final Config.Controls CONTROLS = Config.Controls.defaults();
+    public static final RequestSettings.Controls CONTROLS = RequestSettings.Controls.defaults();
     public record AttemptResources(long contextId, int contextsClosed, int browsersOpened, int browsersClosed, int drivers, int observedProcesses, long alive) {}
     private static final Map<String, List<AttemptResources>> RESOURCES = new ConcurrentHashMap<>();
     public static List<AttemptResources> resources(String id) { return List.copyOf(RESOURCES.getOrDefault(id, List.of())); }
@@ -210,18 +213,18 @@ public final class ProductionLabAdapter {
     }
     public static String export(JourneyDefinition journey) throws Exception {
         // Roundtrip through the actual serializer/parser before execution and omit fixture secrets from examples.
-        try (var document = new ConfigManager.NativeDocument(ConfigManager.DocumentKind.EXPORT, UUID.randomUUID(), List.of(journey), List.of(), null, Map.of())) {
-            String serialized = ConfigManager.nativeToJson(document);
-            try (var parsed = ConfigManager.parseNative(serialized, ConfigManager.DocumentKind.EXPORT)) { assertEquals(journey, parsed.journeys().getFirst()); }
+        try (var document = new JourneyDocument(JourneyDocument.DocumentKind.EXPORT, UUID.randomUUID(), List.of(journey), List.of(), null, Map.of())) {
+            String serialized = JourneyJson.write(document);
+            try (var parsed = JourneyJson.read(serialized, JourneyDocument.DocumentKind.EXPORT)) { assertEquals(journey, parsed.journeys().getFirst()); }
             return serialized;
         }
     }
     private static String name(String role) { return switch (role) { case "B" -> "bearer"; case "C1" -> "first"; case "C2" -> "second"; default -> throw new IllegalArgumentException(); }; }
     /** Hashes the same native saved definition/revision, with no secure-input values or runtime tokens. */
     public static String savedDefinitionHash(Prepared prepared) throws Exception {
-        try (var document = new ConfigManager.NativeDocument(ConfigManager.DocumentKind.EXPORT, prepared.definition.id(), List.of(prepared.definition), List.of(), null, Map.of())) {
+        try (var document = new JourneyDocument(JourneyDocument.DocumentKind.EXPORT, prepared.definition.id(), List.of(prepared.definition), List.of(), null, Map.of())) {
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(ConfigManager.nativeToJson(document).getBytes(StandardCharsets.UTF_8)));
+                    .digest(JourneyJson.write(document).getBytes(StandardCharsets.UTF_8)));
         }
     }
     public static Map<String, String> credentials(AuthenticationResult result, List<String> roles) {
@@ -252,7 +255,7 @@ public final class ProductionLabAdapter {
     public static void automaticAndTaggedProofs(AuthLabSupport targets, AuthLabSupport.Case target, Prepared prepared, String account) throws Exception {
         observed(targets, target, () -> {
             try (var secrets = new SecretStore()) {
-                var registry = new JourneyRegistry(secrets); CoordinatorFixtures.load(registry, List.of(prepared.definition));
+                var registry = new JourneyWorkspace(secrets); CoordinatorFixtures.load(registry, List.of(prepared.definition));
                 registry.secretChanged(new JourneyKey(JourneyDefinition.Scope.PROJECT, prepared.definition.id()), prepared.values);
                 try (var coordinator = BrowserAuthentication.coordinator(registry, secrets, BrowserJourneyIntegrationTest.runner,
                         BrowserJourneyIntegrationTest.identities, CONTROLS)) {

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "type": "CLICK",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "type": "INPUT",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "type": "SECURE_INPUT",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "type": "WAIT_LOAD_STATE",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "type": "WAIT_URL",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "type": "WAIT_TIME",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "type": "WAIT_SELECTOR",
+    "selector": "#field",
+    "value": "",
+    "state": ""
+  }
+]

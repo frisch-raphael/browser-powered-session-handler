@@ -1,6 +1,6 @@
 # Documentation
 
-The extension runtime is Java-owned. Python is not required to install or run it.
+The extension and authentication lab are maintained in Java. This index contains current contracts and operating instructions.
 
 ## Product and development
 
@@ -9,33 +9,24 @@ The extension runtime is Java-owned. Python is not required to install or run it
 - [Product contract](product.md)
 - [Code structure and dependency rules](designs/code-structure.md)
 
-## Maintained designs
+## Runtime contracts
 
-- [Native authentication and recovery](designs/bapp-owned-authentication.md)
+- [Authentication, request tags and recovery](designs/bapp-owned-authentication.md)
 - [Journey interface and credential controls](designs/interface.md)
 - [Universal offline packaging](designs/universal-packaging.md)
-- [Authentication test lab](designs/authentication-test-lab.md), [case ownership](designs/authentication-test-lab-cases.md), [contracts](designs/authentication-test-lab-contracts.md) and [terms](designs/authentication-test-lab-terms.md)
-- [Run the Java authentication lab](../test/authentication-lab/README.md)
 
-The universal design supersedes the authentication design's earlier platform-specific JAR distribution. Current interface amendments supersede its older UI descriptions. The former API environment and wheelhouse are retired; historical API sources remain unsupported reference only.
+## Proposed features
 
-## Validation evidence
+- [Browser journey recording](designs/browser-journey-recording.md) - recording and native review are implemented; popup edge cases and final acceptance remain under qualification.
 
-[Current integration validation](implementation/main-integration-validation.md) identifies the merged source, installed artifact and current test results.
+## Authentication lab
 
-[Test-suite integration](implementation/test-suite-integration.md) records the integrated lab, portable capture changes and scoped validation.
+- [Run the Java lab](../test/authentication-lab/README.md)
+- [Architecture and ownership](designs/authentication-test-lab.md)
+- [Case matrix](designs/authentication-test-lab-cases.md)
+- [Data and execution contracts](designs/authentication-test-lab-contracts.md)
+- [Terms and examples](designs/authentication-test-lab-terms.md)
+- [Capability assessment recipes](designs/capability-assessments.md)
+- [Federation client](../test/federation-client/README.md)
 
-[Code structure validation](implementation/code-structure-validation.md) records the package boundaries, responsibility splits and packaged-runtime checks.
-
-[Authentication findings fixes](implementation/authentication-findings-fixes.md) records the subsequent main fixes, focused regressions and actual Burp recovery verification.
-
-Each historical record applies only to its recorded artifact and date. It does not establish acceptance of a later integrated build.
-
-- [driver resource probe](implementation/driver-resource-probe.md)
-- [journey ux audit checklist](implementation/journey-ux-audit-checklist.md)
-- [p2 browser tls validation](implementation/p2-browser-tls-validation.md)
-- [p3 coordination tags validation](implementation/p3-coordination-tags-validation.md)
-- [p4 native cutover validation](implementation/p4-native-cutover-validation.md)
-- [session loss recovery validation](implementation/session-loss-recovery-validation.md)
-- [universal packaging validation](implementation/universal-packaging-validation.md)
-- [ux test matrix](implementation/ux-test-matrix.md)
+Each verification run records its source, artifact and actual results under the owning module's ignored build directory. Passing unit tests, browser execution, software-token checks and actual Burp acceptance establish different facts. Use the reports from the artifact being qualified.

@@ -1,19 +1,19 @@
-// Feature packages form a directed graph. Keep lower layers independent of their consumers.
+// Feature-owned boundaries. Concrete adapters may depend on core contracts; core never imports adapters.
 val architectureDependencies = mapOf(
-    "bpsh" to setOf("browser", "config", "diagnostics", "http", "model", "mtls", "runtime", "secrets", "session", "ui"),
-    "bpsh.model" to emptySet(),
-    "bpsh.events" to setOf("model"),
-    "bpsh.io" to emptySet(),
-    "bpsh.secrets" to setOf("model"),
-    "bpsh.credentials" to setOf("model"),
-    "bpsh.config" to setOf("credentials", "io", "model", "secrets"),
-    "bpsh.runtime" to setOf("io", "model"),
-    "bpsh.mtls" to setOf("credentials", "model"),
-    "bpsh.session" to setOf("config", "credentials", "events", "model"),
-    "bpsh.browser" to setOf("config", "credentials", "model", "mtls", "runtime", "secrets", "session"),
-    "bpsh.diagnostics" to setOf("config", "model"),
-    "bpsh.http" to setOf("browser", "config", "credentials", "diagnostics", "model", "session"),
-    "bpsh.ui" to setOf("config", "credentials", "diagnostics", "events", "model", "mtls", "secrets", "session")
+    "bpsh" to setOf("authentication", "authentication.session", "browser", "browser.mtls", "browser.runtime", "burp.http", "burp.ui", "journey", "journey.editing", "journey.persistence", "request"),
+    "bpsh.journey" to emptySet(),
+    "bpsh.authentication" to setOf("journey"),
+    "bpsh.authentication.credentials" to setOf("journey", "authentication"),
+    "bpsh.authentication.session" to setOf("journey", "authentication", "authentication.credentials"),
+    "bpsh.request" to setOf("journey", "authentication"),
+    "bpsh.platform.files" to emptySet(),
+    "bpsh.journey.persistence" to setOf("journey", "authentication", "authentication.credentials", "request", "platform.files"),
+    "bpsh.journey.editing" to setOf("journey", "journey.persistence", "request"),
+    "bpsh.browser.runtime" to setOf("journey", "authentication", "platform.files"),
+    "bpsh.browser.mtls" to setOf("journey", "authentication", "authentication.credentials"),
+    "bpsh.browser" to setOf("journey", "authentication", "authentication.credentials", "authentication.session", "browser.runtime", "browser.mtls"),
+    "bpsh.burp.http" to setOf("journey", "authentication", "authentication.credentials", "authentication.session", "browser", "request"),
+    "bpsh.burp.ui" to setOf("journey", "journey.editing", "journey.persistence", "authentication", "authentication.credentials", "authentication.session", "browser.mtls", "burp.http", "request")
 ).mapValues { (_, dependencies) -> dependencies.map { "bpsh.$it" }.toSet() }
 
 val verifyArchitecture = tasks.register("verifyArchitecture") {
@@ -48,9 +48,20 @@ val verifyArchitecture = tasks.register("verifyArchitecture") {
                 if (dependency !in architectureDependencies.getValue(name)) failures += "$relative: $name must not depend on $dependency"
                 graph.getValue(name).add(dependency)
             }
-            if (name in setOf("bpsh.model", "bpsh.session")) {
+            if (name in setOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.session", "bpsh.authentication.credentials", "bpsh.request")) {
                 listOf("javax.swing.", "java.awt.", "burp.api.montoya.", "com.microsoft.playwright.").forEach { forbidden ->
                     if (code.contains(forbidden)) failures += "$relative: $forbidden belongs at an adapter boundary"
+                }
+            }
+            if (name != "bpsh.browser.runtime" && (code.contains("com.microsoft.playwright.impl.") || code.contains("com.google.gson.")))
+                failures += "$relative: private Playwright/Gson protocol access belongs in browser.runtime"
+        }
+        listOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.session", "bpsh.request").forEach { core ->
+            sources.files.filter { it.parentFile.toPath() == root.resolve(core.replace('.', '/')) }.forEach { file ->
+                val imports = Regex("(?m)^import\\s+(?:static\\s+)?([^;]+);").findAll(nonCode.replace(file.readText(), " "))
+                imports.forEach { imported ->
+                    val target = imported.groupValues[1]
+                    if (!target.startsWith("java.") && !target.startsWith("bpsh.")) failures += "${file.name}: $target is a framework import in core $core"
                 }
             }
         }

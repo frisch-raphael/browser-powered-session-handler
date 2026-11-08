@@ -1,9 +1,9 @@
 package bpsh.browser;
 
-import bpsh.model.AuthenticationFailure;
-import bpsh.mtls.JourneyTlsProxy;
-import bpsh.runtime.BrowserRuntimeManager;
-import bpsh.runtime.PlaywrightDriverAdapter;
+import bpsh.authentication.AuthenticationFailure;
+import bpsh.browser.mtls.JourneyTlsProxy;
+import bpsh.browser.runtime.BrowserRuntimeManager;
+import bpsh.browser.runtime.PlaywrightDriverAdapter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -11,6 +11,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Checks evidence-based browser diagnostics without launching a browser or making network requests. */
 class BrowserFailureMessagesTest {
+    @Test void clientCertificateErrorsUsePositiveSymbolsAndCurrentConfiguration() {
+        for (boolean configured : new boolean[]{false, true}) {
+            var required = BrowserFailureClassifier.networkFailure("net::ERR_SSL_CLIENT_AUTH_CERT_NEEDED", configured);
+            assertEquals(AuthenticationFailure.Cause.CLIENT_CERTIFICATE_REQUIRED, required.reason());
+            assertEquals(AuthenticationFailure.Input.CERTIFICATE, required.input().input()); assertEquals(1, required.priority());
+            assertEquals(!configured, required.getMessage().contains("Enable Client certificate"));
+            var failed = BrowserFailureClassifier.networkFailure("ERR_BAD_SSL_CLIENT_AUTH_CERT", configured);
+            assertEquals(AuthenticationFailure.Cause.CLIENT_CERTIFICATE_FAILED, failed.reason());
+            assertEquals(!configured, failed.getMessage().contains("Enable Client certificate"));
+            assertFalse(failed.retryable());
+        }
+        for (String symbol : new String[]{"ERR_CONNECTION_RESET", "ERR_SSL_PROTOCOL_ERROR", "ERR_CONNECTION_TIMED_OUT"}) {
+            var unknown = BrowserFailureClassifier.networkFailure(symbol, false);
+            assertNotEquals(AuthenticationFailure.Cause.CLIENT_CERTIFICATE_REQUIRED, unknown.reason());
+            assertNotEquals(AuthenticationFailure.Cause.CLIENT_CERTIFICATE_FAILED, unknown.reason());
+        }
+        assertNull(BrowserFailureClassifier.networkFailure("CANARY ERR_SSL_CLIENT_AUTH_CERT_NEEDED"));
+    }
     @Test void unavailableMtlsUpstreamIsTemporaryOnlyWithPositiveSocketEvidence() {
         for (var cause : new Throwable[]{new java.net.ConnectException("CANARY_CONNECTION"), new java.net.SocketTimeoutException("CANARY_TIMEOUT"),
                 new RuntimeException("CANARY_WRAPPER", new java.net.ConnectException("CANARY_NESTED"))}) {
@@ -51,8 +69,8 @@ class BrowserFailureMessagesTest {
             "ERR_CERT_COMMON_NAME_INVALID, TRUST, false, hostname",
             "ERR_CERT_DATE_INVALID, TRUST, false, validity dates",
             "ERR_CERT_REVOKED, TRUST, false, has been revoked",
-            "ERR_SSL_PROTOCOL_ERROR, UNKNOWN, false, HTTPS connection",
-            "ERR_SSL_VERSION_OR_CIPHER_MISMATCH, UNKNOWN, false, HTTPS connection"
+            "ERR_SSL_PROTOCOL_ERROR, UNKNOWN, false, secure connection",
+            "ERR_SSL_VERSION_OR_CIPHER_MISMATCH, UNKNOWN, false, secure connection"
     })
     void browserErrorsReportObservedFactsAndPreserveRetryPolicy(String code, AuthenticationFailure.Cause cause,
                                                                 boolean retryable, String relevantDetail) {

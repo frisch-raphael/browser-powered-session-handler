@@ -353,7 +353,7 @@ public final class FederationEnvironment implements AutoCloseable {
     }
     /** Labels alone are insufficient: the retained immutable ID must also match the actual object. */
     private void verifyOwner(JsonObject observed,String id) throws IOException {
-        var labels=observed.has("bpsh.config.Config")?observed.getAsJsonObject("bpsh.config.Config").getAsJsonObject("Labels"):observed.getAsJsonObject("Labels");
+        var labels=observed.has("bpsh.request.RequestSettings")?observed.getAsJsonObject("bpsh.request.RequestSettings").getAsJsonObject("Labels"):observed.getAsJsonObject("Labels");
         if(!id.equals(LabRun.text(observed,"Id"))||labels==null||!owner.runId().toString().equals(LabRun.text(labels,"authlab.run"))
                 ||!owner.spec().invocationId().toString().equals(LabRun.text(labels,"authlab.invocation")))throw new IOException("Docker resource ownership differs; it was not removed.");
     }

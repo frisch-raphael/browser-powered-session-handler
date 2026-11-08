@@ -7,5 +7,4 @@ bapp/gradle/verification-metadata.xml text eol=lf
 test/authentication-lab/** text eol=lf
 test/federation-client/** text eol=lf
 bapp/*.lockfile text eol=lf
-docs/designs/authentication-test-lab/sources/bapp-owned-authentication-baseline.md -text
 bapp/src/**/*.java text eol=lf
