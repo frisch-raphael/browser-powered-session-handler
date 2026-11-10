@@ -38,15 +38,22 @@ through your local user library.
 
 Configure the wizard:
 
-1. **Setup:** name, login URL, browser visibility and optional proxy URL.
-2. **Login steps:** add browser actions with **+**, then configure their inputs.
-3. **Token:** choose JSON response, regex or cookie capture. Several outputs can
+1. **Setup:** name, login URL, authentication methods, browser visibility and optional proxy URL.
+   Combine form-based, PKCS#11 client-certificate and HTTP authentication as needed.
+2. **Login steps:** shown when **Use form-based authentication** is checked. Add browser actions with **+**, then configure their inputs. Turning the method off retains the steps and skips their execution.
+3. **Capture credentials:** choose JSON response, regex or cookie capture. This page stays available for every authentication method. Several outputs can
    be captured together; give each a token name when there is more than one.
 4. **Client certificate:** configure PKCS#11 if the login needs it.
-5. **Test & use:** test authentication, inspect its result and use the journey in requests.
+5. **Test & use:** shown when at least one authentication method is checked. Test authentication, inspect its result and use the journey in requests.
 
 Each journey remembers its last displayed step for the current extension session.
 Switching Project/User tabs also returns to the last journey opened there.
+
+To reuse a journey's configuration, select it and choose **Duplicate selected**
+from the **...** menu above the list. The copy opens in the same collection with
+a unique name and tag. Configured secrets are copied for this session, with
+**Remember secrets** off; cached tokens, cookies and Session handling rules are
+not copied.
 
 The request-tag alias is derived from the journey name: **Employee login**
 becomes `<@employee-login/>`. Renaming a journey updates its alias when saved;
@@ -116,16 +123,27 @@ Each journey has its own credential cache. **Journey cache**, beside **Event log
 shows usable cached tokens/cookies and their cache lifetime without starting a
 login. Right-click a row for **Copy name** or **Copy value**.
 
+HTTP authentication also appears here, including HTTP-only journeys: protocol,
+account, exact server origin, latest progress/result and observation time. These
+rows contain no password or reusable NTLM response and have no credential-copy
+actions. Clear cache removes the observed result; the saved identity remains.
+
 **Event log** shows the selected journey's timestamped authentication and
 configuration events. Filter by severity or search messages for the full
 explanation of a failure. Event history is kept in memory for the extension
 session; credential values, PINs and response bodies are excluded.
+
+HTTP authentication logs NTLM negotiate, validated challenge and authentication
+response steps, server acceptance, connection reuse, and actionable failures.
+This covers browser login, recording, HTTP-only tests and tagged requests.
 
 Use the cache-clear action in Test & use to invalidate the selected journey.
 **Cancel authentication** stops its shared login and releases waiting requests;
 it keeps credentials that are still usable.
 
 ## Proxy and PKCS#11
+
+For a test website or proxy certificate that Chromium does not trust, enable **Allow untrusted HTTPS certificates** in the journey's **Setup**. It applies to that journey's recording and login only and defaults to off. Client-certificate journeys retain their separate server-trust checks and Trusted CA setting.
 
 An optional explicit HTTP proxy URL can point at a Burp listener. Empty means
 direct. Configured proxy authentication is unsupported; use a listener that

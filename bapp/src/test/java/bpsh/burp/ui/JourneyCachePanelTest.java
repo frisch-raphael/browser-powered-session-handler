@@ -22,7 +22,63 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Verifies explicit cache inspection without acquisition, cross-journey disclosure, logging or editable values. */
 class JourneyCachePanelTest {
+    @Test void unfinishedRecordingCanShowHttpAuthenticationBeforeCaptureRulesExist() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var base=CoordinatorFixtures.journey("http-user");var origin=java.net.URI.create("https://app.example");
+            var draft=bpsh.journey.JourneyDraft.capture(Map.of("url",origin.toString()),Map.of("httpAuthentication",true),JourneyDefinition.SlotKind.INDEX,"",List.of(),List.of());
+            var owner=new JourneyCatalog.Entry(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT,base.id(),1),draft.definition(base.id(),"HTTP user","http-user",false));
+            var settings=new bpsh.journey.HttpAuthentication(bpsh.journey.HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",java.util.Set.of(origin));
+            var accepted=new bpsh.authentication.http.HttpAuthenticationProgress(bpsh.authentication.http.HttpAuthenticationProgress.Stage.ACCEPTED,
+                    settings.protocol(),origin,Instant.now(),200);
+            var panel=new JourneyCachePanel(()->{});panel.refresh(owner,null,List.of(accepted),settings);
+            var table=member(panel,"table",JTable.class);assertEquals(1,table.getRowCount());
+            assertEquals("HTTP auth",table.getValueAt(0,0));assertEquals(origin.toString(),table.getValueAt(0,2));assertTrue(httpDetails(table,0).contains("Accepted"));
+            assertFalse(member(panel,"metadata",JPanel.class).isVisible());
+            panel.refresh(owner,null,List.of(),null);assertEquals(0,table.getRowCount());
+        });
+    }
+    @Test void httpOnlyIdentityAppearsBeforeAndAfterAuthenticationWithoutAFakeTokenOrCopyableSecret() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var base=CoordinatorFixtures.journey("http-user");var origin=java.net.URI.create("https://app.example");
+            var definition=new JourneyDefinition(base.id(),base.displayName(),base.alias(),origin,false,List.of(),base.browser(),null,
+                    JourneyDefinition.Injection.perToken(List.of()),base.cache(),null,
+                    new bpsh.journey.HttpAuthentication(bpsh.journey.HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",java.util.Set.of(origin)),null);
+            var owner=new JourneyCatalog.Entry(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT,base.id(),1),definition);
+            var copied=new java.util.ArrayList<String>();var panel=new JourneyCachePanel(()->{},message->{},copied::add);
+            panel.refresh(owner,null);var table=member(panel,"table",JTable.class);
+            assertEquals(1,table.getRowCount());assertEquals("HTTP auth",table.getValueAt(0,0));assertEquals("NTLMv2 · LAB\\user-a",table.getValueAt(0,1));
+            assertEquals(origin.toString(),table.getValueAt(0,2));assertEquals("Not yet observed",httpDetails(table,0));
+            assertFalse(member(panel,"metadata",JPanel.class).isVisible());assertFalse(member(panel,"copyValue",JMenuItem.class).isEnabled());
+            var accepted=new bpsh.authentication.http.HttpAuthenticationProgress(bpsh.authentication.http.HttpAuthenticationProgress.Stage.ACCEPTED,
+                    bpsh.journey.HttpAuthentication.Protocol.NTLM_V2,origin,Instant.parse("2026-11-09T12:00:00Z"),200);
+            panel.refresh(owner,null,List.of(accepted));assertTrue(httpDetails(table,0).contains("Accepted"));
+            assertEquals(origin.toString(),table.getValueAt(0,2));assertTrue(copied.isEmpty());
+            panel.refresh(owner,null,List.of());assertEquals(origin.toString(),table.getValueAt(0,2));assertEquals("Not yet observed",httpDetails(table,0));
+            panel.refresh(null,null,List.of(accepted));assertEquals(0,table.getRowCount());
+        });
+    }
+    @Test void httpFailureUpdatesBesideCapturedCookiesWithoutChangingTheTokenLifetime() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var origin=java.net.URI.create("https://app.example");var original=entry(new JourneyDefinition.CookieExtraction(origin,"sid",null,"/"));
+            var base=original.definition();var definition=new JourneyDefinition(base.id(),base.displayName(),base.alias(),origin,false,List.of(),base.browser(),
+                    base.extraction(),base.injection(),base.cache(),null,
+                    new bpsh.journey.HttpAuthentication(bpsh.journey.HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",java.util.Set.of(origin)),null);
+            var owner=new JourneyCatalog.Entry(original.identity(),definition);var captured=token(owner,"session-a",Map.of("sid","session-a"),Map.of());
+            var panel=new JourneyCachePanel(()->{});panel.refresh(owner,captured);var table=member(panel,"table",JTable.class);
+            assertEquals(2,table.getRowCount());assertEquals("session-a",table.getValueAt(0,2));
+            String acquired=member(panel,"cached",JLabel.class).getText();
+            var rejected=new bpsh.authentication.http.HttpAuthenticationProgress(bpsh.authentication.http.HttpAuthenticationProgress.Stage.REJECTED,
+                    bpsh.journey.HttpAuthentication.Protocol.NTLM_V2,origin,Instant.now(),401);
+            panel.refresh(owner,captured,List.of(rejected));assertEquals(origin.toString(),table.getValueAt(1,2));assertTrue(httpDetails(table,1).contains("Rejected"));
+            assertNull(((JComponent)table.prepareRenderer(table.getCellRenderer(0,2),0,2)).getToolTipText(),"Cookie values must not inherit an HTTP tooltip");
+            assertEquals(acquired,member(panel,"cached",JLabel.class).getText());assertEquals("session-a",table.getValueAt(0,2));
+            table.setRowSelectionInterval(1,1);assertFalse(member(panel,"copyValue",JMenuItem.class).isEnabled());
+            table.setRowSelectionInterval(0,0);assertTrue(member(panel,"copyValue",JMenuItem.class).isEnabled());
+        });
+    }
     @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
+    /** @return Status information shown on hover, separate from the origin-only Value cell. */
+    private static String httpDetails(JTable table,int row) { return ((JComponent)table.prepareRenderer(table.getCellRenderer(row,2),row,2)).getToolTipText(); }
     /** @param extraction Configured sources. @return Owned immutable generation. */
     private static JourneyCatalog.Entry entry(JourneyDefinition.Extraction extraction) {
         var base = CoordinatorFixtures.journey("employee");

@@ -12,7 +12,7 @@ Run these commands from the repository root, using Java 21:
 .\bapp\gradlew.bat -p bapp authLabDoctor -PlabProfiles=baseline
 ```
 
-`matrix` lists current requirement IDs, owning layers, expected observations and prerequisites. The catalog has 41 groups and 980 entries: 912 active automated requirements, 28 explicit exclusions, 24 manual Burp checks and sixteen capability assessments. Active bindings share 851 execution owners. Binding counts are not passing results, and fixture-only checks are not extension coverage.
+`matrix` lists current requirement IDs, owning layers, expected observations and prerequisites. The catalog has 52 groups and 1030 entries: 959 active automated requirements, 28 explicit exclusions, 27 manual Burp checks and sixteen capability assessments. Active bindings share 898 execution owners. Binding counts are not passing results, and fixture-only checks are not extension coverage.
 
 `doctor` checks prerequisites without logging in. It currently qualifies Java 21 and current fixture bindings only; it does not qualify production-profile prerequisites. Use the actual profile commands below for production execution. The Java exit code for blocked work is 3, which Gradle reports as a failed command. This indicates a missing prerequisite or binding, not a failed login or network connection.
 
@@ -136,9 +136,9 @@ Revocation and clock controls act on the same store that issued the certificate 
 
 ## Catalog rules
 
-The ten JSON files in `src/main/resources/catalog` implement the [approved contracts](../../docs/designs/authentication-test-lab-contracts.md). `catalog.json` explicitly indexes nine data files and the exact twelve profiles. Every expanded requirement is stored as data; runtime loading uses no expression language or native journey parser.
+The eleven JSON files in `src/main/resources/catalog` implement the [approved contracts](../../docs/designs/authentication-test-lab-contracts.md). `catalog.json` explicitly indexes ten data files and the exact thirteen profiles. Every expanded requirement is stored as data; runtime loading uses no expression language or native journey parser.
 
-The Java validator rejects malformed/ambiguous JSON, unknown fields/capabilities, invalid bindings and missing/extra catalog members. The 912 inspected bindings are 523 fixture, 313 component-owned, 41 browser/recovery/subresource, seventeen federation and eighteen transport requirements, sharing 851 executions. No active automated requirement remains unbound. This is not a pass count: actual retained source/configuration-specific results still control acceptance. Excluded entries cannot execute or earn coverage. Exclusion reasons and expected observations are explicit in the current catalog.
+The Java validator rejects malformed/ambiguous JSON, unknown fields/capabilities, invalid bindings and missing/extra catalog members. The 959 inspected bindings are 523 fixture, 319 component-owned, 47 browser/recovery/subresource, seventeen federation and eighteen transport requirements, sharing 898 executions. No active automated requirement remains unbound. This is not a pass count: actual retained source/configuration-specific results still control acceptance. Excluded entries cannot execute or earn coverage. Exclusion reasons and expected observations are explicit in the current catalog.
 
 Normalized axis labels are fixed in `ScenarioCatalog`: tag locations are `header,path,query,text-body`; tools are `scanner,proxy,repeater,extensions,intruder`; URL modes retain `burp_scope,all_requests,single_url`; boolean axes use `true,false`; limit dimensions use underscore-separated names. Named variant IDs and recipe labels retain the matrix's exact spelling, including `PIN-rejected` and `PIN-unknown`. H01 uses ordered `tool,mode` axes with `automatic-combined-injection,native-tags`. These are lab labels, not new production syntax.
 
@@ -157,6 +157,29 @@ The lab uses Gson 2.13.2 and JUnit BOM 6.1.3. Gson's strict reader is combined w
 ## Acceptance gates
 
 Each invocation audits the current source and configuration. Manual host checks and the [capability assessments](../../docs/designs/capability-assessments.md) require their own completed observations. Prepare and qualify dedicated HTTPS/provider material for this checkout using [Windows setup](Windows-Federation-Setup.md) and the [federation guide](../federation-client/README.md). Normal tests do not install trust or edit hosts.
+
+## HTTP authentication
+
+Run `authLab -PlabProfiles=http-auth --offline` for twelve isolated production
+acceptance cases: Basic, strict NTLMv1 and NTLMv2 identity isolation, direct tagged
+requests, protected browser forms and recording/replay. This profile has no
+PKCS#11 prerequisite. Native lifecycle, resource, response-fidelity and protocol
+checks remain separate checks; twelve passes do not imply every feature gate passed.
+
+`authLabServe -PlabProfiles=http-auth --offline` serves the same maintained HTTP
+authentication applications. Its target inventory lists each protocol's `/whoami`
+and `/login` URLs. Synthetic accounts are `user-a` / `alpha-password` and `user-b` /
+`bravo-password`. The main lab origin's `/http-auth/observations` reports accepted
+accounts, protocol, opaque connections and counters without raw authentication data.
+Stopping the owned run closes these listeners and event loops.
+
+For the manual host probe, select the expected BASIC, NTLM_V1 or NTLM_V2 proof type,
+set the expected account and load a prepared request containing
+`BPSP-HTTP-AUTHENT: <@journey-alias/>`. Send A, then B, then A at the same application.
+The actual response must identify that account and authentication type; selecting
+an option or seeing an HTTP 200 alone earns no proof. Verify directive removal and
+connection isolation with the server observations. Keep Windows and Linux results
+bound to the checksum of the exact loaded development JAR.
 
 ## Manual Extensions-origin probe
 
@@ -177,6 +200,11 @@ When refreshing an extension already installed in Burp, toggle **Loaded** off be
 ## Maintaining source bindings
 
 Acceptance extensions under `production-tests/bpsh/` mirror the native test packages. Select owners by fully qualified JUnit class name. After an intentional reviewed harness refactor, run `:auth-lab:refreshBindings --offline`, review the catalog diff, then run the relevant profiles in a new invocation. This updates fingerprints, preserves nullable contract fields and unbound rows, and grants no acceptance. All launchers and collectors share `src/main/resources/configuration-inputs.json`. See [code structure](../../docs/designs/code-structure.md).
+
+Captured builds restore the lab's test-only external dependency graph using the
+captured exact coordinates and binary hashes. Gradle locks and verification remain
+active; each resolved test dependency must match its retained input. Production
+runtime dependencies and the extension artifact exclude this test-only graph.
 
 ## Source contract
 

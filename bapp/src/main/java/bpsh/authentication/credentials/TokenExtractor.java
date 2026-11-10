@@ -236,6 +236,18 @@ public final class TokenExtractor {
         return expiry == Long.MAX_VALUE ? OptionalLong.empty() : OptionalLong.of(expiry);
     }
 
+    /** Returns established failure evidence without inventing a missing-output diagnosis. */
+    public AuthenticationFailure observedFailure() {
+        AuthenticationFailure observed = failure;
+        for (int index = 0; index < parts.size(); index++) {
+            var child = parts.get(index);
+            if (child.hasToken() || child.failure == null) continue;
+            var candidate = child.failure.forCredential(index);
+            if (observed == null || candidate.priority() < observed.priority()) observed = candidate;
+        }
+        return observed;
+    }
+
     /**
      * Rechecks expiry at completion so a token captured early cannot expire while steps finish.
      * @return Normalized token string for deliberate use by the coordinator.
@@ -244,13 +256,7 @@ public final class TokenExtractor {
     public String result() throws AuthenticationFailure {
         if (!parts.isEmpty() && hasToken()) return parts.stream().filter(p -> !(p.definition instanceof JourneyDefinition.CookieExtraction)).findFirst().orElse(parts.getFirst()).result();
         if (hasToken()) return normalize(token, clock);
-        AuthenticationFailure observed = failure;
-        for (int index = 0; index < parts.size(); index++) {
-            var child = parts.get(index);
-            if (child.hasToken() || child.failure == null) continue;
-            var candidate = child.failure.forCredential(index);
-            if (observed == null || candidate.priority() < observed.priority()) observed = candidate;
-        }
+        AuthenticationFailure observed = observedFailure();
         if (observed != null) throw observed.phase() == AuthenticationFailure.Phase.EXTRACTION && observed.input() == null
                 ? observed.atInput(AuthenticationFailure.Input.CAPTURE_SOURCE) : observed;
         if (!parts.isEmpty()) for (int index = 0; index < parts.size(); index++) if (!parts.get(index).hasToken()) {

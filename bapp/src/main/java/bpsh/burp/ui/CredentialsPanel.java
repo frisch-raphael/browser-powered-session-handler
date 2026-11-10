@@ -195,7 +195,7 @@ final class CredentialsPanel extends JPanel {
             selectorLine = line(selectorLabel, selector, ""); capture.add(selectorLine);
             startLine = line(new JLabel("Start regex"), startRegex, "RE2 expression before the token. For <token>example</token>, start <token> and end </token> capture example. Boundaries are excluded."); capture.add(startLine);
             endLine = line(new JLabel("End regex"), endRegex, "RE2 expression after the token. Capture ends before the next match; the first complete pair wins. Boundaries are excluded."); capture.add(endLine);
-            filters.setLayout(new BoxLayout(filters, BoxLayout.Y_AXIS)); filters.setVisible(!input.domain().isBlank() || !input.cookiePath().isBlank()); filtersToggle.setSelected(filters.isVisible());
+            filters.setLayout(new BoxLayout(filters, BoxLayout.Y_AXIS)); filters.setVisible(false); filtersToggle.setSelected(false);
             filtersToggle.addActionListener(e -> { filters.setVisible(filtersToggle.isSelected()); refresh(); }); capture.add(filtersToggle); capture.add(filters);
             domainLine = line(new JLabel("Exact domain (optional)"), domain, "Distinguish same-name cookies by their exact stored domain."); filters.add(domainLine);
             cookiePathLine = line(new JLabel("Exact path (optional)"), cookiePath, "Distinguish same-name cookies by their exact stored path."); filters.add(cookiePathLine);

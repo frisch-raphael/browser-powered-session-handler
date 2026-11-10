@@ -32,9 +32,22 @@ public final class AuthenticationTagMenu implements ContextMenuItemsProvider {
         var editor = selected.get(); byte[] original = editor.requestResponse().request().toByteArray().getBytes();
         int start = editor.selectionOffsets().map(r -> r.startIndexInclusive()).orElse(editor.caretPosition());
         int end = editor.selectionOffsets().map(r -> r.endIndexExclusive()).orElse(start);
-        var root = new JMenu("Add authentication token"); var snapshot = registry.snapshot();
+        var root = new JMenu("Add authentication"); var snapshot = registry.snapshot();
         snapshot.entries().values().stream().filter(e -> snapshot.isCurrent(e.identity())).sorted(java.util.Comparator.comparing(e -> e.definition().canonicalAlias())).forEach(entry -> {
             var journey = new JMenu(entry.definition().alias()); root.add(journey);
+            if (entry.definition().httpAuthenticationEnabled()) {
+                var http = new JMenuItem("Authenticate HTTP as this user"); journey.add(http);
+                http.addActionListener(action -> {
+                    if (!registry.snapshot().isCurrent(entry.identity())) { report.accept("The journey changed. Reopen the authentication menu."); return; }
+                    var request = editor.requestResponse().request();
+                    if (!Arrays.equals(original, request.toByteArray().getBytes())) { report.accept("The request changed. Reopen the authentication menu."); return; }
+                    try { editor.setRequest(request.withRemovedHeader("BPSP-HTTP-AUTHENT").withAddedHeader("BPSP-HTTP-AUTHENT", "<@" + entry.definition().alias() + "/>")); }
+                    catch (RuntimeException failure) { report.accept("Open an editable request in Repeater to add HTTP authentication."); }
+                });
+                if (!hasCredentialCapture(entry.definition())) return;
+                journey.addSeparator();
+            }
+            if (!hasCredentialCapture(entry.definition())) return;
             if (entry.definition().extraction() instanceof JourneyDefinition.CombinedExtraction combined && combined.tokens().size() > 1) {
                 for (var token : combined.tokens()) { var item = new JMenu(token.name()); journey.add(item); formats(item, entry, token.name(), editor, original, start, end); }
             } else formats(journey, entry, null, editor, original, start, end);
@@ -69,9 +82,9 @@ public final class AuthenticationTagMenu implements ContextMenuItemsProvider {
      * @param end Exclusive selected offset.
      */
     private void insert(JourneyCatalog.Entry entry, String token, String format, MessageEditorHttpRequestResponse editor, byte[] original, int start, int end) {
-        if (!registry.snapshot().isCurrent(entry.identity())) { report.accept("The journey changed. Reopen Add authentication token and select it again."); return; }
+        if (!registry.snapshot().isCurrent(entry.identity())) { report.accept("The journey changed. Reopen Add authentication and select it again."); return; }
         var request = editor.requestResponse().request();
-        if (!Arrays.equals(original, request.toByteArray().getBytes()) || start < 0 || end < start || end > original.length) { report.accept("The request changed. Place the cursor again and reopen Add authentication token."); return; }
+        if (!Arrays.equals(original, request.toByteArray().getBytes()) || start < 0 || end < start || end > original.length) { report.accept("The request changed. Place the cursor again and reopen Add authentication."); return; }
         byte[] replacement = tag(entry.definition().alias(), token, format).getBytes(StandardCharsets.US_ASCII);
         byte[] result = new byte[original.length - (end - start) + replacement.length];
         System.arraycopy(original, 0, result, 0, start); System.arraycopy(replacement, 0, result, start, replacement.length); System.arraycopy(original, end, result, start + replacement.length, original.length - end);
@@ -90,4 +103,10 @@ public final class AuthenticationTagMenu implements ContextMenuItemsProvider {
         String wrapper = switch (format) { case "URL component" -> "url"; case "Form value" -> "form"; case "JSON string content" -> "json"; default -> null; };
         return wrapper == null ? raw : "<@" + wrapper + ">" + raw + "</@" + wrapper + ">";
     }
+    /** @return Whether this saved definition has outputs for credential-reference choices. */
+    static boolean hasCredentialCapture(JourneyDefinition definition) {
+        return definition.extraction() != null && (!(definition.extraction() instanceof JourneyDefinition.CombinedExtraction combined) || !combined.tokens().isEmpty());
+    }
+    /** @return Literal custom request header selecting a saved HTTP authentication identity, without credentials. */
+    static String httpHeader(String alias) { return "BPSP-HTTP-AUTHENT: " + tag(alias, null, "Raw"); }
 }

@@ -17,6 +17,7 @@ final class InlineValidation {
         error.setEditable(false); error.setLineWrap(true); error.setWrapStyleWord(true); error.setOpaque(false); error.setVisible(false);
         error.getAccessibleContext().setAccessibleName("Input error");
         input.putClientProperty("validationMessage", error); input.putClientProperty("validationContainer", panel);
+        input.putClientProperty("validationDescription", input.getAccessibleContext().getAccessibleDescription());
         panel.add(input); panel.add(error, BorderLayout.SOUTH);
         if (input instanceof javax.swing.text.JTextComponent text) text.getDocument().addDocumentListener(new DocumentChangeListener(onEdit));
         else if (input instanceof JComboBox<?> combo) combo.addActionListener(e -> onEdit.run());
@@ -25,7 +26,7 @@ final class InlineValidation {
     /** @param input Existing field. @param message Sanitized explanation; never raw parser/input contents. */
     static void show(JComponent input, String message) { if (input.getClientProperty("validationMessage") instanceof JTextArea error) { error.setText(message); error.setVisible(true); input.getAccessibleContext().setAccessibleDescription(message); input.revalidate(); } }
     /** @param input Corrected or repopulated field. */
-    static void clear(JComponent input) { if (input.getClientProperty("validationMessage") instanceof JTextArea error) { error.setText(""); error.setVisible(false); input.getAccessibleContext().setAccessibleDescription(null); input.revalidate(); } }
+    static void clear(JComponent input) { if (input.getClientProperty("validationMessage") instanceof JTextArea error) { error.setText(""); error.setVisible(false); input.getAccessibleContext().setAccessibleDescription((String)input.getClientProperty("validationDescription")); input.revalidate(); } }
     /** @param input Revealed input. Focus after Swing lays out newly expanded rows/tabs, only while it remains visible. */
     static void focus(JComponent input) {
         SwingUtilities.invokeLater(() -> { if (input.isShowing() && input.isEnabled()) { input.scrollRectToVisible(new Rectangle(0, 0, input.getWidth(), input.getHeight())); input.requestFocusInWindow(); } });

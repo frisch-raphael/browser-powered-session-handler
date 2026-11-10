@@ -22,7 +22,11 @@ login steps, token capture, optional PKCS#11 certificate setup, then review/test
 and tag usage. Existing saved journeys remain editable. Changes autosave after
 500 ms without editing; navigation and execution flush the latest edits first.
 Plus immediately creates a new saved journey. Incomplete settings are retained;
-configuration errors appear when executing the journey. Browser recording supports
+configuration errors appear when executing the journey.
+Duplicate selected creates and opens an independent copy in the same collection,
+with a unique name/tag and session-only configured secrets. Cached credentials
+and automatic session-handling rules are not copied.
+Browser recording supports
 Enter, Ctrl+Enter, Tab and Shift+Tab.
 Review explains omitted interactions and allows replacing partial recordings
 so users can finish the steps manually before Test login. Save activity belongs
@@ -39,6 +43,10 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
 - Ordinary journeys use the configured proxy directly. Only mTLS journeys create
   the attempt-owned Java TLS proxy; its internal access credentials remain an
   implementation detail, independent of configured upstream proxy support.
+- **Allow untrusted HTTPS certificates** is an explicit journey setting, off by
+  default, for browser recording and login through either direct or proxied
+  connections. It changes no system trust or other journeys. The mTLS transport
+  retains its upstream server verification and optional Trusted CA bundle.
 - Java uses vendor PKCS#11 middleware and an exact certificate fingerprint. PINs
   are configured explicitly; multiple certificates with the same subject remain
   distinguishable. PKCS#12 support is out of scope.
@@ -50,6 +58,11 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   and explicit encodings, without acquiring credentials. Renaming updates the alias when saved, so existing
   request tags need updating. Existing/imported aliases remain intact until the
   name is edited; duplicate generated aliases block execution with rename guidance.
+- HTTP-only journeys offer Copy HTTP authentication header as a direct action.
+  Mixed journeys offer that header alongside tags and encodings for their
+  configured captured credentials. The HTTP settings explain that the custom
+  header applies authentication to its request and is removed before delivery;
+  its example uses the selected journey's current tag name.
 - Previously used aliases are freely reusable after rename/deletion. Naming and
   the meaning of existing request tags are the user's responsibility; there is
   no retired-name reservation or reassignment acknowledgement. Legacy retirement
@@ -61,6 +74,11 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   export inclusion is a separate unchecked choice. Tokens and private keys are
   never exported. Cached tokens and cookies are visible only in the explicitly
   opened Journey cache inspector; they never enter event logs or saved config.
+- Journey cache also shows HTTP identities and their latest observed result per
+  allowed origin, including HTTP-only journeys. Event log reports NTLM handshake
+  stages, server acceptance, connection reuse and actionable failures for every
+  delivery path. Passwords, authentication payloads and raw exceptions stay out
+  of both views. Clear cache fences late observation updates.
 - Editing a journey keeps usable cached credentials and their original expiry
   and refresh times, including while an unfinished edit temporarily blocks
   execution. Renaming, reordering or removing captured outputs retains matching
@@ -81,6 +99,11 @@ references and explicit encoding choices without reading token values.
 
 ## Interface commitments
 
+Setup groups form-based, PKCS#11 client-certificate and HTTP authentication as
+independent methods. Form-based authentication controls Login steps and is on for
+new journeys. Disabled login steps remain saved and do not execute. Capture
+credentials stays available; Test & use requires at least one enabled method.
+
 Preserve Burp's native theme, controls, fonts, keyboard conventions and dialog
 parenting. Simplify duplicate checkbox labels: the checkbox owns its label and
 adjacent help explains consequences. Keep advanced settings discoverable without
@@ -97,7 +120,10 @@ excluded. The former phase line, permanent feedback box and separate test-result
 box are removed. Automatic injection is named Session handling in the UI.
 Explicit Test login and Retry finish with a native popup summarizing captured
 credential names and counts or the safe error and failed step. Values remain in
-Journey cache. Automatic authentication does not open completion popups.
+Journey cache. Configuration errors and HTTP authentication failures appear
+inline on the relevant settings page instead of in an error popup. Explicit
+actions focus the identified field; background validation never steals focus.
+Automatic authentication does not open completion popups.
 
 ## Evidence and acceptance
 

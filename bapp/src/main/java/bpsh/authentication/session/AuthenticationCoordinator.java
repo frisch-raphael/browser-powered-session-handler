@@ -344,6 +344,9 @@ public final class AuthenticationCoordinator implements AutoCloseable {
                 Map<JourneyDefinition.Identity, State> needed = new LinkedHashMap<>();
                 for (var entry : entries) {
                     if (!registry.snapshot().isCurrent(entry.identity())) throw stale();
+                    if (entry.definition().httpOnly()) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
+                            AuthenticationFailure.Cause.CONFIGURATION, "This HTTP-only journey has no captured token or cookie.",
+                            "Use BPSP-HTTP-AUTHENT: <@" + entry.definition().alias() + "/> to authenticate the request as this user.").forJourney(entry.identity());
                     if (entry.definition().draft() != null) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
                             AuthenticationFailure.Cause.CONFIGURATION, "This journey has incomplete or invalid settings.",
                             "Review the journey settings, then test login.").forJourney(entry.identity());
@@ -510,7 +513,7 @@ public final class AuthenticationCoordinator implements AutoCloseable {
                     var lifetime = TokenLifetime.acquire(normalized, cycle.state.entry.definition().cache(), outcome.acquiredAt(), outcome.acquiredNanos(), outcome.expiresAt());
                     if (!lifetime.usable(runtime.nanos(), runtime.instant())) throw new AuthenticationFailure(AuthenticationFailure.Phase.EXTRACTION, AuthenticationFailure.Cause.TOKEN_EXPIRED,
                             "The token expired before it could be used.", "Run Test login to obtain a fresh token.");
-                    TokenSnapshot token = new TokenSnapshot(outcome.identity(), ++versions, normalized, lifetime, outcome.cookies(), outcome.namedTokens(), cycle.state.entry.definition().extraction());
+                    TokenSnapshot token = new TokenSnapshot(outcome.identity(), ++versions, normalized, lifetime, outcome.cookies(), outcome.namedTokens(), cycle.state.entry.definition().extraction(), outcome.httpProtocol(),outcome.httpObservations());
                     cycle.state.token.set(token);
                     cycle.state.lastFailure = null; cycle.state.cooldown = 0; cycle.state.acceptedUse = false;
                     if (cycle.operator) { paused.remove(token.identity().key()); cycle.state.episode = null; }
@@ -811,7 +814,8 @@ public final class AuthenticationCoordinator implements AutoCloseable {
                     && replacement.identity().generation() == state.entry.identity().generation() + 1 && view.isCurrent(replacement.identity())) {
                 boolean draft = replacement.definition().draft() != null;
                 TokenSnapshot retained = draft ? new TokenSnapshot(replacement.identity(), captured.version(), captured.value(), captured.lifetime(),
-                        captured.cookies(), captured.namedTokens(), captured.extraction()) : captured.reconfigure(replacement.identity(), captured.extraction(), replacement.definition().extraction());
+                        captured.cookies(), captured.namedTokens(), captured.extraction(),captured.httpProtocol(),captured.httpObservations()) : captured.reconfigure(replacement.identity(), captured.extraction(), replacement.definition().extraction());
+                if(retained!=null && !state.entry.sameHttpAuthentication(replacement))retained=retained.withoutHttpObservations();
                 if (retained != null) {
                     State current = states.computeIfAbsent(replacement.identity(), ignored -> new State(replacement));
                     if (current.token.compareAndSet(null, retained)) {

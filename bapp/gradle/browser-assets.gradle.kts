@@ -142,6 +142,8 @@ val assetLock = layout.projectDirectory.file("browser-assets.lock.json")
 
 /** Pinned source ZIPs and isolated consumer-validator dependencies. */
 val runtime = configurations.getByName("runtimeClasspath")
+val jcifsReplacement = providers.gradleProperty("jcifsReplacement")
+val jcifsReplacementSources = providers.gradleProperty("jcifsReplacementSources")
 val supportedTargets = listOf("windows-x64", "linux-x64", "macos-x64")
 require(!providers.gradleProperty("bundlePlatform").isPresent) { "bundlePlatform is retired. Build the universal JAR without it." }
 
@@ -537,6 +539,8 @@ val assembledRuntime = layout.buildDirectory.dir("platform-runtime")
 tasks.register("assemblePlatformRuntime") {
     group = "build"
     inputs.files(runtime)
+    inputs.property("jcifsReplacement", jcifsReplacement.orElse("pinned"))
+    if(jcifsReplacement.isPresent)inputs.file(file(jcifsReplacement.get()))
     outputs.dir(assembledRuntime)
     doLast {
         val directory = assembledRuntime.get().asFile.toPath().toAbsolutePath().normalize()
@@ -548,7 +552,7 @@ tasks.register("assemblePlatformRuntime") {
         val versions = java.util.Properties()
         runtime.resolvedConfiguration.resolvedArtifacts.sortedBy { it.moduleVersion.id.toString() }.forEach { artifact ->
             val owner = "${artifact.moduleVersion.id.group}.${artifact.name}-${artifact.moduleVersion.id.version}"
-            java.util.zip.ZipFile(artifact.file).use { zipFile ->
+            java.util.zip.ZipFile(if(artifact.moduleVersion.id.group=="eu.agno3.jcifs" && jcifsReplacement.isPresent)file(jcifsReplacement.get()) else artifact.file).use { zipFile ->
                 zipFile.entries().asSequence().filterNot { it.isDirectory }.forEach entryLoop@ { entry ->
                     val name = safePath(entry.name)
                     if (name == "META-INF/MANIFEST.MF" || name == "META-INF/INDEX.LIST" || name.endsWith("module-info.class")
@@ -616,14 +620,58 @@ version = artifactVersion
  * notices and the exact embedded asset-archive digest. This structural gate does not claim live
  * browser, PKCS#11 or real-Burp acceptance; those require their explicit integration gates.
  */
+val thirdPartyOutput = layout.buildDirectory.dir("generated/third-party")
+require(jcifsReplacement.isPresent == jcifsReplacementSources.isPresent) { "Provide jcifsReplacement and jcifsReplacementSources together." }
+val prepareJcifsSources = tasks.register("prepareJcifsSources") {
+    inputs.property("replacement", jcifsReplacement.orElse("pinned"))
+    inputs.property("replacementSources", jcifsReplacementSources.orElse("pinned"))
+    inputs.files(runtime)
+    inputs.file(layout.projectDirectory.file("third-party/jcifs-source.lock.json"))
+    inputs.file(layout.projectDirectory.file("third-party/jcifs-ng.md"))
+    if (jcifsReplacement.isPresent) { inputs.file(file(jcifsReplacement.get())); inputs.file(file(jcifsReplacementSources.get())) }
+    outputs.dir(thirdPartyOutput)
+    doLast {
+        val lock = assetMapper.readTree(file("third-party/jcifs-source.lock.json"))
+        val source = if(jcifsReplacementSources.isPresent) file(jcifsReplacementSources.get()) else layout.buildDirectory.file("third-party/jcifs-ng-source.zip").get().asFile
+        fun sha(file: java.io.File) = file.inputStream().use { input ->
+            val digest=MessageDigest.getInstance("SHA-256"); val buffer=ByteArray(8192)
+            while(true) { val count=input.read(buffer); if(count<0)break; digest.update(buffer,0,count) }
+            HexFormat.of().formatHex(digest.digest())
+        }
+        fun validSource() = source.isFile && source.length()==lock.path("size").longValue() && sha(source)==lock.path("sha256").textValue()
+        if(!jcifsReplacementSources.isPresent && !validSource()) {
+            require(!gradle.startParameter.isOffline) { "Pinned jcifs source is missing or invalid; run prepareJcifsSources online." }
+            source.parentFile.mkdirs()
+            val client=HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(30)).build()
+            val response=client.send(HttpRequest.newBuilder(URI.create(lock.path("url").textValue())).timeout(Duration.ofMinutes(2)).GET().build(),HttpResponse.BodyHandlers.ofFile(source.toPath()))
+            require(response.statusCode()==200 && validSource()) { "Pinned jcifs source download failed verification." }
+        }
+        require(source.isFile && source.length()<=32L*1024*1024) { "Invalid corresponding-source ZIP." }
+        val output=thirdPartyOutput.get().asFile.resolve("META-INF/bpsh/third-party"); output.mkdirs()
+        java.util.zip.ZipFile(source).use { zip ->
+            val entries=zip.entries().asSequence().filterNot { it.isDirectory }.toList()
+            val license=entries.single { it.name.substringAfterLast('/')=="LICENSE" }
+            require(entries.any { it.name.endsWith("/pom.xml") } && entries.any { it.name.endsWith("/src/main/java/jcifs/ntlmssp/Type3Message.java") }) { "Provide complete jcifs source and build files." }
+            output.resolve("jcifs-ng-LICENSE.txt").writeBytes(zip.getInputStream(license).use { it.readBytes() })
+        }
+        source.copyTo(output.resolve("jcifs-ng-source.zip"),overwrite=true)
+        file("third-party/jcifs-ng.md").copyTo(output.resolve("jcifs-ng.md"),overwrite=true)
+        val binary=if(jcifsReplacement.isPresent)file(jcifsReplacement.get()) else runtime.resolvedConfiguration.resolvedArtifacts.single { it.moduleVersion.id.group=="eu.agno3.jcifs" && it.name=="jcifs-ng" }.file
+        val provenance=assetMapper.createObjectNode().put("version",lock.path("version").textValue()).put("replacement",jcifsReplacement.isPresent)
+            .put("sourceSha256",sha(source)).put("binarySha256",sha(binary))
+        if(!jcifsReplacement.isPresent)provenance.put("revision",lock.path("revision").textValue())
+        output.resolve("jcifs-ng-provenance.json").writeText(assetMapper.writeValueAsString(provenance))
+    }
+}
+
 tasks.named<Jar>("jar") {
-    dependsOn("prepareBrowserAssets", "assemblePlatformRuntime")
+    dependsOn("prepareBrowserAssets", "assemblePlatformRuntime", prepareJcifsSources)
     archiveFileName.set(provider { "browser-powered-session-handler-${project.version}.jar" })
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
     duplicatesStrategy = DuplicatesStrategy.FAIL
     manifest.attributes("Multi-Release" to "true")
-    from(assembledRuntime); from(generatedAssets)
+    from(assembledRuntime); from(generatedAssets); from(thirdPartyOutput)
     doLast {
         java.util.zip.ZipFile(archiveFile.get().asFile).use { jar ->
             val names = jar.entries().asSequence().map { it.name }.toList()
@@ -638,7 +686,23 @@ tasks.named<Jar>("jar") {
             require(names.none { it.startsWith("driver/") }) { "Duplicate driver execution resources leaked into the universal JAR." }
             require(names.any { it.startsWith("META-INF/notices/") }) { "Third-party notices missing." }
             val pairs = names.filter { !it.endsWith("/") && it.startsWith("META-INF/bpsh/") }
-            require(pairs.toSet() == supportedTargets.flatMap { listOf("META-INF/bpsh/$it/browser-assets.json", "META-INF/bpsh/$it/browser-assets.zip") }.toSet()) { "Universal target inventory differs." }
+            val thirdPartyNames=listOf("jcifs-ng-source.zip","jcifs-ng-LICENSE.txt","jcifs-ng.md","jcifs-ng-provenance.json").map { "META-INF/bpsh/third-party/$it" }
+            val expected=supportedTargets.flatMap { listOf("META-INF/bpsh/$it/browser-assets.json", "META-INF/bpsh/$it/browser-assets.zip") } + thirdPartyNames
+            require(pairs.toSet() == expected.toSet()) { "Universal browser/third-party inventory differs." }
+            val provenance=jar.getInputStream(jar.getEntry("META-INF/bpsh/third-party/jcifs-ng-provenance.json")).use { assetMapper.readTree(it) }
+            val sourceDigest=MessageDigest.getInstance("SHA-256")
+            jar.getInputStream(jar.getEntry("META-INF/bpsh/third-party/jcifs-ng-source.zip")).use { input ->
+                val buffer=ByteArray(8192)
+                while(true) {val count=input.read(buffer);if(count<0)break;sourceDigest.update(buffer,0,count)}
+            }
+            require(HexFormat.of().formatHex(sourceDigest.digest())==provenance.path("sourceSha256").textValue()) { "Embedded corresponding source differs from provenance." }
+            val binary=if(jcifsReplacement.isPresent)file(jcifsReplacement.get()) else runtime.resolvedConfiguration.resolvedArtifacts.single { it.moduleVersion.id.group=="eu.agno3.jcifs" && it.name=="jcifs-ng" }.file
+            java.util.zip.ZipFile(binary).use { library ->
+                library.entries().asSequence().filter { !it.isDirectory && it.name.startsWith("jcifs/") && it.name.endsWith(".class") }.forEach { entry ->
+                    val actual=jar.getEntry(entry.name) ?: error("Missing selected jcifs class.")
+                    require(library.getInputStream(entry).use { it.readBytes() }.contentEquals(jar.getInputStream(actual).use { it.readBytes() })) { "Packaged jcifs class differs from selected library." }
+                }
+            }
             withManifestValidator { validate ->
                 supportedTargets.forEach { target ->
                     val raw = jar.getInputStream(jar.getEntry("META-INF/bpsh/$target/browser-assets.json")).use { it.readNBytes((32 shl 20) + 1) }

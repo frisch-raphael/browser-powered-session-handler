@@ -1,4 +1,5 @@
 package bpsh.browser.mtls;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 
 import lab.auth.LoginFlows;
 import lab.auth.TransportFixtures;
@@ -49,6 +50,7 @@ class Pkcs11JourneyIntegrationTest {
     static BrowserRuntimeManager runtime;
     static AuthTrafficGuard guard;
     static BrowserFlowRunner runner;
+    static bpsh.transport.httpauth.HttpTransportRuntime httpTransport;
     private static ProductionLabAdapter.BrowserProcesses ownedProcesses;
     static SSLContext defaultContext;
     static List<String> providers;
@@ -57,8 +59,8 @@ class Pkcs11JourneyIntegrationTest {
     @BeforeAll static void setup() throws Exception {
         fixture = IntegrationFixtures.nativeFixture(); root = Path.of(fixture.path("root").textValue());
         providers = Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList(); defaultContext = SSLContext.getDefault();
-        identities = new Pkcs11IdentityManager(); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
-        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, identities, guard, Clock.systemUTC());
+        identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
+        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
     }
     private static boolean dynamicOwner(String method) {
         return Set.of("explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials","wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed").contains(method);
@@ -74,7 +76,7 @@ class Pkcs11JourneyIntegrationTest {
 
     /** Removes only owned providers/listeners; shared token logout/default TLS changes are prohibited. */
     @AfterAll static void shutdown() throws Exception {
-        if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
+        if (httpTransport != null) httpTransport.close(); if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
         if (defaultContext != null) assertSame(defaultContext, SSLContext.getDefault());
         if (providers != null) assertEquals(providers, Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList());
     }
@@ -255,9 +257,9 @@ class Pkcs11JourneyIntegrationTest {
         try(var target=new lab.auth.IngressSentinel(null)) {
             var origin=URI.create("https://localhost:"+target.address().getPort());
             var definition=mtls("employee",List.of(origin),root.resolve("ca.crt").toString());
-            try(var proxy=new JourneyTlsProxy(definition,select(definition),null,Clock.systemUTC());
-                var anotherLocalAttempt=new JourneyTlsProxy(definition,select(definition),null,Clock.systemUTC())) {
-                assertThrows(IllegalStateException.class,proxy::serverSslEngine,"A TLS engine without its target peer must fail before target contact.");
+            try(var httpTransport=new bpsh.transport.httpauth.HttpTransportRuntime();
+                var proxy=IntegrationFixtures.browserProxy(httpTransport,definition,select(definition),null,Clock.systemUTC());
+                var anotherLocalAttempt=IntegrationFixtures.browserProxy(httpTransport,definition,select(definition),null,Clock.systemUTC())) {
                 address=proxy.address();otherAddress=anotherLocalAttempt.address();
                 var credentials=anotherLocalAttempt.browserProxy();assertNotNull(credentials.username);assertNotNull(credentials.password);
                 String otherAttempt="Proxy-Authorization: Basic "+java.util.Base64.getEncoder().encodeToString((credentials.username+":"+credentials.password).getBytes(java.nio.charset.StandardCharsets.UTF_8))+"\r\n";

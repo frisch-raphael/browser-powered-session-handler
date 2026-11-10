@@ -57,13 +57,15 @@ final class NativeDocumentCodec {
         try {
             JsonNode root = NATIVE.readTree(json);
             object(root, "$", "schemaVersion", "kind", "revision", "journeys", "retiredAliases", "controls");
-            number(root.get("schemaVersion"), "schemaVersion", 1, 1);
+            long schemaVersion = number(root.get("schemaVersion"), "schemaVersion", 1, 2);
             DocumentKind kind = enumeration(text(root, "kind", "$"), DocumentKind.class, "kind");
             if (kind != expected) throw invalid("kind", "wrong document type; use Export journeys for transfer");
             UUID revision = uuid(root.get("revision"), "revision");
             List<JourneyDefinition> journeys = new ArrayList<>();
             Set<UUID> ids = new HashSet<>();
             for (JsonNode n : array(root.get("journeys"), "journeys")) {
+                if (schemaVersion == 1 && (n.has("httpAuthentication") || n.path("secrets").has("httpPassword")))
+                    throw invalid("schemaVersion", "HTTP authentication requires schema version 2");
                 JourneyDefinition journey = parseJourney(n);
                 if (!ids.add(journey.id())) throw invalid("journeys.id", "duplicate identity");
                 journeys.add(journey);
@@ -215,7 +217,7 @@ final class NativeDocumentCodec {
             ids.add(j.id());
         }
         if (!ids.containsAll(d.secrets().keySet())) throw invalid("secrets", "secret owner is missing");
-        ObjectNode root = NATIVE.createObjectNode(); root.put("schemaVersion", 1); root.put("kind", d.kind().wire()); root.put("revision", d.revision().toString());
+        ObjectNode root = NATIVE.createObjectNode(); root.put("schemaVersion", 2); root.put("kind", d.kind().wire()); root.put("revision", d.revision().toString());
         ArrayNode journeys = root.putArray("journeys");
         for (JourneyDefinition j : d.journeys()) {
             ObjectNode n = journeyJson(j, d.kind() == DocumentKind.EXPORT);

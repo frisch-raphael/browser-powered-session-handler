@@ -135,7 +135,7 @@ class UxControlMatrixTest {
             h.edt(() -> {
                 h.call(editor.ui, "newJourney", new Class<?>[]{});
                 var inputs = ((CredentialsPanel) h.member(editor.ui, "credentials")).snapshot(); assertEquals("", inputs.getFirst().origin()); assertEquals("", inputs.getFirst().selector()); assertEquals("", inputs.getFirst().path());
-                h.call(editor.ui, "moveWizard", new Class<?>[]{int.class}, 1); assertEquals(2, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex()); assertTrue(editor.clock.workers.isEmpty());
+                h.call(editor.ui, "moveWizard", new Class<?>[]{int.class}, 1); assertEquals("Login steps", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard")))); assertTrue(editor.clock.workers.isEmpty());
             });
         }
     }
@@ -475,7 +475,7 @@ class UxControlMatrixTest {
             h.await(() -> { try { return editor.saved() && editor.status().startsWith("Credential 1:"); } catch (Exception error) { return false; } });
             h.edt(() -> {
                 CredentialsPanel panel = h.member(editor.ui, "credentials"); List<?> rows = h.member(panel, "rows");
-                assertEquals(3, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals("Capture credentials", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 assertTrue(((JToggleButton) h.member(rows.getFirst(), "expanded")).isSelected()); assertFalse(((JToggleButton) h.member(rows.getLast(), "expanded")).isSelected());
                 assertTrue(((JTextArea) ((JTextField) h.member(rows.getFirst(), "name")).getClientProperty("validationMessage")).isVisible());
             });
@@ -528,7 +528,7 @@ class UxControlMatrixTest {
                 var second = new JourneyDraft.CredentialInput("csrf", type, "https://login.example", "/token", type.equals("cookie") ? "csrf-cookie" : "token", "", "", "<token>", "</token>", field.equals("destination") ? "header" : "disabled", "X-CSRF");
                 panel.setInputs(List.of(first, second)); List<?> rows = h.member(panel, "rows");
                 ((JTextField) h.member(rows.getLast(), field)).setText(invalid); h.call(editor.ui, "edited", new Class<?>[]{});
-                ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0);
+                WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0);
             });
             h.await(() -> { try {
                 List<?> rows = h.member((CredentialsPanel) h.member(editor.ui, "credentials"), "rows");
@@ -536,7 +536,7 @@ class UxControlMatrixTest {
             } catch (Exception error) { return false; } });
             h.edt(() -> {
                 List<?> rows = h.member((CredentialsPanel) h.member(editor.ui, "credentials"), "rows");
-                assertEquals(3, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals("Capture credentials", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 assertTrue(((JToggleButton) h.member(rows.getLast(), "expanded")).isSelected());
                 assertFalse(((JTextArea) ((JComponent) h.member(rows.getFirst(), "selector")).getClientProperty("validationMessage")).isVisible());
                 assertFalse(((SessionStatusBar) h.member(editor.ui, "status")).isLogOpen());
@@ -610,7 +610,7 @@ class UxControlMatrixTest {
                 assertEquals(ca.getToolTipText(), ((JLabel) ca.getClientProperty("rowLabel")).getToolTipText());
                 assertTrue(SwingUtilities.isDescendingFrom(ca, advanced)); assertTrue(SwingUtilities.isDescendingFrom(editor.fields().get("origins"), advanced));
                 assertFalse(texts(editor.component).contains("Use login origin"));
-                ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(1);
+                WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Client certificate");
                 for (boolean expanded : new boolean[]{false, true}) {
                     if (toggle.isSelected() != expanded) toggle.doClick(0);
                     for (int width : new int[]{980, 1280}) {
@@ -651,7 +651,7 @@ class UxControlMatrixTest {
             });
             h.await(() -> { try { return editor.status().startsWith(field.equals("ca") ? "Trusted CA:" : "Additional authentication servers:"); } catch (Exception error) { return false; } });
             h.edt(() -> {
-                assertEquals(1, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals("Client certificate", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 assertTrue(((JPanel) h.member(editor.ui, "certificateAdvanced")).isVisible()); assertTrue(((JToggleButton) h.member(editor.ui, "certificateAdvancedToggle")).isSelected());
                 assertTrue(((JTextArea) editor.fields().get(field).getClientProperty("validationMessage")).isVisible());
             });
@@ -711,7 +711,12 @@ class UxControlMatrixTest {
                 var page = (JScrollPane) h.call(editor.ui, "testAndUseForm", new Class<?>[]{});
                 assertFalse(texts(page).contains("Last test result"));
                 assertFalse(texts(page).contains("Not tested in this session."));
-                assertNotNull(find(page, "Test login")); assertNotNull(find(page, "Clear cached credentials"));
+                assertNotNull(find(page, "Test login"));
+                var clear = find(page, "Clear cached credentials");
+                assertNotNull(clear.getIcon()); assertTrue(clear.getText() == null || clear.getText().isEmpty());
+                assertEquals("Clear cached credentials", clear.getAccessibleContext().getAccessibleName());
+                assertTrue(clear.getToolTipText().contains("HTTP authentication sessions"));
+                assertEquals(clear.getToolTipText(), clear.getAccessibleContext().getAccessibleDescription());
             });
         }
     }

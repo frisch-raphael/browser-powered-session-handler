@@ -50,7 +50,7 @@ public final class ScenarioCatalog {
     }
 
     private static final List<String> DATA_FILES = List.of("fixtures.json", "browser.json", "credentials.json",
-            "recovery.json", "registry.json", "federation.json", "transport.json", "burp.json", "assessments.json");
+            "recovery.json", "registry.json", "federation.json", "transport.json", "http-authentication.json", "burp.json", "assessments.json");
     private static final Set<String> CAPABILITIES = words("FIXTURES PRODUCTION BROWSER NATIVE_TAGS WRAPPERS LIMITS INJECTION MULTI_OUTPUT REPLAY_PAUSE PRESENTATION NATIVE_STORAGE HTTPS CROSS_SITE KEYCLOAK BROKER IDP_COOKIE_PROOF PKCS11 SOFTHSM PHYSICAL_TOKEN BURP_HOST PACKAGED_ARTIFACT");
     private static final Set<String> ROLES = words("B C1 C2 API_TOKEN CLIENT_COOKIE IDP_COOKIE");
     private static final Set<String> FACTS = words("outcome httpStatus account issuance role publication ingressBytes actions attempts replays state stage cause requiredMessageFact forbiddenMessageClaim currentRevision resources redaction capability");
@@ -108,6 +108,17 @@ public final class ScenarioCatalog {
         named("TLS.mtls", "transport.json", Layer.TRANSPORT, "expected-fingerprint same-CN-pair missing-certificate ambiguous-certificate token-unavailable allowed-redirect disallowed-origin resource-without-mtls pool-cleanup internal-proxy-credentials");
         named("TLS.trust", "transport.json", Layer.TRANSPORT, "untrusted-origin wrong-host listed-proxy-key unlisted-proxy-key");
         axes("H01", "burp.json", Layer.HOST, "tool:scanner,proxy,repeater,extensions,intruder", "mode:automatic-combined-injection,native-tags");
+        for (String protocol : List.of("basic", "ntlm-v1", "ntlm-v2")) {
+            named("HTTP.auth." + protocol, "http-authentication.json", Layer.COMPONENT, "identity direct browser recording");
+        }
+        named("HTTP.auth.browser-authorization", "http-authentication.json", Layer.RUNNER, "fresh-basic fresh-ntlm-v1 fresh-ntlm-v2 reused-basic reused-ntlm-v1 reused-ntlm-v2");
+        named("HTTP.auth.browser-trust", "http-authentication.json", Layer.RUNNER, "scoped");
+        named("HTTP.auth.configuration", "http-authentication.json", Layer.COMPONENT, "schema-two secrets invalid schema-one disabled");
+        named("HTTP.auth.fidelity", "http-authentication.json", Layer.COMPONENT, "errors no-entity");
+        named("HTTP.auth.lifecycle", "http-authentication.json", Layer.COMPONENT, "early-epoch cancel-own retire-setup observation-remap secret-revision");
+        named("HTTP.auth.protocol", "http-authentication.json", Layer.COMPONENT, "v1-vector protection-flags variant-requirements malformed no-downgrade");
+        named("HTTP.auth.resources", "http-authentication.json", Layer.COMPONENT, "scopes setup-snapshot setup-shutdown admission running-ownership pin-expiry connections response-headers-basic response-headers-ntlm-v1 response-headers-ntlm-v2 body-budget");
+        named("HOST.http-auth", "http-authentication.json", Layer.HOST, "basic ntlm-v1 ntlm-v2");
         named("H02", "burp.json", Layer.HOST, "tagged-stop ordinary-unchanged");
         named("H03", "burp.json", Layer.HOST, "successful-replay rejected-replacement-pauses");
         named("H04", "burp.json", Layer.HOST, "intercepted-auth-traffic mtls-through-burp");
@@ -143,7 +154,7 @@ public final class ScenarioCatalog {
     private static ScenarioCatalog loadResources(Resource source) {
         var index = object(read(source, "catalog.json"), words("labCatalogVersion dataFiles profiles"));
         version(index);
-        require(strings(index.get("dataFiles")).equals(DATA_FILES), "Catalog must index the exact nine data files in order.");
+        require(strings(index.get("dataFiles")).equals(DATA_FILES), "Catalog must index the exact declared data files in order.");
         var all = new LinkedHashMap<String, Requirement>();
         for (var name : DATA_FILES) {
             var document = object(read(source, name), words("labCatalogVersion requirements"));
@@ -152,7 +163,9 @@ public final class ScenarioCatalog {
                 var requirement = parseRequirement(element);
                 var spec = SPECS.get(requirement.group());
                 require(spec != null && spec.file().equals(name), "Requirement group is unknown or in the wrong data file.");
-                require(spec.layer() == requirement.layer(), "Requirement has an incorrect owning layer.");
+                Layer owningLayer = requirement.group().startsWith("HTTP.auth.") &&
+                        (requirement.id().endsWith(".browser") || requirement.id().endsWith(".recording")) ? Layer.RUNNER : spec.layer();
+                require(owningLayer == requirement.layer(), "Requirement has an incorrect owning layer.");
                 require(all.putIfAbsent(requirement.id(), requirement) == null, "Duplicate requirement ID.");
             }
         }
@@ -361,6 +374,7 @@ public final class ScenarioCatalog {
         profiles.put("browser", matching(all, r -> r.group().startsWith("BROW.")));
         profiles.put("federation", matching(all, r -> r.group().startsWith("FED.")));
         profiles.put("recovery", matching(all, r -> Set.of("CORE.recovery", "CORE.retry", "CORE.resources", "RUN.recovery").contains(r.group()) || Set.of("CORE.lifetime.server-revoked", "CORE.lifetime.late-old-401").contains(r.id())));
+        profiles.put("http-auth", matching(all, r -> r.group().startsWith("HTTP.auth.")));
         profiles.put("transport", matching(all, r -> r.group().startsWith("TLS.")));
         profiles.put("burp", matching(all, r -> r.layer() == Layer.HOST && !r.group().equals("H06")));
         profiles.put("deployment", matching(all, r -> r.group().equals("H06")));

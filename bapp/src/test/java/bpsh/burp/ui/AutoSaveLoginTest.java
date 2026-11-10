@@ -87,7 +87,7 @@ class AutoSaveLoginTest {
                     .atStep(new AuthenticationFailure.Step(step.id(), 1, step.type()));
         })) {
             var key = editor.registry.snapshot().resolve("employee").identity().key(); open(h, editor, key);
-            h.edt(() -> { ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
+            h.edt(() -> { WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
             h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
             h.await(() -> { try {
                 List<?> rows = h.member((StepsPanel) h.member(editor.ui, "steps"), "rows");
@@ -156,7 +156,7 @@ class AutoSaveLoginTest {
             h.await(() -> dialogs.results.size() == 1);
             var result = dialogs.results.getFirst();
             assertEquals("Credentials captured", result.title()); assertFalse(result.error());
-            assertTrue(result.text().contains("Employee")); assertTrue(result.text().contains("Journey cache"));
+            assertTrue(result.text().contains("Employee")); assertFalse(result.text().contains("Open Journey cache"));
             assertFalse(result.text().contains("private-ui-token")); assertFalse(result.text().contains("private-cookie-value"));
             assertFalse(result.text().contains("Authenticated"));
             if (mode.equals("combined")) { assertTrue(result.text().contains("2 credentials")); assertTrue(result.text().contains("access")); assertTrue(result.text().contains("session")); }
@@ -194,10 +194,13 @@ class AutoSaveLoginTest {
         try (var editor = h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
             open(h, editor, editor.registry.snapshot().resolve("employee").identity().key()); var dialogs = loginResults(h, editor);
             h.edt(() -> { editor.fields().get("url").setText("invalid-private-input"); dialogs.test.doClick(0); });
-            h.await(() -> dialogs.results.size() == 1); var result = dialogs.results.getFirst();
-            assertEquals("Login could not start", result.title()); assertTrue(result.error()); assertTrue(result.text().contains("Login URL"));
-            assertFalse(result.text().contains("invalid-private-input")); assertTrue(editor.clock.workers.isEmpty());
-            h.edt(() -> assertTrue(((JTextArea) editor.fields().get("url").getClientProperty("validationMessage")).isVisible()));
+            h.await(() -> { try { return ((JTextArea) editor.fields().get("url").getClientProperty("validationMessage")).isVisible(); } catch(Exception error) { return false; } });
+            h.edt(() -> {
+                var guidance = (JTextArea) editor.fields().get("url").getClientProperty("validationMessage");
+                assertTrue(guidance.getText().contains("Login URL")); assertFalse(guidance.getText().contains("invalid-private-input"));
+                assertTrue(dialogs.results.isEmpty()); assertEquals("Setup", WizardTestPages.selected(h.member(editor.ui,"wizard")));
+            });
+            assertTrue(editor.clock.workers.isEmpty());
         }
     }
 
@@ -254,12 +257,12 @@ class AutoSaveLoginTest {
             open(h, editor, editor.registry.snapshot().resolve("employee").identity().key());
             h.edt(() -> {
                 editor.fields().get(field).setText(field.equals("name") ? "" : "invalid");
-                ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4);
+                WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use");
                 ((JButton) h.member(editor.ui, "testButton")).doClick(0);
             });
             h.await(() -> { try { return ((JTextArea) editor.fields().get(field).getClientProperty("validationMessage")).isVisible(); } catch (Exception error) { return false; } });
             h.edt(() -> {
-                assertEquals(field.equals("maxAge") || field.equals("skew") ? 3 : 0, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals(field.equals("maxAge") || field.equals("skew") ? "Capture credentials" : "Setup", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 for (java.awt.Component component = editor.fields().get(field); component != null; component = component.getParent()) assertTrue(component.isVisible(), field);
                 assertFalse(((SessionStatusBar) h.member(editor.ui, "status")).isLogOpen());
             });
@@ -289,7 +292,7 @@ class AutoSaveLoginTest {
                     panel.setSteps(definitions, values);
                 }
                 h.call(editor.ui, "edited", new Class<?>[]{});
-                ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4);
+                WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use");
                 ((JButton) h.member(editor.ui, "testButton")).doClick(0);
             });
             h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
@@ -334,7 +337,7 @@ class AutoSaveLoginTest {
                 ((CredentialsPanel) h.member(editor.ui, "credentials")).setInputs(List.of(
                         new JourneyDraft.CredentialInput("session", "cookie", "https://login.example/", "", "sid", "", "", "", "", "disabled", ""),
                         new JourneyDraft.CredentialInput("csrf", "json_path", "https://login.example", "/token", "token", "", "", "", "", "bearer", "")));
-                h.call(editor.ui, "edited", new Class<?>[]{}); ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4);
+                h.call(editor.ui, "edited", new Class<?>[]{}); WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use");
                 ((JButton) h.member(editor.ui, "testButton")).doClick(0);
             });
             h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
@@ -349,8 +352,8 @@ class AutoSaveLoginTest {
                 return ((JTextArea) field.getClientProperty("validationMessage")).isVisible();
             } catch (Exception error) { return false; } });
             h.edt(() -> {
-                int expectedTab = mode.equals("service") ? 4 : mode.equals("dns") || mode.equals("proxy") ? 0 : 3;
-                assertEquals(expectedTab, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                String expectedTab = mode.equals("service") ? "Test & use" : mode.equals("dns") || mode.equals("proxy") ? "Setup" : "Capture credentials";
+                assertEquals(expectedTab, WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 if (!mode.equals("service")) {
                     JComponent field;
                     if (mode.equals("dns") || mode.equals("proxy")) field = editor.fields().get(mode.equals("dns") ? "url" : "proxy");

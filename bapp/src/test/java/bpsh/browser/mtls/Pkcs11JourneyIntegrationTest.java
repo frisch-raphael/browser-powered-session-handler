@@ -1,4 +1,8 @@
 package bpsh.browser.mtls;
+import bpsh.transport.tls.Pkcs11IdentityManager;
+
+import bpsh.browser.proxy.ProxyCertificateFactory;
+import bpsh.browser.proxy.BrowserProxyForwarder;
 
 import lab.auth.LoginFlows;
 import lab.auth.TransportFixtures;
@@ -49,6 +53,7 @@ class Pkcs11JourneyIntegrationTest {
     static BrowserRuntimeManager runtime;
     static AuthTrafficGuard guard;
     static BrowserFlowRunner runner;
+    static bpsh.transport.httpauth.HttpTransportRuntime httpTransport;
     static SSLContext defaultContext;
     static List<String> providers;
 
@@ -56,12 +61,12 @@ class Pkcs11JourneyIntegrationTest {
     @BeforeAll static void setup() throws Exception {
         fixture = IntegrationFixtures.nativeFixture(); root = Path.of(fixture.path("root").textValue());
         providers = Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList(); defaultContext = SSLContext.getDefault();
-        identities = new Pkcs11IdentityManager(); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
-        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, identities, guard, Clock.systemUTC());
+        identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
+        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
     }
     /** Removes only owned providers/listeners; shared token logout/default TLS changes are prohibited. */
     @AfterAll static void shutdown() throws Exception {
-        if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
+        if (httpTransport != null) httpTransport.close(); if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
         if (defaultContext != null) assertSame(defaultContext, SSLContext.getDefault());
         if (providers != null) assertEquals(providers, Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList());
     }
@@ -108,7 +113,7 @@ class Pkcs11JourneyIntegrationTest {
             var journey = IntegrationFixtures.configured(base, base.authenticationUrl(), base.browser(), base.extraction(),
                     mtls("employee", List.of(TokenExtractor.origin(origin.url("/"))), root.resolve("ca.crt").toString()));
             var lifecycle = new java.util.concurrent.CopyOnWriteArrayList<bpsh.browser.BrowserSessionLauncher.Lifecycle>();
-            var launcher = new bpsh.browser.BrowserSessionLauncher(runtime, identities, guard, Clock.systemUTC(), lifecycle::add);
+            var launcher = new bpsh.browser.BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC(), lifecycle::add);
             try (var recorder = new bpsh.browser.BrowserJourneyRecorder(launcher)) {
                 var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
                 var request = new bpsh.journey.JourneyRecording.Request(identity,
@@ -212,7 +217,8 @@ class Pkcs11JourneyIntegrationTest {
 
     @Test @Order(4) void localEndpointRejectsMissingAndIncorrectAttemptCredentials() throws Exception {
         var definition = mtls("employee", List.of(URI.create("https://localhost")), root.resolve("ca.crt").toString());
-        try (var proxy = new JourneyTlsProxy(definition, select(definition), null, Clock.systemUTC())) {
+        try (var httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime();
+             var proxy = bpsh.support.IntegrationFixtures.browserProxy(httpTransport, definition, select(definition), null, Clock.systemUTC())) {
             for (String header : List.of("", "Proxy-Authorization: Basic ZGlzcG9zYWJsZTppbmNvcnJlY3Q=\r\n")) {
                 try (var socket = new java.net.Socket()) {
                     socket.connect(proxy.address(), 2000); socket.setSoTimeout(3000);
@@ -228,7 +234,8 @@ class Pkcs11JourneyIntegrationTest {
         try (var origin = IntegrationFixtures.https(root, false, true); var foreign = new ProxyCertificateFactory(Clock.systemUTC())) {
             TransportFixtures.countingTarget(origin.owner, () -> {}).start();
             var definition = mtls("employee", List.of(TokenExtractor.origin(origin.url("/"))), root.resolve("ca.crt").toString());
-            try (var proxy = new JourneyTlsProxy(definition, select(definition), null, Clock.systemUTC());
+            try (var httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime();
+             var proxy = bpsh.support.IntegrationFixtures.browserProxy(httpTransport, definition, select(definition), null, Clock.systemUTC());
                  var driver = PlaywrightDriverAdapter.open(runtime.acquire(deadline(), () -> false), deadline(), () -> false);
                  var browser = driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setExecutablePath(runtime.acquire(deadline(), () -> false).browserExecutable())
                          .setProxy(proxy.browserProxy()).setArgs(List.of("--ignore-certificate-errors-spki-list=" + foreign.spkiSha256())));
@@ -237,7 +244,6 @@ class Pkcs11JourneyIntegrationTest {
                 var matcher = java.util.regex.Pattern.compile("ERR_[A-Z0-9_]+").matcher(ex.getMessage());
                 String symbol = matcher.find() ? matcher.group() : "no browser symbol";
                 assertTrue(ex.getMessage().contains("ERR_CERT_AUTHORITY_INVALID"), "Observed safe browser code: " + symbol + "; proxy: " + proxy.failure());
-                assertThrows(IllegalStateException.class, proxy::serverSslEngine);
             }
         }
     }

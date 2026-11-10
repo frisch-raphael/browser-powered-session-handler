@@ -94,9 +94,17 @@ public record JourneyDraft(Map<String, String> text, Map<String, Boolean> flags,
 
         @Override public String toString() { return "CredentialInput[type=" + type + "]"; }
     }
-    private static final Set<String> FIELDS = Set.of("name", "alias", "url", "navTimeout", "tokenWait", "proxy", "maxAge", "skew", "module", "slot", "origins", "ca");
-    private static final Set<String> FLAGS = Set.of("headless", "remember", "mtls");
+    private static final Set<String> FIELDS = Set.of("name", "alias", "url", "navTimeout", "tokenWait", "proxy", "maxAge", "skew", "module", "slot", "origins", "ca", "httpProtocol", "httpUsername", "httpDomain", "httpWorkstation", "httpOrigins");
+    private static final Set<String> FLAGS = Set.of("headless", "remember", "mtls", "ignoreHttpsErrors", "httpAuthentication", "formAuthentication");
     public JourneyDraft {
+        if (!flags.containsKey("ignoreHttpsErrors")) { flags = new LinkedHashMap<>(flags); flags.put("ignoreHttpsErrors", false); }
+        // Schema-1 drafts acquire disabled HTTP settings without changing their existing fields.
+        if (!flags.containsKey("httpAuthentication")) { flags = new LinkedHashMap<>(flags); flags.put("httpAuthentication", false); }
+        if (!flags.containsKey("formAuthentication")) { flags = new LinkedHashMap<>(flags); flags.put("formAuthentication", defaultFormAuthentication(flags, !steps.isEmpty())); }
+        if (!text.containsKey("httpProtocol")) {
+            text = new LinkedHashMap<>(text); text.put("httpProtocol", "NTLM_V2");
+            for (String field : List.of("httpUsername", "httpDomain", "httpWorkstation", "httpOrigins")) text.put(field, "");
+        }
         text = Map.copyOf(text); flags = Map.copyOf(flags); steps = List.copyOf(steps); credentials = List.copyOf(credentials);
         if (!text.keySet().equals(FIELDS) || !flags.keySet().equals(FLAGS) || slotKind == null || certificateSha256 == null
                 || steps.size() > 256 || credentials.size() > 16) throw new IllegalArgumentException("Invalid journey draft structure.");
@@ -118,9 +126,14 @@ public record JourneyDraft(Map<String, String> text, Map<String, Boolean> flags,
     /** Filters project controls out of the journey's raw editor fields. */
     public static JourneyDraft capture(Map<String, String> text, Map<String, Boolean> flags, JourneyDefinition.SlotKind slotKind,
             String certificate, List<StepInput> steps, List<CredentialInput> credentials) {
-        var fields = new LinkedHashMap<String, String>(); FIELDS.forEach(k -> fields.put(k, text.getOrDefault(k, "")));
-        var options = new LinkedHashMap<String, Boolean>(); FLAGS.forEach(k -> options.put(k, flags.getOrDefault(k, false)));
+        var fields = new LinkedHashMap<String, String>(); FIELDS.forEach(k -> fields.put(k, text.getOrDefault(k, k.equals("httpProtocol") ? "NTLM_V2" : "")));
+        var options = new LinkedHashMap<String, Boolean>();
+        FLAGS.forEach(k -> options.put(k, flags.getOrDefault(k, k.equals("formAuthentication") && defaultFormAuthentication(flags, !steps.isEmpty()))));
         return new JourneyDraft(fields, options, slotKind, certificate, steps, credentials);
+    }
+    /** Infers legacy method choices while retaining every previously configured login step. */
+    private static boolean defaultFormAuthentication(Map<String, Boolean> flags, boolean hasSteps) {
+        return hasSteps || !(flags.getOrDefault("mtls", false) || flags.getOrDefault("httpAuthentication", false));
     }
     /** Retains secure-step owners without interpreting unfinished numeric settings. */
     public List<AuthStep.Definition> structuralSteps() {
@@ -132,7 +145,7 @@ public record JourneyDraft(Map<String, String> text, Map<String, Boolean> flags,
     public JourneyDefinition definition(UUID id, String displayName, String alias, boolean remember) {
         var mtls = flags.get("mtls") ? new JourneyDefinition.Mtls(text.get("module"), new JourneyDefinition.Slot(slotKind, 0), certificateSha256, List.of(), null) : null;
         return new JourneyDefinition(id, displayName, alias, URI.create(""), remember, structuralSteps(),
-                new JourneyDefinition.Browser(flags.get("headless"), null, 30_000, 3000),
+                new JourneyDefinition.Browser(flags.get("headless"), null, 30_000, 3000, flags.get("ignoreHttpsErrors"), flags.get("formAuthentication")),
                 new JourneyDefinition.CombinedExtraction(List.of()), JourneyDefinition.Injection.perToken(List.of()),
                 new JourneyDefinition.Cache(1800, 10), mtls, this);
     }

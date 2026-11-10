@@ -1,19 +1,22 @@
 // Feature-owned boundaries. Concrete adapters may depend on core contracts; core never imports adapters.
 val architectureDependencies = mapOf(
-    "bpsh" to setOf("authentication", "authentication.session", "browser", "browser.mtls", "browser.runtime", "burp.http", "burp.ui", "journey", "journey.editing", "journey.persistence", "request"),
+    "bpsh" to setOf("authentication", "authentication.http", "transport.httpauth", "authentication.session", "browser", "transport.tls", "browser.runtime", "burp.http", "burp.ui", "journey", "journey.editing", "journey.persistence", "request"),
     "bpsh.journey" to emptySet(),
     "bpsh.authentication" to setOf("journey"),
-    "bpsh.authentication.credentials" to setOf("journey", "authentication"),
+    "bpsh.authentication.http" to setOf("journey", "authentication"),
+    "bpsh.transport.httpauth" to setOf("journey", "authentication", "authentication.http", "transport.tls"),
+    "bpsh.authentication.credentials" to setOf("journey", "authentication", "authentication.http"),
     "bpsh.authentication.session" to setOf("journey", "authentication", "authentication.credentials"),
     "bpsh.request" to setOf("journey", "authentication"),
     "bpsh.platform.files" to emptySet(),
     "bpsh.journey.persistence" to setOf("journey", "authentication", "authentication.credentials", "request", "platform.files"),
     "bpsh.journey.editing" to setOf("journey", "journey.persistence", "request"),
     "bpsh.browser.runtime" to setOf("journey", "authentication", "platform.files"),
-    "bpsh.browser.mtls" to setOf("journey", "authentication", "authentication.credentials"),
-    "bpsh.browser" to setOf("journey", "authentication", "authentication.credentials", "authentication.session", "browser.runtime", "browser.mtls"),
-    "bpsh.burp.http" to setOf("journey", "authentication", "authentication.credentials", "authentication.session", "browser", "request"),
-    "bpsh.burp.ui" to setOf("journey", "journey.editing", "journey.persistence", "authentication", "authentication.credentials", "authentication.session", "browser.mtls", "burp.http", "request")
+    "bpsh.transport.tls" to setOf("journey", "authentication"),
+    "bpsh.browser.proxy" to setOf("journey", "authentication", "authentication.http", "transport.tls"),
+    "bpsh.browser" to setOf("journey", "authentication", "authentication.http", "authentication.credentials", "authentication.session", "browser.runtime", "transport.tls", "browser.proxy"),
+    "bpsh.burp.http" to setOf("journey", "authentication", "authentication.http", "authentication.credentials", "authentication.session", "browser", "request"),
+    "bpsh.burp.ui" to setOf("authentication.http", "journey", "journey.editing", "journey.persistence", "authentication", "authentication.credentials", "authentication.session", "transport.tls", "burp.http", "request")
 ).mapValues { (_, dependencies) -> dependencies.map { "bpsh.$it" }.toSet() }
 
 val verifyArchitecture = tasks.register("verifyArchitecture") {
@@ -48,7 +51,7 @@ val verifyArchitecture = tasks.register("verifyArchitecture") {
                 if (dependency !in architectureDependencies.getValue(name)) failures += "$relative: $name must not depend on $dependency"
                 graph.getValue(name).add(dependency)
             }
-            if (name in setOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.session", "bpsh.authentication.credentials", "bpsh.request")) {
+            if (name in setOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.http", "bpsh.authentication.session", "bpsh.authentication.credentials", "bpsh.request")) {
                 listOf("javax.swing.", "java.awt.", "burp.api.montoya.", "com.microsoft.playwright.").forEach { forbidden ->
                     if (code.contains(forbidden)) failures += "$relative: $forbidden belongs at an adapter boundary"
                 }
@@ -56,7 +59,7 @@ val verifyArchitecture = tasks.register("verifyArchitecture") {
             if (name != "bpsh.browser.runtime" && (code.contains("com.microsoft.playwright.impl.") || code.contains("com.google.gson.")))
                 failures += "$relative: private Playwright/Gson protocol access belongs in browser.runtime"
         }
-        listOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.session", "bpsh.request").forEach { core ->
+        listOf("bpsh.journey", "bpsh.authentication", "bpsh.authentication.http", "bpsh.authentication.session", "bpsh.request").forEach { core ->
             sources.files.filter { it.parentFile.toPath() == root.resolve(core.replace('.', '/')) }.forEach { file ->
                 val imports = Regex("(?m)^import\\s+(?:static\\s+)?([^;]+);").findAll(nonCode.replace(file.readText(), " "))
                 imports.forEach { imported ->

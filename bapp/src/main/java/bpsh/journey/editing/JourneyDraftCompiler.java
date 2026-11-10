@@ -40,15 +40,18 @@ public final class JourneyDraftCompiler {
     /** Builds the executable representation through the same strict codec used by native imports. */
     public static JourneyDefinition compile(JourneyDraft draft, UUID id) {
         var text = draft.text(); var flags = draft.flags();
+        if (!flags.get("formAuthentication") && !flags.get("mtls") && !flags.get("httpAuthentication"))
+            throw new ConfigurationException("formAuthentication: choose at least one authentication method.");
         var credentials = draft.credentials();
         var definitions = steps(draft.steps());
         ObjectNode j = BrowserSetupCompiler.node(draft); j.put("id", id.toString()); j.put("displayName", text.get("name")); j.put("alias", text.get("alias")); j.put("authenticationUrl", text.get("url").trim()); j.put("rememberSecrets", flags.get("remember"));
         var s = j.putArray("steps"); definitions.forEach(step -> s.add(JourneyJson.stepNode(step)));
         ((ObjectNode) j.get("browser")).put("tokenWaitTimeoutMs", BrowserSetupCompiler.seconds(text, "tokenWait"));
-        j.set("extraction", JourneyDraftCompiler.extractionNode(credentials));
+        if (credentials.isEmpty() && flags.get("httpAuthentication")) j.putNull("extraction");
+        else j.set("extraction", JourneyDraftCompiler.extractionNode(credentials));
         j.set("injection", JourneyDraftCompiler.injectionNode(credentials));
         j.putObject("cache").put("maxAgeSeconds", number(text, "maxAge")).put("refreshSkewSeconds", number(text, "skew"));
-        var root = JSON.createObjectNode().put("schemaVersion", 1).put("kind", "export").put("revision", UUID.randomUUID().toString()); root.putArray("journeys").add(j); root.putArray("retiredAliases");
+        var root = JSON.createObjectNode().put("schemaVersion", 2).put("kind", "export").put("revision", UUID.randomUUID().toString()); root.putArray("journeys").add(j); root.putArray("retiredAliases");
         try (var parsed = JourneyJson.read(root.toString(), JourneyDocument.DocumentKind.EXPORT)) { return parsed.journeys().getFirst(); }
     }
     /**

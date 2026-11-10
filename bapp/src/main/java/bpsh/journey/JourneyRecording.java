@@ -10,7 +10,7 @@ public interface JourneyRecording extends AutoCloseable {
     /** Bounds interactive recording independently of ordinary authentication deadlines. */
     final class Limits {
         private Limits() {}
-        public static final long LIFETIME_MS = 30 * 60_000L;
+        public static final long LIFETIME_MS = 30 * 60_000L, PREPARATION_MS = 60_000;
         public static final int PUMP_MS = 100, STOP_MS = 5000, STEPS = 256, PAGES = 16, FRAME_DEPTH = 16;
         public static final int QUEUED_EVENTS = 256, EVENT_BYTES = 64 * 1024, RETAINED_BYTES = 4 * 1024 * 1024;
         public static final int SELECTOR_BYTES = 4096, FILL_BYTES = 16 * 1024, OPTIONS = 256, SOURCE_KEY_BYTES = 128;
@@ -28,9 +28,12 @@ public interface JourneyRecording extends AutoCloseable {
     }
 
     /** Safe progress states contain no values, URLs or selectors. */
-    enum State { PREPARING, RECORDING, STOPPING, REVIEW, CLOSED }
+    enum State {
+        PREPARING, WAITING_FOR_BROWSER, VERIFYING_BROWSER, EXTRACTING_BROWSER,
+        STARTING_DRIVER, STARTING_BROWSER, OPENING_LOGIN, RECORDING, STOPPING, REVIEW, CLOSED
+    }
     /** Identifies a known setup input without a UI component or vendor exception. */
-    enum Field { GENERAL, LOGIN_URL, PROXY_URL, CLIENT_CERTIFICATE, PIN, MIDDLEWARE, SECURITY_DEVICE, TRUSTED_CA }
+    enum Field { GENERAL, LOGIN_URL, PROXY_URL, CLIENT_CERTIFICATE, PIN, MIDDLEWARE, SECURITY_DEVICE, TRUSTED_CA, HTTP_AUTHENTICATION, HTTP_PASSWORD }
     /** Safe, application-owned failure guidance only. */
     record Problem(Field field, String message) {
         public Problem { Objects.requireNonNull(field); Objects.requireNonNull(message); }

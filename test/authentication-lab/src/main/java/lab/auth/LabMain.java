@@ -129,11 +129,12 @@ public final class LabMain {
                     var target=run.prepareServingCase(transportCase,run.generation());out.println("Transport login: "+target.startUri());
                     out.println("Transport topology and private software configuration path are available in the owned /targets inventory. Export with authLabExamples -PlabRun="+run.runId()+".");
                     out.println("One transport case is active at a time. Reset retires its listeners; prepare the next case afterward. This is a software token, not physical-device qualification.");
-                }else for (var row : catalog.select(profiles).requirements())if(row.disposition()!=ScenarioCatalog.Disposition.EXCLUDED)run.prepareCase(row.id());
+                }else for (var row : catalog.select(profiles).requirements())if(row.disposition()!=ScenarioCatalog.Disposition.EXCLUDED && !row.group().startsWith("HTTP.auth."))run.prepareCase(row.id());
                 out.println("Controlled targets: " + run.applicationUri() + "/");
                 out.println("Alternate origin: " + run.alternateUri());
                 out.println("Run ID: " + run.runId()); out.println("Private run directory: " + run.directory());
-                out.println("Fixture accounts: user/pass, user2/pass2, admin/adminpass.");
+                if(profiles.contains("http-auth"))out.println("HTTP fixture accounts: user-a/alpha-password and user-b/bravo-password; Basic, NTLMv1 and NTLMv2 links are on the target index.");
+                if(profiles.stream().anyMatch(profile->!profile.equals("http-auth")))out.println("Fixture accounts: user/pass, user2/pass2, admin/adminpass.");
                 if(!federation&&!transport)out.println("HTTPS/provider/native/browser execution prerequisites remain separate; unavailable target routes report them explicitly.");
                 out.println("Targets stay in the foreground until authLabStop or interruption. Hosting targets is not a passing test run.");
                 out.flush(); run.awaitStop(); return 0;

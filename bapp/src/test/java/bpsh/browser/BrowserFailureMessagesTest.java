@@ -1,7 +1,7 @@
 package bpsh.browser;
 
 import bpsh.authentication.AuthenticationFailure;
-import bpsh.browser.mtls.JourneyTlsProxy;
+import bpsh.browser.proxy.BrowserProxyForwarder;
 import bpsh.browser.runtime.BrowserRuntimeManager;
 import bpsh.browser.runtime.PlaywrightDriverAdapter;
 import org.junit.jupiter.api.Test;
@@ -11,6 +11,30 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Checks evidence-based browser diagnostics without launching a browser or making network requests. */
 class BrowserFailureMessagesTest {
+    @Test void destinationTlsFailuresStayTerminalWithoutInferringARejectedPinOrExposingPeerText() {
+        for(var cause:new Throwable[]{new javax.net.ssl.SSLPeerUnverifiedException("CANARY_PEER"),
+                new java.security.cert.CertificateException("CANARY_CHAIN"),new javax.net.ssl.SSLHandshakeException("CANARY_HANDSHAKE")}) {
+            var failure=bpsh.transport.tls.JourneyTlsContexts.destinationFailure(new java.io.IOException("CANARY_WRAPPER",cause),true);
+            assertNotNull(failure);assertFalse(failure.retryable());assertNotEquals(AuthenticationFailure.Cause.PIN_REJECTED,failure.reason());
+            assertFalse(failure.getMessage().contains("CANARY"));
+        }
+        assertNull(bpsh.transport.tls.JourneyTlsContexts.destinationFailure(new javax.net.ssl.SSLException("CANARY_UNKNOWN"),true));
+        assertNull(bpsh.transport.tls.JourneyTlsContexts.destinationFailure(new java.net.ConnectException("CANARY_CONNECT"),false));
+    }
+    @Test void actualProxyFailureOutranksSynthetic502ButKeepsStrongerEvidenceAndValidCaptures() throws Exception {
+        var definition=new bpsh.journey.JourneyDefinition.JsonExtraction(java.net.URI.create("https://example.test"),"/token","access_token");
+        var extractor=new bpsh.authentication.credentials.TokenExtractor(definition,java.time.Clock.systemUTC());
+        var proxy=bpsh.transport.tls.JourneyTlsContexts.upstreamFailure(new java.net.ConnectException("CANARY_CONNECT"));
+        extractor.observe(new AuthenticationFailure(AuthenticationFailure.Phase.NAVIGATION,AuthenticationFailure.Cause.TEMPORARY_SERVICE,"Synthetic HTTP 502.","",502,null));
+        var unknown=new AuthenticationFailure(AuthenticationFailure.Phase.PROXY,AuthenticationFailure.Cause.UNKNOWN,"Unclassified destination failure.");
+        assertSame(unknown,assertThrows(AuthenticationFailure.class,()->BrowserFlowRunner.observeTransportFailure(extractor,unknown)));
+        assertSame(proxy,assertThrows(AuthenticationFailure.class,()->BrowserFlowRunner.observeTransportFailure(extractor,proxy)));
+        var rejected=new AuthenticationFailure(AuthenticationFailure.Phase.NAVIGATION,AuthenticationFailure.Cause.AUTH_REJECTED,"Confirmed HTTP 401.");
+        extractor.observe(rejected);assertDoesNotThrow(()->BrowserFlowRunner.observeTransportFailure(extractor,proxy));
+        assertSame(rejected,assertThrows(AuthenticationFailure.class,extractor::result));
+        extractor.considerResponse("https://example.test/token","{\"access_token\":\"kept\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8),true);
+        assertDoesNotThrow(()->BrowserFlowRunner.observeTransportFailure(extractor,proxy));assertEquals("kept",extractor.result());
+    }
     @Test void clientCertificateErrorsUsePositiveSymbolsAndCurrentConfiguration() {
         for (boolean configured : new boolean[]{false, true}) {
             var required = BrowserFailureClassifier.networkFailure("net::ERR_SSL_CLIENT_AUTH_CERT_NEEDED", configured);
@@ -32,12 +56,12 @@ class BrowserFailureMessagesTest {
     @Test void unavailableMtlsUpstreamIsTemporaryOnlyWithPositiveSocketEvidence() {
         for (var cause : new Throwable[]{new java.net.ConnectException("CANARY_CONNECTION"), new java.net.SocketTimeoutException("CANARY_TIMEOUT"),
                 new RuntimeException("CANARY_WRAPPER", new java.net.ConnectException("CANARY_NESTED"))}) {
-            var failure = JourneyTlsProxy.upstreamFailure(cause);
+            var failure = bpsh.transport.tls.JourneyTlsContexts.upstreamFailure(cause);
             assertEquals(AuthenticationFailure.Phase.PROXY, failure.phase());
             assertEquals(AuthenticationFailure.Cause.TRANSPORT, failure.reason()); assertTrue(failure.retryable());
             assertFalse(failure.getMessage().contains("CANARY"));
         }
-        var unknown = JourneyTlsProxy.upstreamFailure(new IllegalStateException("CANARY_UNKNOWN"));
+        var unknown = bpsh.transport.tls.JourneyTlsContexts.upstreamFailure(new IllegalStateException("CANARY_UNKNOWN"));
         assertEquals(AuthenticationFailure.Cause.UNKNOWN, unknown.reason()); assertFalse(unknown.retryable());
         assertFalse(unknown.getMessage().contains("CANARY"));
     }
@@ -129,6 +153,13 @@ class BrowserFailureMessagesTest {
             assertNull(setup.getCause()); assertNull(driver.getCause());
         }
         assertTrue(PlaywrightDriverAdapter.startupFailure(new java.io.IOException("fixture-secret"), true).getMessage().contains("exited during initialization"));
+        for (Throwable error : java.util.List.of(new NoClassDefFoundError("fixture-secret"),
+                new java.lang.reflect.InvocationTargetException(new UnsatisfiedLinkError("fixture-secret")))) {
+            var driver = PlaywrightDriverAdapter.startupFailure(error, false);
+            assertEquals(AuthenticationFailure.Cause.CONFIGURATION, driver.reason());
+            assertTrue(driver.getMessage().contains("runtime could not load"));
+            assertFalse(driver.getMessage().contains("fixture-secret")); assertNull(driver.getCause());
+        }
     }
 
     @Test void navigationMetadataRequiresAnEstablishedMainFrame() {

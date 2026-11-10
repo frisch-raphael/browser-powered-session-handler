@@ -8,6 +8,8 @@ import bpsh.journey.persistence.JourneyJson;
 import bpsh.journey.AuthStep;
 import bpsh.journey.JourneyDefinition;
 import bpsh.journey.JourneyKey;
+import bpsh.journey.JourneyDraft;
+import bpsh.journey.JourneyNames;
 import bpsh.journey.SecretStore;
 import bpsh.journey.JourneyCatalog;
 import bpsh.journey.JourneyCatalog.Entry;
@@ -43,6 +45,7 @@ public final class JourneyWorkspace implements JourneyCatalog {
      * Retains the highest generation even after deletion so reusing a UUID cannot revive stale work.
      */
     private final Map<JourneyKey, Long> generations = new HashMap<>();
+    private final Map<JourneyKey, Long> secretRevisions = new HashMap<>();
     /**
      * Tracks containers blocked for repair while keeping their definitions visible to the editor.
      */
@@ -113,7 +116,8 @@ public final class JourneyWorkspace implements JourneyCatalog {
             boolean changed = previous == null || !j.sameAuthenticationConfiguration(previous.definition()) || secretChanged || unavailable.contains(scope);
             long generation = changed ? generations.getOrDefault(key, 0L) + 1 : previous.identity().generation();
             generations.put(key, generation);
-            entries.put(key, new Entry(new JourneyDefinition.Identity(scope, j.id(), generation), j));
+            long secretRevision=secretChanged?secretRevisions.merge(key,1L,Long::sum):secretRevisions.getOrDefault(key,0L);
+            entries.put(key, new Entry(new JourneyDefinition.Identity(scope, j.id(), generation), j,secretRevision));
         }
         for (JourneyKey key : List.copyOf(entries.keySet())) if (key.scope() == scope && !incoming.contains(key.journeyId())) {
             entries.remove(key); secrets.remove(key);
@@ -156,7 +160,7 @@ public final class JourneyWorkspace implements JourneyCatalog {
         if (!secrets.put(key, values)) return Set.of();
         long next = generations.merge(key, 1L, Long::sum);
         Map<JourneyKey, Entry> entries = new HashMap<>(snapshot.entries());
-        entries.put(key, new Entry(new JourneyDefinition.Identity(key.scope(), key.journeyId(), next), previous.definition()));
+        entries.put(key, new Entry(new JourneyDefinition.Identity(key.scope(), key.journeyId(), next), previous.definition(),secretRevisions.merge(key,1L,Long::sum)));
         return publish(entries);
     }
 
@@ -189,7 +193,7 @@ public final class JourneyWorkspace implements JourneyCatalog {
                 SecretStore.Values value = secrets.snapshot(new JourneyKey(scope, j.id()));
                 // Removed or retyped steps must not leave secret references behind.
                 Set<UUID> valid = new HashSet<>(); j.steps().stream().filter(s -> s.type() == AuthStep.Type.SECURE_INPUT).forEach(s -> valid.add(s.id()));
-                SecretStore.Values filtered = value.retain(valid, j.mtls() != null);
+                SecretStore.Values filtered = value.retain(valid, j.mtls() != null, bpsh.journey.JourneySecrets.hasHttpConfiguration(j));
                 value.close(); values.put(j.id(), filtered);
             }
             JourneyDocument edited = new JourneyDocument(kind(scope), old.revision(), journeys,
@@ -197,6 +201,58 @@ public final class JourneyWorkspace implements JourneyCatalog {
             JourneyJson.write(edited); // Whole-preview validation, before any storage side effect.
             return edited;
         } catch (RuntimeException ex) { values.values().forEach(SecretStore.Values::close); throw ex; }
+    }
+
+    /**
+     * Appends an independent copy in the source collection without publishing or writing storage.
+     * Fresh step identities retain popup references and secure inputs, including unfinished drafts.
+     * Configured secrets remain session-only; authentication caches belong to the original identity.
+     * The caller persists the returned preview before publication and closes it when finished.
+     */
+    public synchronized JourneyDocument prepareDuplicate(JourneyKey source) {
+        Entry entry = snapshot.entries().get(source);
+        if (entry == null) throw new IllegalStateException("This journey is no longer saved. Select an existing journey and try again.");
+        if (unavailable.contains(source.scope())) throw new IllegalStateException("Storage is unavailable; repair it before duplicating a journey.");
+        JourneyDefinition original = entry.definition();
+        String name = duplicateName(original.displayName());
+        String alias = JourneyNames.alias(name);
+        Map<UUID, UUID> stepIds = new HashMap<>();
+        original.steps().forEach(step -> stepIds.put(step.id(), UUID.randomUUID()));
+        List<AuthStep.Definition> steps = original.steps().stream().map(step -> step.remap(stepIds)).toList();
+        UUID id = UUID.randomUUID();
+        JourneyDraft draft = original.draft() == null ? null : original.draft().remap(steps, alias, false);
+        if (draft != null) {
+            var text = new HashMap<>(draft.text()); text.put("name", name);
+            draft = new JourneyDraft(text, draft.flags(), draft.slotKind(), draft.certificateSha256(), draft.steps(), draft.credentials());
+        }
+        var copy = new JourneyDefinition(id, name, alias, original.authenticationUrl(), false, steps,
+                original.browser(), original.extraction(), original.injection(), original.cache(), original.mtls(), original.httpAuthentication(), draft);
+        var current = document(source.scope());
+        var journeys = new ArrayList<>(current.journeys()); journeys.add(copy);
+        try (var preview = prepareEdit(source.scope(), journeys, current.controls());
+             var sourceValues = secrets.snapshot(source)) {
+            var values = new HashMap<UUID, SecretStore.Values>();
+            try {
+                preview.secrets().forEach((key, value) -> { if (!key.equals(id)) values.put(key, value.copy()); });
+                values.put(id, sourceValues.remapSteps(stepIds));
+                var result = new JourneyDocument(preview.kind(), preview.revision(), journeys, List.of(), preview.controls(), values);
+                JourneyJson.write(result);
+                return result;
+            } catch (RuntimeException ex) { values.values().forEach(SecretStore.Values::close); throw ex; }
+        }
+    }
+
+    /** Keeps the copy suffix inside both the display-name and derived-alias limits. */
+    private String duplicateName(String original) {
+        var aliases = new HashSet<String>(); var names = new HashSet<String>();
+        snapshot.entries().values().forEach(entry -> { aliases.add(entry.definition().canonicalAlias()); names.add(entry.definition().displayName()); });
+        for (int index = 1; ; index++) {
+            String suffix = index == 1 ? " copy" : " copy " + index;
+            String base = original.substring(0, original.offsetByCodePoints(0, Math.min(original.codePointCount(0, original.length()), 128 - suffix.length())));
+            while (JourneyNames.alias(base).length() > 64 - suffix.length()) base = base.substring(0, base.offsetByCodePoints(base.length(), -1));
+            String name = base + suffix;
+            if (!names.contains(name) && !aliases.contains(JourneyNames.alias(name))) return name;
+        }
     }
 
     /**
@@ -219,7 +275,7 @@ public final class JourneyWorkspace implements JourneyCatalog {
             if (previous != null && previous.identity().equals(current.identity())
                     && snapshot.isCurrent(previous.identity()) != next.isCurrent(current.identity())) {
                 long generation = generations.merge(key, 1L, Long::sum);
-                entries.put(key, new Entry(new JourneyDefinition.Identity(key.scope(), key.journeyId(), generation), current.definition()));
+                entries.put(key, new Entry(new JourneyDefinition.Identity(key.scope(), key.journeyId(), generation), current.definition(),current.authenticationSecretRevision()));
             }
         }
         next = new Snapshot(entries, aliases, unavailable);

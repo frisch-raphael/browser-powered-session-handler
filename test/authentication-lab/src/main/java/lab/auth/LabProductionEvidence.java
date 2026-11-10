@@ -9,7 +9,7 @@ import java.util.*;
 /** Joins audited production owners to real JUnit XML; never executes authentication. */
 public final class LabProductionEvidence {
     private LabProductionEvidence() {}
-    private static final Set<String> FOCUSED_PROFILES = Set.of("baseline", "revised", "credentials", "diagnostics", "browser", "recovery");
+    private static final Set<String> FOCUSED_PROFILES = Set.of("baseline", "revised", "credentials", "diagnostics", "browser", "recovery", "http-auth");
     static List<ScenarioCatalog.Requirement> profileRows(List<String> profiles) {
         if (profiles.isEmpty() || !FOCUSED_PROFILES.containsAll(profiles)) throw new IllegalArgumentException("Unsupported production profile selection.");
         return ScenarioCatalog.load().select(profiles).requirements();
@@ -282,7 +282,7 @@ public final class LabProductionEvidence {
         }
         if(task.equals(":authLabTransportTest"))valid &= LabTransportEvidence.preparationCurrent(plan);
         var rows = ScenarioCatalog.load().requirements().stream().filter(LabProductionEvidence::supported)
-                .filter(row -> row.group().startsWith("TLS.")?LabTransportEvidence.input(row.id()).task().equals(task):
+                .filter(row -> LabHttpAuthenticationEvidence.supports(row.id())?LabHttpAuthenticationEvidence.task(row.id()).equals(task):row.group().startsWith("TLS.")?LabTransportEvidence.input(row.id()).task().equals(task):
                         task.equals(":authLabFederationTest")?row.group().startsWith("FED."):
                         !task.equals(":authLabTransportTest")&&!row.group().startsWith("FED.")&&(row.group().equals("BROW.fresh")||LabBrowserEvidence.supports(row.id())||row.id().equals(LabRecoveryBrowserEvidence.ID)||row.id().equals("CORE.retry.subresource-error")) == task.equals(":authLabBrowserTest")).toList();
         if (plan.has("selectedProfiles")) rows = scopedProfileRows(plan, task);
@@ -329,6 +329,7 @@ public final class LabProductionEvidence {
                                 // Labels are earned by the owning input's assertions, never copied from expected facts.
                                 var established = actual==null?List.<ScenarioCatalog.Fact>of():establishedFacts(row, actual); facts.addAll(established);
                                 missing.remove("completion");
+                                if(LabHttpAuthenticationEvidence.supports(row.id())&&LabHttpAuthenticationEvidence.valid(row.id(),actual)){missing.remove("browserLaunch");missing.remove("contextClose");missing.remove("resources");}
                                 if (row.group().equals("BROW.fresh")) { missing.remove("browserLaunch"); missing.remove("contextClose"); }
                                 if(LabBrowserEvidence.supports(row.id())&&LabBrowserEvidence.valid(row.id(),actual)){missing.remove("browserLaunch");missing.remove("contextClose");missing.remove("resources");}
                                 if(row.id().equals(LabRecoveryBrowserEvidence.ID)&&LabRecoveryBrowserEvidence.valid(actual)){missing.remove("browserLaunch");missing.remove("contextClose");missing.remove("resources");}
@@ -484,9 +485,10 @@ public final class LabProductionEvidence {
         return List.of(new ScenarioCatalog.Fact("outcome",outcome));
     }
     static boolean supported(ScenarioCatalog.Requirement row) {
-        return LabConfigurationEvidence.supports(row.id())||LabResourceEvidence.supports(row.id())||LabInjectionEvidence.supports(row.id())||LabTagFailureEvidence.supports(row.id())||LabLimitEvidence.supports(row.id())||row.id().equals("CORE.tag-failure.output-contains-tag")||LabTagSelectionEvidence.supports(row.id())||LabEncodingEvidence.supports(row.id())||LabOutputEvidence.supports(row.id())||LabLifetimeEvidence.supports(row.id())||row.id().equals(LabRecoveryBrowserEvidence.ID)||LabRetryEvidence.supports(row.id())||LabBrowserEvidence.supports(row.id())||row.group().startsWith("TLS.")||row.group().startsWith("FED.")||Set.of("CORE.tool-policy", "CORE.tag-matrix", "CORE.recovery", "BROW.fresh").contains(row.group()) || row.id().equals("CORE.encoding.literal-prefix") || diagnosticSpec(row) != null;
+        return LabHttpAuthenticationEvidence.supports(row.id())||LabConfigurationEvidence.supports(row.id())||LabResourceEvidence.supports(row.id())||LabInjectionEvidence.supports(row.id())||LabTagFailureEvidence.supports(row.id())||LabLimitEvidence.supports(row.id())||row.id().equals("CORE.tag-failure.output-contains-tag")||LabTagSelectionEvidence.supports(row.id())||LabEncodingEvidence.supports(row.id())||LabOutputEvidence.supports(row.id())||LabLifetimeEvidence.supports(row.id())||row.id().equals(LabRecoveryBrowserEvidence.ID)||LabRetryEvidence.supports(row.id())||LabBrowserEvidence.supports(row.id())||row.group().startsWith("TLS.")||row.group().startsWith("FED.")||Set.of("CORE.tool-policy", "CORE.tag-matrix", "CORE.recovery", "BROW.fresh").contains(row.group()) || row.id().equals("CORE.encoding.literal-prefix") || diagnosticSpec(row) != null;
     }
     static List<ScenarioCatalog.Fact> establishedFacts(ScenarioCatalog.Requirement row, JsonObject actual) {
+        if(LabHttpAuthenticationEvidence.supports(row.id()))return LabHttpAuthenticationEvidence.facts(row.id(),actual);
         if(LabConfigurationEvidence.supports(row.id()))return LabConfigurationEvidence.facts(row.id(),actual);
         if(LabResourceEvidence.supports(row.id()))return LabResourceEvidence.facts(row.id(),actual);
         if(LabInjectionEvidence.supports(row.id()))return LabInjectionEvidence.facts(row.id(),actual);
@@ -552,6 +554,7 @@ public final class LabProductionEvidence {
         if (!timings.keySet().equals(Set.of("startupMs", "caseMs", "cleanupMs"))) return false;
         for (String key : timings.keySet()) number(timings, key);
         var actual = capture.getAsJsonObject("observed");
+        if(LabHttpAuthenticationEvidence.supports(row.id()))return text(context,"taskPath").equals(LabHttpAuthenticationEvidence.task(row.id()))&&LabHttpAuthenticationEvidence.valid(row.id(),actual);
         if(LabConfigurationEvidence.supports(row.id()))return text(context,"taskPath").equals(":authLabComponentTest")&&LabConfigurationEvidence.valid(row.id(),actual);
         if(LabResourceEvidence.supports(row.id()))return text(context,"taskPath").equals(":authLabComponentTest")&&LabResourceEvidence.valid(row.id(),actual);
         if(LabInjectionEvidence.supports(row.id()))return text(context,"taskPath").equals(":authLabComponentTest")&&LabInjectionEvidence.valid(row.id(),actual);

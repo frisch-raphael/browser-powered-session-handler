@@ -7,6 +7,10 @@ import java.util.Objects;
 /** Holds one immutable, versioned credential; diagnostic representations never disclose its value. */
 public final class TokenSnapshot {
     private final JourneyDefinition.Identity identity;
+    private final bpsh.journey.HttpAuthentication.Protocol httpProtocol;
+    public bpsh.journey.HttpAuthentication.Protocol httpProtocol() { return httpProtocol; }
+    private final java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> httpObservations;
+    public java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> httpObservations() {return httpObservations;}
     private final long version;
     private final String value;
     private final TokenLifetime.Window lifetime;
@@ -37,6 +41,16 @@ public final class TokenSnapshot {
     }
     /** Binds captured source metadata so unfinished edits can still display the existing cache accurately. */
     public TokenSnapshot(JourneyDefinition.Identity identity, long version, String value, TokenLifetime.Window lifetime, java.util.Map<String, String> cookies, java.util.Map<String, String> namedTokens, JourneyDefinition.Extraction extraction) {
+        this(identity, version, value, lifetime, cookies, namedTokens, extraction, null);
+    }
+    public TokenSnapshot(JourneyDefinition.Identity identity, long version, String value, TokenLifetime.Window lifetime, java.util.Map<String,String> cookies, java.util.Map<String,String> namedTokens, JourneyDefinition.Extraction extraction, bpsh.journey.HttpAuthentication.Protocol httpProtocol) {
+        this(identity,version,value,lifetime,cookies,namedTokens,extraction,httpProtocol,java.util.List.of());
+    }
+    public TokenSnapshot(JourneyDefinition.Identity identity,long version,String value,TokenLifetime.Window lifetime,java.util.Map<String,String> cookies,
+            java.util.Map<String,String> namedTokens,JourneyDefinition.Extraction extraction,bpsh.journey.HttpAuthentication.Protocol httpProtocol,
+            java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> observations) {
+        this.httpObservations=java.util.List.copyOf(observations);
+        this.httpProtocol = httpProtocol;
         if (version < 1) throw new IllegalArgumentException("Invalid token version.");
         this.identity = Objects.requireNonNull(identity); this.version = version;
         this.value = Objects.requireNonNull(value); this.lifetime = Objects.requireNonNull(lifetime);
@@ -102,7 +116,11 @@ public final class TokenSnapshot {
             if (target.selector() instanceof JourneyDefinition.CookieExtraction cookie) retainedCookies.put(cookie.name(), captured);
             else if (primary == null) primary = captured;
         }
-        return new TokenSnapshot(current, version, primary == null ? first : primary, lifetime, retainedCookies, named, replacement);
+        return new TokenSnapshot(current, version, primary == null ? first : primary, lifetime, retainedCookies, named, replacement,httpProtocol,httpObservations);
+    }
+
+    public TokenSnapshot withoutHttpObservations() {
+        return new TokenSnapshot(identity,version,value,lifetime,cookies,namedTokens,extraction,null,java.util.List.of());
     }
 
     private static java.util.List<JourneyDefinition.NamedExtraction> selections(JourneyDefinition.Extraction extraction) {

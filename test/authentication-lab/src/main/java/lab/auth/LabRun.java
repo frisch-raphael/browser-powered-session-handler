@@ -364,6 +364,7 @@ public final class LabRun implements AutoCloseable {
             topology.put("issuer",ports.issuer().toString());topology.put("upstreamIssuer",ports.upstream()>0?ports.upstreamIssuer().toString():null);
         }
         view.put("federation",topology);
+        view.put("httpAuthentication",application.httpAuthenticationTargets());
         view.put("transport",cases.values().stream().filter(lease->!lease.closed&&lease.transport!=null).findFirst().map(lease->lease.transport.targets()).orElse(null));return view;
     }
 

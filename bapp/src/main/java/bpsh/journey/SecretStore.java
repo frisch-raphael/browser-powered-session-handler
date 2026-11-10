@@ -27,6 +27,7 @@ public final class SecretStore implements AutoCloseable {
      */
     public static final class Values implements AutoCloseable {
         private char[] pin;
+        private char[] httpPassword;
         private final Map<UUID, char[]> steps = new HashMap<>();
         private boolean closed;
 
@@ -37,7 +38,12 @@ public final class SecretStore implements AutoCloseable {
          * @param stepValues Secure-step UUIDs mapped to supplied values; keys and arrays must be nonnull.
          */
         public Values(char[] pin, Map<UUID, char[]> stepValues) {
+            this(pin, stepValues, null);
+        }
+        /** Copies the optional destination HTTP password, preserving a supplied empty password. */
+        public Values(char[] pin, Map<UUID, char[]> stepValues, char[] httpPassword) {
             this.pin = cloneOrNull(pin);
+            this.httpPassword = cloneOrNull(httpPassword);
             stepValues.forEach((key, value) -> steps.put(Objects.requireNonNull(key), Objects.requireNonNull(value).clone()));
         }
         /**
@@ -66,6 +72,8 @@ public final class SecretStore implements AutoCloseable {
          * @throws IllegalStateException If this snapshot is closed.
          */
         public synchronized char[] pin() { checkOpen(); return cloneOrNull(pin); }
+        /** Returns a caller-owned password copy, or null when no password was supplied. */
+        public synchronized char[] httpPassword() { checkOpen(); return cloneOrNull(httpPassword); }
         /**
          * Lists secure-step associations without disclosing their values.
          *
@@ -87,14 +95,14 @@ public final class SecretStore implements AutoCloseable {
          * @return True only for missing values; supplied empty arrays still count as values.
          * @throws IllegalStateException If this snapshot is closed.
          */
-        public synchronized boolean isEmpty() { checkOpen(); return pin == null && steps.isEmpty(); }
+        public synchronized boolean isEmpty() { checkOpen(); return pin == null && httpPassword == null && steps.isEmpty(); }
         /**
          * Clones all buffers into a snapshot with an independent lifetime.
          *
          * @return A separately owned value set that the caller must close.
          * @throws IllegalStateException If this snapshot is closed.
          */
-        public synchronized Values copy() { checkOpen(); return new Values(pin, steps); }
+        public synchronized Values copy() { checkOpen(); return new Values(pin, steps, httpPassword); }
         /**
          * Rebinds imported values to freshly allocated destination step UUIDs.
          *
@@ -114,7 +122,7 @@ public final class SecretStore implements AutoCloseable {
                 if (mapped == null) throw new IllegalArgumentException("A secure step has no destination identity.");
                 remapped.put(mapped, value);
             });
-            return new Values(pin, remapped);
+            return new Values(pin, remapped, httpPassword);
         }
         /**
          * Builds a replacement snapshot without one step association.
@@ -127,7 +135,7 @@ public final class SecretStore implements AutoCloseable {
             checkOpen();
             Map<UUID, char[]> retained = new HashMap<>(steps);
             retained.remove(id);
-            return new Values(pin, retained);
+            return new Values(pin, retained, httpPassword);
         }
         /**
          * Filters secrets to those still owned by an edited definition.
@@ -141,10 +149,14 @@ public final class SecretStore implements AutoCloseable {
          * @throws IllegalStateException If this snapshot is closed.
          */
         public synchronized Values retain(Set<UUID> secureStepIds, boolean includePin) {
+            return retain(secureStepIds, includePin, true);
+        }
+        /** Retires the HTTP password only when its saved configuration is removed. */
+        public synchronized Values retain(Set<UUID> secureStepIds, boolean includePin, boolean includeHttpPassword) {
             checkOpen();
             Map<UUID, char[]> retained = new HashMap<>();
             steps.forEach((id, value) -> { if (secureStepIds.contains(id)) retained.put(id, value); });
-            return new Values(includePin ? pin : null, retained);
+            return new Values(includePin ? pin : null, retained, includeHttpPassword ? httpPassword : null);
         }
         /**
          * Compares effective values to decide whether a configuration generation must advance.
@@ -162,7 +174,7 @@ public final class SecretStore implements AutoCloseable {
             // Only store-owned snapshots reach this comparison; their ownership prevents lock inversion.
             synchronized (other) {
                 other.checkOpen();
-                if (!Arrays.equals(pin, other.pin)
+                if (!Arrays.equals(pin, other.pin) || !Arrays.equals(httpPassword, other.httpPassword)
                         || !steps.keySet().equals(other.steps.keySet())) return false;
                 for (UUID key : steps.keySet()) if (!Arrays.equals(steps.get(key), other.steps.get(key))) return false;
                 return true;
@@ -176,8 +188,9 @@ public final class SecretStore implements AutoCloseable {
         @Override public synchronized void close() {
             if (closed) return;
             if (pin != null) Arrays.fill(pin, '\0');
+            if (httpPassword != null) Arrays.fill(httpPassword, '\0');
             steps.values().forEach(value -> Arrays.fill(value, '\0'));
-            steps.clear(); pin = null; closed = true;
+            steps.clear(); pin = null; httpPassword = null; closed = true;
         }
         /**
          * Returns a fixed redacted label, including after close.

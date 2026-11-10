@@ -29,7 +29,13 @@ import java.util.UUID;
 public record JourneyDefinition(
         UUID id, String displayName, String alias, URI authenticationUrl,
         boolean rememberSecrets, List<AuthStep.Definition> steps, Browser browser,
-        Extraction extraction, Injection injection, Cache cache, Mtls mtls, JourneyDraft draft) {
+        Extraction extraction, Injection injection, Cache cache, Mtls mtls, HttpAuthentication httpAuthentication, JourneyDraft draft) {
+    /** Existing browser journeys have no destination HTTP identity. */
+    public JourneyDefinition(UUID id, String displayName, String alias, URI authenticationUrl,
+            boolean rememberSecrets, List<AuthStep.Definition> steps, Browser browser,
+            Extraction extraction, Injection injection, Cache cache, Mtls mtls, JourneyDraft draft) {
+        this(id, displayName, alias, authenticationUrl, rememberSecrets, steps, browser, extraction, injection, cache, mtls, null, draft);
+    }
     /** Creates an executable definition without an unfinished editor snapshot. */
     public JourneyDefinition(UUID id, String displayName, String alias, URI authenticationUrl,
             boolean rememberSecrets, List<AuthStep.Definition> steps, Browser browser,
@@ -44,6 +50,10 @@ public record JourneyDefinition(
         Objects.requireNonNull(id);
         steps = List.copyOf(steps);
     }
+
+    /** HTTP-only identities deliberately have no reusable captured application credential. */
+    public boolean httpAuthenticationEnabled() { return httpAuthentication != null && httpAuthentication.enabled(); }
+    public boolean httpOnly() { return httpAuthenticationEnabled() && extraction == null; }
 
     /**
      * Names the managed ownership boundary used with UUIDs for isolation.
@@ -110,8 +120,21 @@ public record JourneyDefinition(
      * @param proxy Explicit HTTP proxy, or null for direct traffic.
      * @param navigationTimeoutMs Navigation timeout in milliseconds, later capped by the attempt budget.
      * @param tokenWaitTimeoutMs Token-observation wait in milliseconds, later capped by the attempt budget.
+     * @param ignoreHttpsErrors Explicit consent to bypass Chromium certificate checks in this journey's context only.
+     * @param formAuthentication Whether saved form-login steps execute during browser authentication.
      */
-    public record Browser(boolean headless, Proxy proxy, int navigationTimeoutMs, int tokenWaitTimeoutMs) {}
+    public record Browser(boolean headless, Proxy proxy, int navigationTimeoutMs, int tokenWaitTimeoutMs, boolean ignoreHttpsErrors, boolean formAuthentication) {
+        /** Existing browser configurations execute their configured login steps. */
+        public Browser(boolean headless, Proxy proxy, int navigationTimeoutMs, int tokenWaitTimeoutMs, boolean ignoreHttpsErrors) {
+            this(headless, proxy, navigationTimeoutMs, tokenWaitTimeoutMs, ignoreHttpsErrors, true);
+        }
+        /** Existing callers retain strict certificate verification unless they explicitly select otherwise. */
+        public Browser(boolean headless, Proxy proxy, int navigationTimeoutMs, int tokenWaitTimeoutMs) {
+            this(headless, proxy, navigationTimeoutMs, tokenWaitTimeoutMs, false);
+        }
+    }
+    /** Returns only the enabled form-login steps; stored steps remain available for editing. */
+    public List<AuthStep.Definition> loginSteps() { return browser.formAuthentication() ? steps : List.of(); }
     /**
      * Restricts token selection to response JSON, response regex, applicable cookies or a named collection.
      */
@@ -286,7 +309,7 @@ public record JourneyDefinition(
      */
     public JourneyDefinition withIdentity(UUID newId, List<AuthStep.Definition> newSteps, boolean remember) {
         return new JourneyDefinition(newId, displayName, alias, authenticationUrl, remember,
-                newSteps, browser, extraction, injection, cache, mtls, draft == null ? null : draft.remap(newSteps, alias, remember));
+                newSteps, browser, extraction, injection, cache, mtls, httpAuthentication, draft == null ? null : draft.remap(newSteps, alias, remember));
     }
 
     /**

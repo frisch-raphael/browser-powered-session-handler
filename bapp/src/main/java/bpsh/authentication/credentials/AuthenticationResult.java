@@ -16,9 +16,16 @@ import java.util.Map;
  * @param skippedSteps Actions not started because all configured credentials were already captured.
  */
 public record AuthenticationResult(JourneyDefinition.Identity identity, String token, Instant acquiredAt, long acquiredNanos,
-                      Map<String, String> cookies, Map<String, String> namedTokens, java.util.OptionalLong expiresAt, int skippedSteps) {
+                      Map<String, String> cookies, Map<String, String> namedTokens, java.util.OptionalLong expiresAt, int skippedSteps, bpsh.journey.HttpAuthentication.Protocol httpProtocol,java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> httpObservations) {
+    public AuthenticationResult(JourneyDefinition.Identity identity,String token,Instant acquiredAt,long acquiredNanos,Map<String,String> cookies,
+            Map<String,String> namedTokens,java.util.OptionalLong expiresAt,int skippedSteps,bpsh.journey.HttpAuthentication.Protocol httpProtocol) {
+        this(identity,token,acquiredAt,acquiredNanos,cookies,namedTokens,expiresAt,skippedSteps,httpProtocol,java.util.List.of());
+    }
+    public AuthenticationResult(JourneyDefinition.Identity identity, String token, Instant acquiredAt, long acquiredNanos, Map<String,String> cookies, Map<String,String> namedTokens, java.util.OptionalLong expiresAt, int skippedSteps) {
+        this(identity, token, acquiredAt, acquiredNanos, cookies, namedTokens, expiresAt, skippedSteps, null);
+    }
     /** Defensively copies the complete credential set without exposing values in diagnostics. */
-    public AuthenticationResult { cookies = Map.copyOf(cookies); namedTokens = Map.copyOf(namedTokens); }
+    public AuthenticationResult { cookies = Map.copyOf(cookies); namedTokens = Map.copyOf(namedTokens);httpObservations=java.util.List.copyOf(httpObservations); }
     /** Keeps adapters without execution metadata source-compatible. */
     public AuthenticationResult(JourneyDefinition.Identity identity, String token, Instant acquiredAt, long acquiredNanos,
                    Map<String, String> cookies, Map<String, String> namedTokens, java.util.OptionalLong expiresAt) {

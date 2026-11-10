@@ -5,7 +5,7 @@ import bpsh.journey.JourneyCatalog;
 import bpsh.authentication.credentials.AuthenticationResult;
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.authentication.AuthenticationStage;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import bpsh.journey.SecretStore;
 import bpsh.authentication.session.AuthenticationCoordinator;
 import java.util.function.BooleanSupplier;

@@ -32,6 +32,13 @@ reviews the full set in one confirmation and performs one revision-checked write
 it cancels authentication only for removed journeys and preserves unselected
 journeys and drafts. Export selected includes the whole saved selection.
 
+With one journey selected, Duplicate selected in the maintenance menu flushes
+pending edits, saves an independent copy in the same collection and opens it.
+The copy receives fresh journey and step identities and a unique name and
+derived tag alias. Unfinished settings and configured session secrets are copied,
+including popup step references; Remember secrets is off for the copy. Cached
+tokens, cookies, event history and automatic session-handling rules are not copied.
+
 Import accepts several export files in one chooser. A single review table has an
 Import checkbox, journey name, source file and editable tag alias for each row,
 plus Select all/Select none and a selected count. Import only the checked rows,
@@ -48,11 +55,20 @@ Reload selected only restores a saved journey into its editor.
 
 ## Wizard
 
-1. Setup: display name, login URL, background mode, optional PKCS#11,
+1. Setup: display name, login URL, background mode, **Allow untrusted HTTPS certificates** (off by default), an Authentication methods group with independent **Use form-based authentication**, **Use a client certificate (PKCS#11)** and **Use HTTP authentication (Basic or NTLM)** checkboxes,
    optional proxy URL, Remember secrets. Its persistence explanation is a tooltip
    on the checkbox, without a permanent paragraph below it. Advanced settings remain collapsed.
    Browser action timeout and final capture wait are entered in seconds, including
    exact fractional seconds, and retain milliseconds only in the saved format.
+   Certificate bypass applies to this journey's recording and login browser only; the client-certificate transport retains its separate Trusted CA verification.
+   Form-based authentication is selected for new journeys. Its checkbox controls
+   Login steps; disabling it retains saved steps but skips their execution and
+   required step secrets. Capture credentials stays available with every method.
+   Test & use and the Test login action are visible only when at least one method
+   is selected. With none selected, Setup asks the user to choose a method and
+   retains the unfinished journey. Certificate and HTTP pages follow their own
+   checkboxes. Existing journeys infer the form-based choice from their steps and
+   other configured methods when the saved choice is absent.
 2. Client certificate: optional page, enabled from Setup. Show only Middleware
    file initially. After the middleware path is entered, discover devices in the
    background without a PIN. Automatically select a sole device and display its
@@ -148,8 +164,10 @@ Reload selected only restores a saved journey into its editor.
    single source also keeps its name field visible. Existing JSON/origin tooltips remain sufficient. Cookie sources
    use Capture URL with task-oriented help: a page where the cookie is available
    after signing in. Avoid storage/filtering implementation details in the tooltip.
-5. Test & use: separate Test login and Use in requests groups. Test login and
-   Clear cached credentials have visible labels. Explicit testing preserves the
+5. Test & use: separate Test login and Use in requests groups. Test login has a
+   visible label. Clear cached credentials is a trash icon with an accessible
+   action name and a tooltip explaining that it clears this journey's cached
+   credentials and HTTP authentication sessions. Explicit testing preserves the
    current dock view and highlights Event log for new test activity instead of
    opening it. Opening the log clears that journey's highlight;
    failed actions carry their exact saved generation and stable step ID, with
@@ -159,13 +177,25 @@ Reload selected only restores a saved journey into its editor.
    captured credentials, including when the login page already sets a session cookie.
    When an explicit Test login or Retry finishes, show a native result dialog
    naming the journey and the captured token/cookie names and count, or the safe
-   error and identified failed step. Captured values remain in Journey cache.
-   Refresh the completed controls before opening the dialog; after dismissal,
-   reveal any identified invalid field or failed step. Automatic authentication
+   error and identified failed step. Configuration errors and HTTP authentication
+   failures instead reveal the relevant settings page and show specific inline
+   guidance, without an error dialog. Focus the identified field; when a rejected
+   account cannot be narrowed to a field, show the observed error at the HTTP
+   authentication group. Background validation never changes page or focus.
+   Captured values remain in Journey cache. Refresh the completed controls before
+   opening a result dialog; after dismissal, reveal an identified failed step. Automatic authentication
    stays non-modal. Do not show obsolete results after editing, changing journeys,
    cancelling the test or unloading the extension; unload dismisses an open result.
    Copy BPSH tag offers named credentials and explicit encodings without
-   logging in or reading cached values. No request-tag preview is displayed.
+   logging in or reading cached values. HTTP-only journeys instead show
+   Copy HTTP authentication header, which copies directly without a format menu.
+   Mixed journeys include HTTP authentication header as a menu choice, followed
+   by formats for their configured captured credentials. The HTTP settings show
+   the custom header using the current journey's tag name and explain that it
+   triggers HTTP authentication for that request and is removed before delivery.
+   Allowed-origin syntax and scope live in tooltips on the input and its label.
+   Browser certificate-check guidance is the checkbox tooltip; proxy connection
+   and unsupported proxy-authentication guidance is the Proxy URL tooltip.
 
 Back/Next are arrow icons and skip the disabled certificate page. There are no
 Save or Save and test controls. Test login flushes the latest edits before
@@ -240,7 +270,27 @@ Focus waits for expanded controls to be laid out. Service, lifecycle and unknown
 failures with no identified input leave the current control alone.
 
 Journey cache sits immediately to the right of Event log. It switches the same
-bottom dock to an explicit, read-only inspector for the selected saved journey's
+journey-owned dock. HTTP authentication rows show the configured protocol and
+account in Name and only each exact allowed origin in Value. The origin's tooltip
+contains the latest observed progress/result and timestamp, or Not yet observed
+before an exchange, including HTTP-only journeys.
+Keep HTTP observations separate from token/cookie expiry metadata: an observed
+success does not promise a live connection. HTTP rows have no Copy name/value
+actions and expose neither passwords nor NTLM payloads. Clear cache removes the
+observations and fences late in-flight updates; saved settings remain visible.
+Recording can expose its validated HTTP identity while capture settings are still
+unfinished. That inspection remains bound to the recording's saved generation.
+
+Event log includes fixed HTTP-authentication stages for browser login, recording,
+HTTP-only tests and direct requests. NTLM reports type 1 negotiation, validated
+type 2 challenge, type 3 response, acceptance and authenticated connection reuse.
+Principal failures include rejection, invalid challenge, response construction,
+connection loss, TLS, unreachable server/proxy, timeout, missing secrets, capacity,
+origin and Authorization conflicts, proxy authentication, HTTP 403 and server
+errors. Messages contain corrective guidance and safe status codes, never account
+secrets, headers, challenge bytes, URLs with paths/queries or vendor exceptions.
+
+The same dock provides explicit, read-only inspection of the selected saved journey's
 usable atomic cache publication: configured token/cookie names, values, cache
 acquisition time, expiry and refresh time. Show fixed expiry and refresh timestamps
 first, followed by acquisition time, in a compact native summary. Display the day,
@@ -254,7 +304,7 @@ a fresh login. While edits are incomplete, the inspector shows the previous
 captured selection and execution stays blocked until the settings are valid.
 Clear cache, deletion, unavailability and expiry discard the cached values.
 Omit the repeated Journey cache/journey heading; align Close with the cache summary.
-Use the full-width table without a selected-value pane. Each row has a context
+Use the full-width table without a selected-value pane. Each token/cookie row has a context
 menu with Copy name and Copy value, also available through Shift+F10. Copy name
 uses the configured token name or the actual cookie name, without the display
 alias decoration. Copy value copies the complete captured value. Clipboard

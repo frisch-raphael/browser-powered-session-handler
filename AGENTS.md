@@ -40,3 +40,7 @@ Build before using Computer Use, including for extension refresh. After the buil
 ## Code structure
 
 Production Java uses feature packages under `bapp/src/main/java/bpsh`; native tests mirror those packages. Follow `docs/designs/code-structure.md`. Keep package dependencies acyclic and run `verifyArchitecture` (also part of `check`). Journey domain, authentication/session and request settings must not import Swing, Montoya or Playwright. Runtime readers consume JourneyCatalog; edits and storage belong to journey.editing/persistence. Keep algorithms shared in their owning codec/compiler rather than duplicating them in the UI. Intentional lab binding changes use `:auth-lab:refreshBindings`; review the diff and run acceptance in a separate invocation.
+
+## UI validation
+
+Show configuration and HTTP authentication errors inline beside the relevant input or settings group, with specific, actionable guidance. An explicit Test login, Retry or recording action should reveal that page and focus the identified input; background validation must not steal focus. Do not open an error popup for these problems. When the server cannot identify which credential is wrong, show the observed error at the HTTP authentication group rather than blaming a particular field.

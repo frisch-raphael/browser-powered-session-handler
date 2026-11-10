@@ -11,7 +11,6 @@ import bpsh.journey.AuthStep;
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.authentication.AuthenticationStage;
 import bpsh.journey.JourneyDefinition;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
 import bpsh.browser.runtime.BrowserRuntimeManager;
 import bpsh.journey.SecretStore;
 import com.microsoft.playwright.BrowserContext;
@@ -47,18 +46,18 @@ public final class BrowserFlowRunner {
     /**
      * Wires shared local services without starting a browser, loading a token or touching Burp hooks.
      * @param runtime Offline verified runtime owner.
-     * @param identities Shared module/slot PIN-state owner.
+     * @param httpTransport Shared asynchronous HTTP/TLS scope factory.
      * @param traffic Active attempt-marker owner.
      * @param clock Wall time for extraction/Retry-After metadata.
      */
-    public BrowserFlowRunner(BrowserRuntimeManager runtime, Pkcs11IdentityManager identities, AuthTrafficGuard traffic, Clock clock) {
-        this(runtime, identities, traffic, clock, event -> {});
+    public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock) {
+        this(runtime, httpTransport, traffic, clock, event -> {});
     }
     /** Supplies a nonsecret production lifecycle observation seam without exposing browser/context handles. */
-    public BrowserFlowRunner(BrowserRuntimeManager runtime, Pkcs11IdentityManager identities, AuthTrafficGuard traffic, Clock clock,
+    public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock,
                              java.util.function.Consumer<Lifecycle> lifecycle) {
         java.util.Objects.requireNonNull(lifecycle); this.clock = clock;
-        this.launcher = new BrowserSessionLauncher(runtime, identities, traffic, clock, event -> lifecycle.accept(new Lifecycle(
+        this.launcher = new BrowserSessionLauncher(runtime, httpTransport, traffic, clock, event -> lifecycle.accept(new Lifecycle(
                 event.resourceId(), event.parentId(), event.identity(), ResourceEvent.valueOf(event.event().name()), event.bootstrap())));
     }
 
@@ -131,7 +130,7 @@ public final class BrowserFlowRunner {
                             long deadline, BooleanSupplier cancelled) throws AuthenticationFailure {
         BrowserContext context = session.context();
         TokenExtractor extractor = new TokenExtractor(journey.extraction(), clock);
-        boolean requiresAllSteps = !journey.steps().isEmpty() && capturesCookies(journey.extraction());
+        boolean requiresAllSteps = !journey.loginSteps().isEmpty() && capturesCookies(journey.extraction());
         context.onResponse(response -> {
             observeStatus(response, journey, extractor);
 
@@ -149,13 +148,13 @@ public final class BrowserFlowRunner {
             }
         });
         Page page = context.newPage();
-        try (var executor = new BrowserStepExecutor(context, page, journey.steps())) {
+        try (var executor = new BrowserStepExecutor(context, page, journey.loginSteps())) {
             int stepsStarted = 0;
             boolean executionFailed = false;
             try {
                 applyTimeouts(page, journey, deadline, cancelled); page.navigate(journey.authenticationUrl().toString()); cookies(context, journey, extractor);
-                for (int i = 0; i < journey.steps().size() && (requiresAllSteps || !extractor.hasToken()); i++) {
-                    var action = journey.steps().get(i); stepsStarted = i + 1;
+                for (int i = 0; i < journey.loginSteps().size() && (requiresAllSteps || !extractor.hasToken()); i++) {
+                    var action = journey.loginSteps().get(i); stepsStarted = i + 1;
                     try {
                         AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.STEP, deadline, cancelled);
                         session.checkTraffic();
@@ -200,16 +199,32 @@ public final class BrowserFlowRunner {
             }
             if (!executionFailed && !extractor.hasToken()) executor.finish(deadline, cancelled, extractor::hasToken);
             session.checkTraffic();
-            if (session.transportFailure() != null) extractor.observe(session.transportFailure());
+            observeTransportFailure(extractor, session.transportFailure());
             try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.EXTRACTION, deadline, cancelled); }
             catch (AuthenticationFailure ex) {
                 if (ex.reason() != AuthenticationFailure.Cause.TIMEOUT || extractor.hasToken()) throw ex;
                 // Preserve a positively observed PIN/trust/status/extraction cause over a generic timeout.
                 extractor.observe(ex);
             }
-            return new AuthenticationResult(identity, extractor.result(), clock.instant(), System.nanoTime(), extractor.cookieValues(), extractor.namedValues(), extractor.expirySeconds(), journey.steps().size() - stepsStarted);
+            var httpEvidence = session.httpAuthentication();
+            if(httpEvidence!=null && httpEvidence.applicationAuthorizationConflict())throw new AuthenticationFailure(AuthenticationFailure.Phase.PROXY,
+                    AuthenticationFailure.Cause.AUTH_REJECTED,"The server rejected the browser's application Authorization header. BPSH preserved that header.",
+                    "The request cannot add the journey's HTTP credentials while the application supplies Authorization.").atInput(AuthenticationFailure.Input.HTTP_AUTHENTICATION);
+            if (journey.httpAuthenticationEnabled() && (httpEvidence == null || httpEvidence.status() != bpsh.authentication.http.HttpAuthenticationEvidence.Status.ACCEPTED))
+                throw new AuthenticationFailure(AuthenticationFailure.Phase.PROXY, AuthenticationFailure.Cause.CONFIGURATION,
+                        "The server did not confirm HTTP authentication.", "Check the HTTP identity, selected protocol and allowed origins.").atInput(AuthenticationFailure.Input.HTTP_AUTHENTICATION);
+            return new AuthenticationResult(identity, extractor.result(), clock.instant(), System.nanoTime(), extractor.cookieValues(), extractor.namedValues(), extractor.expirySeconds(), journey.loginSteps().size() - stepsStarted, httpEvidence == null ? null : httpEvidence.protocol(),session.httpObservations());
         }
         }
+    }
+
+    /** Keeps the actual transport cause ahead of its synthetic proxy response, while retaining stronger evidence. */
+    static void observeTransportFailure(TokenExtractor extractor, AuthenticationFailure transport) throws AuthenticationFailure {
+        if(transport==null)return;
+        var known=extractor.observedFailure();
+        boolean gateway=known!=null && known.reason()==AuthenticationFailure.Cause.TEMPORARY_SERVICE && Integer.valueOf(502).equals(known.httpStatus());
+        if(!extractor.hasToken() && (known==null || gateway || transport.priority()<=known.priority()))throw transport;
+        extractor.observe(transport);
     }
 
     /**
@@ -309,8 +324,8 @@ public final class BrowserFlowRunner {
         char[] pin = values.pin();
         try {
             if (journey.mtls() != null && pin == null) throw missing("mTLS PIN");
-            for (int i = 0; i < journey.steps().size(); i++) if (journey.steps().get(i).type() == AuthStep.Type.SECURE_INPUT) {
-                var step = journey.steps().get(i); char[] value = values.stepValue(step.id());
+            for (int i = 0; i < journey.loginSteps().size(); i++) if (journey.loginSteps().get(i).type() == AuthStep.Type.SECURE_INPUT) {
+                var step = journey.loginSteps().get(i); char[] value = values.stepValue(step.id());
                 if (value == null) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.MISSING_SECRET,
                         "Step " + (i + 1) + " — Enter secret: no secret value was supplied.")
                         .atStep(new AuthenticationFailure.Step(step.id(), i + 1, step.type()));

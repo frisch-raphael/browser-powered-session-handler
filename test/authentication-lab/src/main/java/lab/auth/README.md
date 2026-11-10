@@ -35,6 +35,11 @@ Canonical Java fixture applications, resource ownership and evidence collectors.
 - [`LabTagSelectionEvidence.java:LabTagSelectionEvidence`](./LabTagSelectionEvidence.java): `supports, valid, facts`. Checks exact intended outputs and independent journey observations.
 - [`LabTransportEvidence.java:LabTransportEvidence`](./LabTransportEvidence.java): `input, read, preparationCurrent, facts`. Joins transport captures and process observations with explicit owned preparation.
 
+- [`HttpAuthenticationFixture.java:HttpAuthenticationFixture`](./HttpAuthenticationFixture.java): owns multi-user Basic, strict NTLMv1 and NTLMv2 applications and safe account/connection observations.
+- [`NtlmChallengeVerifier.java:NtlmChallengeVerifier`](./NtlmChallengeVerifier.java): independently verifies the selected NTLM response using lab-only primitives.
+- [`LabHttpAuthenticationEvidence.java:LabHttpAuthenticationEvidence`](./LabHttpAuthenticationEvidence.java): validates the separate HTTP profile's actual server and adapter facts.
+- [`LabObservationCapture.java:LabObservationCapture.write`](./LabObservationCapture.java): writes safe facts inside the existing isolated invocation envelope; ordinary native runs write no acceptance capture.
+
 ## Invariants
 
 - Catalog loading is metadata only; exact file inventory, profile membership, closed fields, duplicate JSON keys and binding witnesses are validated. [`ScenarioCatalog.java:ScenarioCatalog.loadResources`](./ScenarioCatalog.java); [`ScenarioCatalog.java:ScenarioCatalog.parseJson`](./ScenarioCatalog.java)

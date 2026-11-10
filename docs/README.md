@@ -14,6 +14,7 @@ The extension and authentication lab are maintained in Java. This index contains
 - [Authentication, request tags and recovery](designs/bapp-owned-authentication.md)
 - [Journey interface and credential controls](designs/interface.md)
 - [Universal offline packaging](designs/universal-packaging.md)
+- [HTTP authentication](designs/http-authentication.md) - Basic/NTLM implementation, isolated acceptance and Linux Burp qualification completed; Windows Burp UI qualification remains separate.
 
 ## Proposed features
 

@@ -20,7 +20,7 @@ import bpsh.journey.ConfigurationException;
 import bpsh.journey.JourneyDefinition;
 import bpsh.journey.JourneyDraft;
 import bpsh.journey.JourneyKey;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import bpsh.journey.SecretStore;
 import bpsh.authentication.session.AuthenticationCoordinator;
 import bpsh.authentication.session.CoordinatorFixtures;

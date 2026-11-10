@@ -28,7 +28,7 @@ A **catalog** is that saved list; a **record** is one entry in it. A **schema** 
 
 Use UTF-8 JSON, strict syntax and duplicate-member rejection. Every record below has a closed field set; reject unknown fields, invalid enum values and duplicate IDs. No implicit defaults, script expressions or native journey objects are accepted. Optional fields use explicit `null` or an empty array as specified; missing required fields are invalid.
 
-`catalog.json` has exactly `labCatalogVersion` (integer 1), `dataFiles` (the existing nine relative JSON filenames, without traversal), and `profiles` (a map from the profile names in section 2 to arrays of requirement IDs). Each data file has exactly `labCatalogVersion` (1) and `requirements` (array of expanded requirement records). Store all 980 expanded requirements explicitly; the Java catalog validator independently checks their domains/counts against the matrix. This avoids an embedded expansion language. `ScenarioCatalog` computes execution selections and checks that axis labels/IDs match their finite domains.
+`catalog.json` has exactly `labCatalogVersion` (integer 1), `dataFiles` (the existing ten relative JSON filenames, without traversal), and `profiles` (a map from the profile names in section 2 to arrays of requirement IDs). Each data file has exactly `labCatalogVersion` (1) and `requirements` (array of expanded requirement records). Store all 1030 expanded requirements explicitly; the Java catalog validator independently checks their domains/counts against the matrix. This avoids an embedded expansion language. `ScenarioCatalog` computes execution selections and checks that axis labels/IDs match their finite domains.
 
 Each requirement record has these fields:
 
@@ -167,9 +167,10 @@ All active profile members are mandatory requirements. Explicit scope exclusions
 | `federation` | All `FED.*`. |
 | `recovery` | All `CORE.recovery`, `CORE.retry`, `CORE.resources`, `RUN.recovery`; plus `CORE.lifetime.server-revoked`, `CORE.lifetime.late-old-401`. |
 | `transport` | All `TLS.*`; hardware-only evidence remains explicitly manual when selected. |
-| `burp` | All H01–H05 entries. |
+| `http-auth` | All twelve `HTTP.auth.*` cases, through the existing component/browser tasks; no PKCS#11 prerequisite. |
+| `burp` | All `HOST.http-auth.*` and H01–H05 entries. |
 | `deployment` | H06's two entries, with their linked automated package observations and mandatory actual-host checkpoints. Automated package checks alone cannot pass a host requirement. |
-| `all` | All 980 requirements/assessments, including `CORE.registry`, `CORE.storage` and CAP.assessment. |
+| `all` | All 1030 requirements/assessments, including `CORE.registry`, `CORE.storage` and CAP.assessment. |
 
 Baseline IDs: `BROW.basic.json`, `BROW.basic.cookie-one`, `BROW.basic.two-page`, `BROW.redirect.cookie-each-hop`, `CORE.tag-selection.repeat-one-output`, `CORE.injection.bearer`, `CORE.injection.cookie`, `CORE.lifetime.fresh`, `CORE.lifetime.exact-expiry`, `CORE.registry.missing-secret`, `CORE.diagnostics.missing-cookie`, `CORE.diagnostics.connection-refused`.
 

@@ -1,14 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:bpsh:journey-registry:v1",
-  "title": "BPSH native journey documents v1",
+  "$id": "urn:bpsh:journey-registry:v2",
+  "title": "BPSH native journey documents v2 (reads v1)",
   "$comment": "JourneyJson validates document structure, stable UUIDs and secret ownership. Unfinished journeys and alias collisions can be saved; execution rejects invalid or ambiguous settings. Runtime scopes, generations, tokens and browser profiles are never serialized.",
   "oneOf": [
     {
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 1
+          "enum": [
+            1,
+            2
+          ]
         },
         "kind": {
           "const": "project"
@@ -47,7 +50,10 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 1
+          "enum": [
+            1,
+            2
+          ]
         },
         "kind": {
           "const": "library"
@@ -82,7 +88,10 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 1
+          "enum": [
+            1,
+            2
+          ]
         },
         "kind": {
           "const": "export"
@@ -377,9 +386,18 @@
     "browser": {
       "type": "object",
       "properties": {
+        "formAuthentication": {
+          "type": "boolean",
+          "description": "Run the saved login steps. Legacy journeys infer this from their configured steps and authentication methods."
+        },
         "headless": {
           "type": "boolean",
           "default": false
+        },
+        "ignoreHttpsErrors": {
+          "type": "boolean",
+          "default": false,
+          "description": "Bypass Chromium certificate checks only for this journey's recording and authentication context."
         },
         "proxy": {
           "anyOf": [
@@ -984,6 +1002,9 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "httpPassword": {
+          "type": "string"
         }
       },
       "required": [],
@@ -1181,7 +1202,14 @@
           "$ref": "#/$defs/browser"
         },
         "extraction": {
-          "$ref": "#/$defs/extraction"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/extraction"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "injection": {
           "$ref": "#/$defs/injection"
@@ -1202,6 +1230,9 @@
         },
         "secrets": {
           "$ref": "#/$defs/secrets"
+        },
+        "httpAuthentication": {
+          "$ref": "#/$defs/httpAuthentication"
         }
       },
       "required": [
@@ -1216,7 +1247,30 @@
         "cache"
       ],
       "additionalProperties": false,
-      "$comment": "Runtime checks unique step IDs. Secrets are absent when there are no included values."
+      "$comment": "Runtime checks unique step IDs. Secrets are absent when there are no included values.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "extraction": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "extraction"
+            ]
+          },
+          "then": {
+            "required": [
+              "httpAuthentication"
+            ],
+            "anyOf": [
+              { "properties": { "steps": { "maxItems": 0 } } },
+              { "properties": { "browser": { "properties": { "formAuthentication": { "const": false } }, "required": ["formAuthentication"] } }, "required": ["browser"] }
+            ]
+          }
+        }
+      ]
     },
     "editorDraft": {
       "type": "object",
@@ -1259,6 +1313,21 @@
             },
             "ca": {
               "type": "string"
+            },
+            "httpProtocol": {
+              "type": "string"
+            },
+            "httpUsername": {
+              "type": "string"
+            },
+            "httpDomain": {
+              "type": "string"
+            },
+            "httpWorkstation": {
+              "type": "string"
+            },
+            "httpOrigins": {
+              "type": "string"
             }
           },
           "required": [
@@ -1280,13 +1349,23 @@
         "flags": {
           "type": "object",
           "properties": {
+            "formAuthentication": {
+              "type": "boolean"
+            },
             "headless": {
               "type": "boolean"
+            },
+            "ignoreHttpsErrors": {
+              "type": "boolean",
+              "default": false
             },
             "remember": {
               "type": "boolean"
             },
             "mtls": {
+              "type": "boolean"
+            },
+            "httpAuthentication": {
               "type": "boolean"
             }
           },
@@ -1460,6 +1539,53 @@
       ],
       "additionalProperties": false,
       "$comment": "Unfinished editor settings are stored literally. Execution reports configuration errors before browser setup. Secure values remain in the separate secrets object."
+    },
+    "httpAuthentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "username",
+        "domain",
+        "workstation",
+        "origins"
+      ],
+      "properties": {
+        "protocol": {
+          "enum": [
+            "BASIC",
+            "NTLM_V1",
+            "NTLM_V2"
+          ]
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "workstation": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "origins": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
     }
   }
 }

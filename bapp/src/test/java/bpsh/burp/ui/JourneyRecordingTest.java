@@ -36,12 +36,12 @@ class JourneyRecordingTest {
         volatile Request request;
         volatile Consumer<Event> observer;
         volatile Result result;
-        boolean onlyPin, active;
+        boolean onlyPin, active, ready = true;
         @Override public Control start(Request request, SecretStore.Values values, Consumer<Event> observer) {
             try {
                 if (active) throw new IllegalStateException("A review is active.");
                 onlyPin = values.stepIds().isEmpty(); this.request = request; this.observer = observer; active = true; starts.incrementAndGet();
-                observer.accept(new Event(State.PREPARING, null, null)); observer.accept(new Event(State.RECORDING, null, null));
+                observer.accept(new Event(State.PREPARING, null, null)); if (ready) observer.accept(new Event(State.RECORDING, null, null));
                 return new Control() {
                     @Override public void stop() { observer.accept(new Event(State.STOPPING, null, null)); }
                     @Override public void cancel() { cancellations.incrementAndGet(); active = false; if (result != null) result.close(); else observer.accept(new Event(State.CLOSED, null, null)); }
@@ -67,6 +67,39 @@ class JourneyRecordingTest {
         h.edt(() -> h.call(editor.ui, "recordSteps", new Class<?>[]{})); h.await(() -> fake.starts.get() == 1); h.edt(() -> {});
     }
     private JourneyRecordingDialog dialog(JourneyRegistryTest.NativeUi h, JourneyRegistryTest.NativeUi.Editor editor) throws Exception { return h.member(editor.ui, "recordingDialog"); }
+
+    @Test void certificatePolicyIsOptInSavedAndSharedWithRecording() throws Exception {
+        var h = harness(); try (var fake = new Fake(); var editor = h.new Editor(fixture(), null, null, fake)) {
+            open(h, editor);
+            h.edt(() -> {
+                assertFalse(editor.checks().get("ignoreHttpsErrors").isSelected());
+                editor.checks().get("ignoreHttpsErrors").doClick(0);
+                h.call(editor.ui, "save", new Class<?>[]{boolean.class}, false);
+            });
+            h.await(() -> { try { return editor.saved(); } catch (Exception error) { return false; } });
+            var saved = editor.registry.snapshot().resolve("employee").definition();
+            assertTrue(saved.browser().ignoreHttpsErrors());
+            try (var stored = bpsh.journey.persistence.JourneyJson.read(editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY), JourneyDocument.DocumentKind.PROJECT)) {
+                assertTrue(stored.journeys().getFirst().browser().ignoreHttpsErrors());
+            }
+            start(h, editor, fake); assertTrue(fake.request.setup().browser().ignoreHttpsErrors());
+        }
+    }
+
+    @Test void startupProgressIdentifiesTheBlockedStageBeforeRecordingIsReady() throws Exception {
+        var h = harness(); try (var fake = new Fake(); var editor = h.new Editor(fixture(), null, null, fake)) {
+            fake.ready = false; open(h, editor); start(h, editor, fake);
+            for (var phase : Map.of(JourneyRecording.State.EXTRACTING_BROWSER, "Extracting bundled browser files...",
+                    JourneyRecording.State.STARTING_DRIVER, "Starting the browser driver...",
+                    JourneyRecording.State.STARTING_BROWSER, "Starting Chromium...").entrySet()) {
+                h.edt(() -> fake.observer.accept(new JourneyRecording.Event(phase.getKey(), null, null)));
+                h.edt(() -> { assertEquals(phase.getValue(), dialog(h, editor).progress.getText()); assertFalse(dialog(h, editor).stop.isEnabled()); });
+            }
+            h.edt(() -> fake.observer.accept(new JourneyRecording.Event(JourneyRecording.State.CLOSED, null,
+                    new JourneyRecording.Problem(JourneyRecording.Field.GENERAL, "The bundled browser runtime could not load."))));
+            h.edt(() -> { assertNull(dialog(h, editor)); assertTrue(((SessionStatusBar) h.member(editor.ui, "status")).getText().contains("runtime could not load")); });
+        }
+    }
 
     @Test void reviewCorrectionsKeepTheCapturedValueBothWaysAndNeverAutosaveBeforeApply() throws Exception {
         var h = harness(); try (var fake = new Fake(); var editor = h.new Editor(fixture(), null, null, fake)) {

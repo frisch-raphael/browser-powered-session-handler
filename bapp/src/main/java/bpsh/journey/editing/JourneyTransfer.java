@@ -84,7 +84,7 @@ public final class JourneyTransfer {
                         throw new IllegalArgumentException("Alias is already used by an active journey; choose a unique alias.");
                     JourneyDefinition copy = j.withIdentity(id, steps, false);
                     copy = new JourneyDefinition(id, copy.displayName(), JourneyNames.validateAlias(alias), copy.authenticationUrl(), false,
-                            steps, copy.browser(), copy.extraction(), copy.injection(), copy.cache(), copy.mtls(),
+                            steps, copy.browser(), copy.extraction(), copy.injection(), copy.cache(), copy.mtls(), copy.httpAuthentication(),
                             copy.draft() == null ? null : copy.draft().remap(steps, alias, false));
                     journeys.add(copy);
                     SecretStore.Values values = source.secrets().get(j.id());

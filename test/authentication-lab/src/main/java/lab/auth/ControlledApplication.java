@@ -34,6 +34,12 @@ public final class ControlledApplication implements AutoCloseable {
         public static Origin http(String host) throws IOException {
             return new Origin(listener(false), "http", host);
         }
+        /** Creates an owned TLS listener from prepared lab material without changing any client trust store. */
+        public static Origin https(javax.net.ssl.SSLContext context, String host) throws IOException {
+            var server = (HttpsServer) listener(true);
+            server.setHttpsConfigurator(new com.sun.net.httpserver.HttpsConfigurator(context));
+            return new Origin(server, "https", host);
+        }
         /** Keeps browser fixtures above Chromium's restricted service ports, even with a custom OS ephemeral range. */
         static HttpServer listener(boolean tls) throws IOException {
             for (int attempt = 0; attempt < 64; attempt++) {
@@ -68,18 +74,33 @@ public final class ControlledApplication implements AutoCloseable {
     private final Origin appOwner, alternateOwner;
     private final Semaphore slots = new Semaphore(64);
     private final LoginFlows flows;
+    private final Map<HttpAuthenticationFixture.Protocol,HttpAuthenticationFixture> httpAuthentication = new LinkedHashMap<>();
     ControlledApplication(LabRun run) throws IOException {
         this.run = run; appOwner = Origin.http("127.0.0.1"); app = appOwner.server();
         try { alternateOwner = Origin.http("127.0.0.1"); alternate = alternateOwner.server(); }
         catch (IOException ex) { appOwner.close(); throw ex; }
+        try {
+            if (run.spec().profiles().contains("http-auth")) for (var protocol : HttpAuthenticationFixture.Protocol.values())
+                httpAuthentication.put(protocol,new HttpAuthenticationFixture(protocol,Map.of("user-a","alpha-password","user-b","bravo-password"),null));
+        } catch (InterruptedException | RuntimeException failure) {
+            httpAuthentication.values().forEach(HttpAuthenticationFixture::close);appOwner.close();alternateOwner.close();
+            if(failure instanceof InterruptedException)Thread.currentThread().interrupt();
+            throw new IOException("HTTP authentication lab startup failed.",failure);
+        }
         flows = new LoginFlows(run);
         for (var server : List.of(app, alternate)) server.createContext("/", this::handle);
     }
     void start() { app.start(); alternate.start(); }
     URI origin() { return URI.create("http://127.0.0.1:" + app.getAddress().getPort()); }
     URI alternateOrigin() { return URI.create("http://127.0.0.1:" + alternate.getAddress().getPort()); }
+    List<Map<String,Object>> httpAuthenticationTargets() {
+        return httpAuthentication.entrySet().stream().map(entry -> Map.<String,Object>of("protocol",entry.getKey().name(),
+                "origin",entry.getValue().url("/").toString(),"request",entry.getValue().url("/whoami").toString(),
+                "login",entry.getValue().url("/login").toString(),"users",List.of("user-a","user-b"))).toList();
+    }
     @Override public void close() {
-        try { appOwner.close(); } finally { alternateOwner.close(); }
+        try { httpAuthentication.values().forEach(HttpAuthenticationFixture::close); }
+        finally { try { appOwner.close(); } finally { alternateOwner.close(); } }
     }
     private void handle(HttpExchange exchange) throws IOException {
         LabRun.CaseLease lease = null; boolean entered = false;
@@ -88,8 +109,17 @@ public final class ControlledApplication implements AutoCloseable {
             String path = exchange.getRequestURI().getPath();
             if (path.equals("/") && exchange.getRequestMethod().equals("GET")) {
                 var links = new StringBuilder("<html><body><h1>Authentication lab targets</h1><p>Fixture pages; production journeys and host checks remain separately gated.</p><ul>");
+                for (var target : httpAuthenticationTargets()) links.append("<li><a href=\"").append(target.get("login")).append("\">")
+                        .append(target.get("protocol")).append(" protected login</a>; <a href=\"").append(target.get("request")).append("\">account proof</a></li>");
+                if(!httpAuthentication.isEmpty())links.append("<li><a href=\"/http-auth/observations\">HTTP authentication observations</a></li>");
                 for (var c : run.cases()) links.append("<li><a href=\"").append(c.startUri()).append("\">").append(c.id()).append("</a> (generation ").append(c.generation()).append(")</li>");
                 reply(exchange, 200, "text/html; charset=utf-8", links.append("</ul></body></html>").toString()); return;
+            }
+            if(path.equals("/http-auth/observations") && exchange.getRequestMethod().equals("GET")) {
+                json(exchange,200,Map.of("applications",httpAuthentication.entrySet().stream().map(entry->Map.of(
+                        "protocol",entry.getKey().name(),"observations",entry.getValue().observations,
+                        "handshakes",entry.getValue().handshakes.get(),"posts",entry.getValue().applicationPosts.get(),
+                        "leakedDirectives",entry.getValue().leakedDirectives.get())).toList()));return;
             }
             String[] parts = path.split("/", 4);
             if (parts.length < 4 || !parts[1].equals("cases")) throw LabRun.error(404, "NOT_FOUND");

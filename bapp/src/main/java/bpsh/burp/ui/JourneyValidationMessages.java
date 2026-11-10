@@ -46,6 +46,10 @@ final class JourneyValidationMessages {
             case "urlPrefix" -> "URL prefix";
             default -> label;
         };
+        if(path.startsWith("httpAuthentication")) label=switch(leaf) {
+            case "username" -> "HTTP username";case "domain" -> "NTLM domain";case "workstation" -> "Workstation";
+            case "origins" -> "Allowed HTTP authentication origins";case "protocol" -> "HTTP authentication type";default -> "HTTP authentication";
+        };
         if (path.startsWith("browser.proxy")) label = "Proxy URL";
         if (path.equals("recovery.pattern")) label = "RE2 expression";
         var row = java.util.regex.Pattern.compile("extraction\\.tokens\\[(\\d+)\\]").matcher(path);

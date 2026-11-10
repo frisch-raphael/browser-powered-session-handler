@@ -3,6 +3,11 @@ import java.util.*;
 /** Validates typed secret ownership and explicit complete-secret requirements without serialization. */
 public final class JourneySecrets {
     private JourneySecrets() {}
+    /** Unfinished raw HTTP settings still own their editable password. */
+    public static boolean hasHttpConfiguration(JourneyDefinition journey) {
+        return journey.httpAuthentication() != null || journey.draft() != null &&
+                (journey.draft().flags().get("httpAuthentication") || !journey.draft().text().get("httpUsername").isEmpty());
+    }
     private static ConfigurationException invalid(String path, String reason) { return new ConfigurationException(path + ": " + reason + "."); }
     /**
      * Checks typed secret ownership without creating JSON strings for unremembered values.
@@ -16,14 +21,16 @@ public final class JourneySecrets {
      * @throws IllegalStateException If the snapshot is closed.
      */
     public static void validateSecretOwnership(JourneyDefinition journey, SecretStore.Values values) {
-        char[] pin = values.pin();
+        char[] pin = values.pin(), httpPassword = values.httpPassword();
         try {
             if (pin != null && journey.mtls() == null) throw invalid("secrets.mtlsPin", "requires mTLS configuration");
+            if (httpPassword != null && !hasHttpConfiguration(journey) && journey.draft() == null) throw invalid("secrets.httpPassword", "requires HTTP authentication configuration");
             Set<UUID> secure = new HashSet<>();
             journey.steps().stream().filter(s -> s.type() == AuthStep.Type.SECURE_INPUT).forEach(s -> secure.add(s.id()));
             if (!secure.containsAll(values.stepIds())) throw invalid("secrets.stepValues", "value must belong to a secure step in this journey");
         } finally {
             if (pin != null) Arrays.fill(pin, '\0');
+            if (httpPassword != null) Arrays.fill(httpPassword, '\0');
         }
     }
     /**
@@ -40,6 +47,7 @@ public final class JourneySecrets {
     public static void requireCompleteSecrets(JourneyDefinition journey, SecretStore.Values values) {
         String owner = "journey " + JourneyNames.validateAlias(journey.alias()) + ".secrets";
         if (journey.mtls() != null) requireSecret(values.pin(), "mTLS PIN", owner);
+        if (hasHttpConfiguration(journey)) requireSecret(values.httpPassword(), "HTTP authentication password", owner);
         for (int i = 0; i < journey.steps().size(); i++) {
             AuthStep.Definition step = journey.steps().get(i);
             if (step.type() == AuthStep.Type.SECURE_INPUT) requireSecret(values.stepValue(step.id()), "secure-input value at step " + (i + 1), owner);

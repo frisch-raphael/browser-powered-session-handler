@@ -12,7 +12,11 @@ dependencies {
     compileOnly("net.portswigger.burp.extensions:montoya-api:2026.4")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
     implementation("com.microsoft.playwright:playwright:1.64.0")
-    implementation("io.github.littleproxy:littleproxy:2.9.1")
+    implementation("io.netty:netty-codec-http:4.2.17.Final")
+    implementation("io.netty:netty-handler:4.2.17.Final")
+    implementation("org.slf4j:slf4j-api:2.0.20")
+    implementation("org.apache.httpcomponents.client5:httpclient5:5.6.5")
+    implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("com.google.re2j:re2j:1.8")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.86")
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
@@ -178,3 +182,11 @@ if (System.getProperty("authlab.plan") == null) {
 }
 
 apply(from = "gradle/architecture.gradle.kts")
+
+// An explicit local replacement uses the existing compatible dependency graph.
+providers.gradleProperty("jcifsReplacement").orNull?.let { replacement ->
+    val binary=file(replacement)
+    require(binary.isFile && providers.gradleProperty("jcifsReplacementSources").isPresent) { "Provide replacement JAR and complete source ZIP." }
+    tasks.withType<JavaCompile>().configureEach { classpath=classpath.filter { it.name!="jcifs-ng-2.1.10.jar" } + files(binary) }
+    tasks.withType<Test>().configureEach { classpath=classpath.filter { it.name!="jcifs-ng-2.1.10.jar" } + files(binary) }
+}

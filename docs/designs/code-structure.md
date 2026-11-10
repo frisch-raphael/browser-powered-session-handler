@@ -11,10 +11,14 @@ bpsh/
   authentication/            Failures, progress and scheduling policy
     credentials/             Extraction observations, results and lifetimes
     session/                 Coordinator, executors and event history
+    http/                    Direct identity lifecycle and HTTP delivery contracts
   request/                   Automatic rules and request-origin settings
   browser/                   Real browser attempts and traffic provenance
     runtime/                 Bundled browser assets and driver lifecycle
-    mtls/                    Device discovery and attempt TLS transport
+    proxy/                   Browser ingress and attempt evidence
+  transport/
+    httpauth/                Shared HTTP workers, identity pools and NTLM adapter
+    tls/                     Destination trust and shared security-device ownership
   burp/
     http/                    Montoya hooks, tags, injection, recovery and diagnostics
     ui/                      Swing editor and explicit user actions
@@ -39,7 +43,7 @@ bpsh/
 - Authentication contracts and request settings may use journey values. Session policy depends on the read-only catalog and credential contracts, never editing, persistence, UI, browser or Montoya.
 - Credential extraction may use Jackson/RE2 for bounded parsing, but does not import Playwright, Montoya or Swing.
 - Editing depends on journey values, request settings and the explicit persistence boundary. Concrete storage owns document validation and I/O; the catalog never exposes those operations.
-- Browser execution adapts core attempt contracts. Runtime/native resources are grouped beneath the browser that owns their lifecycle.
+- Browser execution adapts core attempt contracts. Browser asset resources live in browser.runtime. HTTP delivery workers and identity pools live in transport.httpauth, and destination TLS/device ownership lives in transport.tls. The composition root injects the same HTTP runtime into browser and direct-request execution.
 - Burp UI/HTTP adapters depend on core contracts. Only the composition root wires the complete graph.
 - Package paths, permitted edges, framework exclusions and absence of cycles are enforced by `verifyArchitecture`, included in `check`.
 

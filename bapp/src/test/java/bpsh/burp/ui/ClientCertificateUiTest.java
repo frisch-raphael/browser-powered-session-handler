@@ -8,10 +8,10 @@ import bpsh.journey.persistence.ProjectStore;
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.journey.JourneyDefinition;
 import bpsh.journey.JourneyKey;
-import bpsh.browser.mtls.JourneyTlsProxy;
-import bpsh.browser.mtls.Pkcs11Failures;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
-import bpsh.browser.mtls.Pkcs11IdentityManagerTest;
+import bpsh.browser.proxy.BrowserProxyForwarder;
+import bpsh.transport.tls.Pkcs11Failures;
+import bpsh.transport.tls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManagerTest;
 import bpsh.journey.SecretStore;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -33,7 +33,7 @@ class ClientCertificateUiTest {
             var key = editor.registry.snapshot().resolve("employee").identity().key();
             h.edt(() -> h.call(editor.ui, "open", new Class<?>[]{JourneyKey.class}, key));
             h.await(() -> { try { return key.equals(h.member(editor.ui, "editing")) && !(boolean) h.member(editor.ui, "editorLoading"); } catch (Exception error) { return false; } });
-            h.edt(() -> { ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
+            h.edt(() -> { WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
             h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
             h.await(() -> { try { return ((JTextArea) editor.checks().get("mtls").getClientProperty("validationMessage")).isVisible(); } catch (Exception error) { return false; } });
             h.edt(() -> {
@@ -64,10 +64,10 @@ class ClientCertificateUiTest {
         var h = harness(); try (var editor = h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
             var key = editor.registry.snapshot().resolve("employee").identity().key(); h.edt(() -> h.call(editor.ui, "open", new Class<?>[]{JourneyKey.class}, key));
             h.await(() -> { try { return key.equals(h.member(editor.ui, "editing")) && !(boolean) h.member(editor.ui, "editorLoading"); } catch (Exception error) { return false; } });
-            h.edt(() -> { editor.checks().get("mtls").doClick(0); ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
+            h.edt(() -> { editor.checks().get("mtls").doClick(0); WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
             var module = editor.fields().get("module"); h.await(() -> ((JTextArea) module.getClientProperty("validationMessage")).isVisible());
             h.edt(() -> {
-                assertEquals(1, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals("Client certificate", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 assertTrue(editor.fields().get("module").isVisible()); assertFalse(((JPanel) h.member(editor.ui, "certificateSettings")).isVisible());
                 assertFalse(((SessionStatusBar) h.member(editor.ui, "status")).isLogOpen());
             });
@@ -80,10 +80,12 @@ class ClientCertificateUiTest {
         if (!mode.equals("missing")) java.nio.file.Files.writeString(ca, mode.equals("empty") ? "" : "synthetic invalid PEM");
         var mtls = new JourneyDefinition.Mtls(root.resolve("fake.dll").toString(), new JourneyDefinition.Slot(JourneyDefinition.SlotKind.ID, 7),
                 "a".repeat(64), java.util.List.of(java.net.URI.create("https://login.example")), ca.toString());
-        var failure = assertThrows(AuthenticationFailure.class, () -> new JourneyTlsProxy(mtls, null, null, java.time.Clock.systemUTC()));
+        try(var httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime()) {
+        var failure = assertThrows(AuthenticationFailure.class, () -> bpsh.support.IntegrationFixtures.browserProxy(httpTransport, mtls, null, null, java.time.Clock.systemUTC()));
         assertEquals(AuthenticationFailure.Input.TRUSTED_CA, failure.input().input());
         assertEquals(AuthenticationFailure.Cause.TRUST, failure.reason()); assertNull(failure.getCause());
         assertFalse(failure.getMessage().contains(ca.toString()));
+        }
     }
 
     @Test void singleDeviceIsDiscoveredWithoutPinAndNoManualSlotControlsAreDisplayed() throws Exception {
@@ -182,15 +184,15 @@ class ClientCertificateUiTest {
                 var key = editor.registry.snapshot().resolve("employee").identity().key(); h.edt(() -> h.call(editor.ui, "open", new Class<?>[]{JourneyKey.class}, key));
                 assertTrue(started.await(3, java.util.concurrent.TimeUnit.SECONDS));
                 if (mode.equals("ready")) h.await(() -> { try { return h.member(editor.ui, "displayedDevice") != null; } catch (Exception error) { return false; } });
-                h.edt(() -> { ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
+                h.edt(() -> { WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0); });
                 h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
                 h.await(() -> { try { return ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex() == 1; } catch (Exception error) { return false; } });
-                if (mode.equals("leave")) h.edt(() -> ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4));
+                if (mode.equals("leave")) h.edt(() -> WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"));
                 release.countDown();
                 h.await(() -> { try { return h.member(editor.ui, "displayedDevice") != null; } catch (Exception error) { return false; } });
                 h.edt(() -> {
                     var pin = (JPasswordField) h.member(editor.ui, "pin"); var guidance = (JTextArea) pin.getClientProperty("validationMessage");
-                    if (mode.equals("leave")) { assertEquals(4, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex()); assertFalse(guidance.isVisible()); }
+                    if (mode.equals("leave")) { assertEquals("Test & use", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard")))); assertFalse(guidance.isVisible()); }
                     else { assertTrue(pin.isVisible()); assertTrue(pin.isEnabled()); assertTrue(guidance.isVisible()); assertTrue(guidance.getText().contains("mTLS PIN")); }
                     var status = (SessionStatusBar) h.member(editor.ui, "status"); assertFalse(status.isLogOpen());
                     assertEquals("New test events available", ((JToggleButton) h.member(status, "eventLog")).getAccessibleContext().getAccessibleDescription());
@@ -218,14 +220,14 @@ class ClientCertificateUiTest {
             h.await(() -> { try { return h.member(editor.ui, "displayedDevice") != null; } catch (Exception error) { return false; } });
             h.edt(() -> {
                 ((JPasswordField) h.member(editor.ui, "pin")).setText("synthetic-pin");
-                ((JTabbedPane) h.member(editor.ui, "wizard")).setSelectedIndex(4); ((JButton) h.member(editor.ui, "testButton")).doClick(0);
+                WizardTestPages.select(((JTabbedPane) h.member(editor.ui, "wizard")), "Test & use"); ((JButton) h.member(editor.ui, "testButton")).doClick(0);
             });
             h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
             String member = switch (mode) { case "device" -> "devicePicker"; case "pin" -> "pin"; case "certificate" -> "chooseCertificateButton"; default -> null; };
             JComponent target = member == null ? editor.fields().get(mode.equals("module") ? "module" : "ca") : h.member(editor.ui, member);
             h.await(() -> ((JTextArea) target.getClientProperty("validationMessage")).isVisible());
             h.edt(() -> {
-                assertEquals(1, ((JTabbedPane) h.member(editor.ui, "wizard")).getSelectedIndex());
+                assertEquals("Client certificate", WizardTestPages.selected(((JTabbedPane) h.member(editor.ui, "wizard"))));
                 assertTrue(target.isVisible()); assertTrue(target.isEnabled());
                 if (mode.equals("ca")) assertTrue(((JPanel) h.member(editor.ui, "certificateAdvanced")).isVisible());
                 assertFalse(((SessionStatusBar) h.member(editor.ui, "status")).isLogOpen());

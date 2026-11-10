@@ -14,22 +14,22 @@ import static org.junit.jupiter.api.Assertions.*;
 class CatalogContractTest {
     @TempDir Path temporary;
     private static final List<String> FILES = List.of("catalog.json", "fixtures.json", "browser.json", "credentials.json",
-            "recovery.json", "registry.json", "federation.json", "transport.json", "burp.json", "assessments.json");
+            "recovery.json", "registry.json", "federation.json", "transport.json", "http-authentication.json", "burp.json", "assessments.json");
 
     @Test void catalogRetainsEveryDeclaredRequirementWithoutClaimingExecutedCoverage() {
         var catalog = ScenarioCatalog.load();
-        assertEquals(980, catalog.requirements().size());
-        assertEquals(41, catalog.requirements().stream().map(ScenarioCatalog.Requirement::group).distinct().count());
-        assertEquals(24, catalog.requirements().stream().filter(r -> r.layer() == ScenarioCatalog.Layer.HOST).count());
+        assertEquals(1030, catalog.requirements().size());
+        assertEquals(52, catalog.requirements().stream().map(ScenarioCatalog.Requirement::group).distinct().count());
+        assertEquals(27, catalog.requirements().stream().filter(r -> r.layer() == ScenarioCatalog.Layer.HOST).count());
         assertEquals(16, catalog.requirements().stream().filter(r -> r.layer() == ScenarioCatalog.Layer.ASSESSMENT).count());
         assertTrue(catalog.requirements().stream().filter(r -> r.layer() != ScenarioCatalog.Layer.FIXTURE && !LabProductionEvidence.supported(r)).allMatch(r -> r.binding() == null));
         assertTrue(catalog.requirements().stream().filter(r -> r.layer() == ScenarioCatalog.Layer.FIXTURE&&r.disposition()!=ScenarioCatalog.Disposition.EXCLUDED).allMatch(r -> r.binding() != null));
         var selected = catalog.select(List.of("all"));
-        assertEquals(851, selected.uniqueBoundExecutions());
-        assertEquals(40, selected.unboundRequirements());
+        assertEquals(898, selected.uniqueBoundExecutions());
+        assertEquals(43, selected.unboundRequirements());
         assertEquals(0, selected.requirements().stream().filter(r -> r.readiness().equals("BLOCKED")).count());
         assertEquals(28,selected.requirements().stream().filter(r->r.readiness().equals("EXCLUDED")).count());
-        assertEquals(912, selected.requirements().stream().filter(r -> r.readiness().equals("BOUND_NOT_EXECUTED")).count());
+        assertEquals(959, selected.requirements().stream().filter(r -> r.readiness().equals("BOUND_NOT_EXECUTED")).count());
     }
     @Test void tagMatrixUsesItsDeclaredAlphanumericScopeAndRetainsSeparateLiteralOutputOwnership() {
         var catalog = ScenarioCatalog.load();
@@ -73,7 +73,7 @@ class CatalogContractTest {
         var catalog = ScenarioCatalog.load();
         var counts = Map.ofEntries(Map.entry("fixtures", 523), Map.entry("baseline", 12), Map.entry("revised", 103),
                 Map.entry("credentials", 179), Map.entry("diagnostics", 18), Map.entry("browser", 49), Map.entry("federation", 31),
-                Map.entry("recovery", 106), Map.entry("transport", 19), Map.entry("burp", 22), Map.entry("deployment", 2), Map.entry("all", 980));
+                Map.entry("recovery", 106), Map.entry("transport", 19), Map.entry("http-auth", 47), Map.entry("burp", 25), Map.entry("deployment", 2), Map.entry("all", 1030));
         counts.forEach((profile, expected) -> assertEquals(expected, catalog.select(List.of(profile)).requirements().size(), profile));
         assertEquals(186, catalog.select(List.of("baseline", "credentials", "baseline")).requirements().size());
         assertEquals(12, catalog.select(List.of("baseline")).requirements().size());

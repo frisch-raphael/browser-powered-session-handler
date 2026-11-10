@@ -82,31 +82,7 @@ public final class ProductionLabAdapter {
         Files.writeString(path.resolve(name+".json"),AuthLabSupport.JSON.writeValueAsString(capture),java.nio.file.StandardOpenOption.CREATE_NEW);
     }
     /** Shared actual-process witness for production journeys and explicit credential-verifier browsers. */
-    public static final class BrowserProcesses implements AutoCloseable {
-        private final long began=System.nanoTime();
-        private final Map<Long,Instant> observed=new ConcurrentHashMap<>();
-        private final java.util.Set<Long> drivers=ConcurrentHashMap.newKeySet();
-        private final java.util.concurrent.ScheduledExecutorService observer=Executors.newSingleThreadScheduledExecutor();
-        private long alive;private boolean closed;
-        public BrowserProcesses(){observer.scheduleAtFixedRate(this::sample,0,5,TimeUnit.MILLISECONDS);}
-        private void sample(){ProcessHandle.current().descendants().forEach(handle->{
-            String command=handle.info().command().orElse("").replace('\\','/').toLowerCase(java.util.Locale.ROOT);
-            if(command.endsWith("/node.exe")||command.endsWith("/chrome.exe")||command.endsWith("/javaw.exe")||command.endsWith("/java"))observed.putIfAbsent(handle.pid(),handle.info().startInstant().orElse(Instant.EPOCH));
-            if(command.endsWith("/node.exe"))drivers.add(handle.pid());
-        });}
-        public int processes(){return observed.size();}public int drivers(){return drivers.size();}public long alive(){return alive;}
-        public void requireObserved(int expectedDrivers){assertTrue(closed);assertFalse(observed.isEmpty(),"A real browser process witness is required.");assertEquals(expectedDrivers,drivers.size(),"Require exactly the owned driver count.");}
-        @Override public void close() throws Exception {
-            if(closed)return;closed=true;sample();observer.shutdownNow();assertTrue(observer.awaitTermination(2,TimeUnit.SECONDS));
-            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
-            do {
-                alive=observed.entrySet().stream().filter(entry->ProcessHandle.of(entry.getKey()).filter(handle->handle.isAlive()
-                        &&(entry.getValue().equals(Instant.EPOCH)||handle.info().startInstant().orElse(Instant.EPOCH).equals(entry.getValue()))).isPresent()).count();
-                if(alive==0)break;Thread.sleep(10);
-            }while(System.nanoTime()<deadline);
-            assertEquals(0,alive,"Observed browser/driver descendants must close after their owner returns.");
-        }
-    }
+    public static final class BrowserProcesses extends BrowserProcessWitness { }
     public static final class Prepared implements AutoCloseable {
         public final JourneyDefinition definition;
         public final SecretStore.Values values;

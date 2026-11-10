@@ -1,6 +1,6 @@
 package bpsh.burp.ui;
 
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import javax.naming.ldap.LdapName;

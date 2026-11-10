@@ -228,7 +228,11 @@ Acceptance must configure automatic session handling with a scope matching the r
 
 ### Recorder lifecycle and event transport
 
+Setup includes **Allow untrusted HTTPS certificates**, off by default. It applies to this journey's Chromium context for both recording and Test login, with either a direct connection or an explicit proxy. It does not install a CA, change system trust, affect other journeys or disable the client-certificate transport's upstream verification. That transport continues to use its existing Trusted CA setting. The optional `browser.ignoreHttpsErrors` field and matching draft flag default to false when absent, including older saved drafts.
+
 Use an explicit lifecycle: Preparing, Recording, Stopping, Review, Applying, then Closed. Preparation validates the visible setup snapshot, serializes behind admitted editor writes and starts the shared browser session on its owning worker. Pause further autosave admission through review; unfinished names, aliases, old steps and capture settings do not have to become executable or persistable to start recording. Capture the resulting current storage revision after the write barrier and recheck it before applying. Resume normal autosave on discard or replacement. Install the private event observer and page/frame lifecycle listeners and start recording on the managed context before initial navigation. Preparation and navigation errors retain the old steps and produce classified guidance.
+
+Browser preparation has a separate 60-second budget within the recording's 30-minute overall lifetime. Display the fixed cache-wait, verification, extraction, driver-start, Chromium-start and login-navigation stages in the recording dialog. Runtime linkage failures must close the recording with safe reload guidance and release its reservation, rather than leaving the dialog waiting for a worker that has exited.
 
 The recorder worker must continue pumping Playwright events while waiting for user activity. Use bounded Playwright event waits and a thread-safe command channel for Stop/Cancel; do not block the owning thread on a UI future or use Thread.sleep as an event pump. Only the owner calls Playwright. The driver watchdog remains able to terminate the owned process tree when cancellation cannot complete normally.
 

@@ -2,8 +2,7 @@ package bpsh.browser;
 
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.authentication.AuthenticationStage;
-import bpsh.browser.mtls.JourneyTlsProxy;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.browser.proxy.BrowserProxyForwarder;
 import bpsh.browser.runtime.BrowserRuntimeManager;
 import bpsh.browser.runtime.PlaywrightDriverAdapter;
 import bpsh.journey.BrowserSetup;
@@ -16,7 +15,6 @@ import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.Proxy;
 import java.time.Clock;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,21 +32,21 @@ public final class BrowserSessionLauncher {
     public record Lifecycle(long resourceId, long parentId, JourneyDefinition.Identity identity, ResourceEvent event, boolean bootstrap) {}
 
     private final BrowserRuntimeManager runtime;
-    private final Pkcs11IdentityManager identities;
+    private final bpsh.authentication.http.HttpTransportFactory httpTransport;
     private final AuthTrafficGuard traffic;
     private final Clock clock;
     private final Consumer<Lifecycle> lifecycle;
     private final AtomicLong resourceIds = new AtomicLong();
 
     /** Captures shared services without preparing assets, opening a device or starting a browser. */
-    public BrowserSessionLauncher(BrowserRuntimeManager runtime, Pkcs11IdentityManager identities, AuthTrafficGuard traffic, Clock clock) {
-        this(runtime, identities, traffic, clock, ignored -> {});
+    public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock) {
+        this(runtime, httpTransport, traffic, clock, ignored -> {});
     }
 
     /** Adds a safe observation seam while keeping resource ownership inside the browser boundary. */
-    public BrowserSessionLauncher(BrowserRuntimeManager runtime, Pkcs11IdentityManager identities, AuthTrafficGuard traffic,
+    public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic,
             Clock clock, Consumer<Lifecycle> lifecycle) {
-        this.runtime = runtime; this.identities = identities; this.traffic = traffic; this.clock = clock;
+        this.runtime = runtime; this.httpTransport = httpTransport; this.traffic = traffic; this.clock = clock;
         this.lifecycle = java.util.Objects.requireNonNull(lifecycle);
     }
 
@@ -94,7 +92,7 @@ public final class BrowserSessionLauncher {
         private OwnedBrowser browser;
         private OwnedContext context;
         private PlaywrightDriverAdapter.Session driver;
-        private JourneyTlsProxy transport;
+        private BrowserProxyForwarder transport;
         private AuthTrafficGuard.Lease trafficLease;
         private boolean closed;
 
@@ -118,6 +116,9 @@ public final class BrowserSessionLauncher {
         }
 
         /** Returns safe native transport evidence without replacing successful credential extraction. */
+        public bpsh.authentication.http.HttpAuthenticationEvidence httpAuthentication() { owner(); return transport == null ? null : transport.authentication(); }
+
+        public java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> httpObservations() {owner();return transport==null?java.util.List.of():transport.observations();}
         public AuthenticationFailure transportFailure() { owner(); return transport == null ? null : transport.failure(); }
 
         /** Closes context, browser, driver and transport before revoking ownership of their traffic. */
@@ -127,7 +128,7 @@ public final class BrowserSessionLauncher {
             for (AutoCloseable resource : new AutoCloseable[]{context, browser, driver, transport, trafficLease}) {
                 if (resource == null) continue;
                 try { resource.close(); }
-                catch (Exception error) {
+                catch (Exception | LinkageError error) {
                     AuthenticationFailure safe = error instanceof AuthenticationFailure classified ? classified
                             : new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
                                     "The browser session could not finish closing.");
@@ -142,7 +143,7 @@ public final class BrowserSessionLauncher {
      * Prepares a fresh session without navigating or executing login steps.
      * @param identity Journey generation used only for safe lifecycle attribution.
      * @param setup Setup already validated by the shared codec.
-     * @param inputValues Borrowed snapshot; only a temporary PIN copy is read and wiped here.
+     * @param inputValues Borrowed snapshot; the shared factory copies setup secrets before returning.
      * @param visibility Explicit consumer override, independent of saved browser settings.
      * @param explicitRecovery Whether the user explicitly authorized recovery from PIN suppression.
      * @param deadline Original monotonic deadline, including setup and native work.
@@ -154,20 +155,37 @@ public final class BrowserSessionLauncher {
     public Session open(JourneyDefinition.Identity identity, BrowserSetup setup, SecretStore.Values inputValues,
             Visibility visibility, boolean explicitRecovery, long deadline, BooleanSupplier cancelled,
             Consumer<AuthenticationStage> observer) throws AuthenticationFailure {
-        var session = new Session(); char[] pin = null;
+        return openOwned(identity,setup,inputValues,visibility,explicitRecovery,deadline,cancelled,observer,bpsh.authentication.http.HttpTransportFactory.Purpose.BROWSER);
+    }
+    /** Opens recording setup with its own pinned transport scope, including unsaved recordings. */
+    public Session openRecording(JourneyDefinition.Identity identity,BrowserSetup setup,SecretStore.Values inputValues,
+            Visibility visibility,boolean explicitRecovery,long deadline,BooleanSupplier cancelled,Consumer<AuthenticationStage> observer) throws AuthenticationFailure {
+        return openOwned(identity,setup,inputValues,visibility,explicitRecovery,deadline,cancelled,observer,bpsh.authentication.http.HttpTransportFactory.Purpose.RECORDING);
+    }
+    private Session openOwned(JourneyDefinition.Identity identity,BrowserSetup setup,SecretStore.Values inputValues,
+            Visibility visibility,boolean explicitRecovery,long deadline,BooleanSupplier cancelled,Consumer<AuthenticationStage> observer,
+            bpsh.authentication.http.HttpTransportFactory.Purpose purpose) throws AuthenticationFailure {
+        var session = new Session();
         try {
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled);
-            pin = setup.mtls() == null ? null : inputValues.pin();
-            if (setup.mtls() != null && pin == null) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
-                    AuthenticationFailure.Cause.MISSING_SECRET, "The journey is missing its mTLS PIN.",
-                    "Enter the client-certificate PIN before recording or testing this journey.")
-                    .atInput(AuthenticationFailure.Input.MTLS_PIN);
             BrowserRuntimeManager.Ready ready = runtime.acquire(deadline, cancelled, observer);
-            if (setup.mtls() != null) {
-                Pkcs11IdentityManager.Selected selected;
-                try { selected = identities.select(setup.mtls(), pin, explicitRecovery, deadline, cancelled); }
-                finally { Arrays.fill(pin, '\0'); pin = null; }
-                session.transport = new JourneyTlsProxy(setup.mtls(), selected, setup.browser().proxy(), clock);
+            if(setup.mtls()!=null || setup.httpAuthenticationEnabled()) {
+                var spec=new bpsh.authentication.http.HttpTransportFactory.ScopeSpec(java.util.UUID.randomUUID(),purpose,identity,0,setup,explicitRecovery);
+                var opening=httpTransport.open(spec,inputValues,deadline);
+                bpsh.authentication.http.HttpAuthenticationService scope=null;
+                try {
+                    while(scope==null) {
+                        AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP,deadline,cancelled);
+                        try {scope=opening.get(Math.min(50,Math.max(1,java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline-System.nanoTime()))),java.util.concurrent.TimeUnit.MILLISECONDS);}
+                        catch(java.util.concurrent.TimeoutException waiting) { /* poll cancellation within the original deadline */ }
+                    }
+                    session.transport=new BrowserProxyForwarder(setup,scope,httpTransport.bodies(),clock,deadline);
+                } catch(Exception failure) {
+                    opening.thenAccept(bpsh.authentication.http.HttpAuthenticationService::close);opening.cancel(true);
+                    if(failure instanceof java.util.concurrent.ExecutionException wrapper && wrapper.getCause() instanceof AuthenticationFailure safe)throw safe;
+                    if(failure instanceof InterruptedException)Thread.currentThread().interrupt();
+                    throw failure;
+                }
             }
             boolean proxied = session.transport != null || setup.browser().proxy() != null;
             if (proxied) session.trafficLease = traffic.begin();
@@ -182,7 +200,7 @@ public final class BrowserSessionLauncher {
             else options.setArgs(List.of("--no-proxy-server"));
             BrowserRuntimeManager.observed(observer, AuthenticationStage.STARTING_BROWSER);
             session.browser = new OwnedBrowser(startBrowser(session.driver, options, deadline, cancelled), identity);
-            var contextOptions = new Browser.NewContextOptions();
+            var contextOptions = new Browser.NewContextOptions().setIgnoreHTTPSErrors(setup.browser().ignoreHttpsErrors());
             String originalAgent = null;
             if (session.trafficLease != null) {
                 try (var bootstrap = new OwnedContext(session.browser.browser.newContext(), session.browser, true)) {
@@ -193,9 +211,12 @@ public final class BrowserSessionLauncher {
             session.context = new OwnedContext(session.browser.browser.newContext(contextOptions), session.browser, false);
             installRouting(session, originalAgent);
             return session;
-        } catch (Exception error) {
+        } catch (Exception | LinkageError error) {
             AuthenticationFailure failure;
             if (error instanceof AuthenticationFailure classified) failure = classified;
+            else if (error instanceof LinkageError) failure = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
+                    AuthenticationFailure.Cause.CONFIGURATION, "The bundled browser runtime could not load.",
+                    "Reload the complete universal extension JAR, then try again.");
             else {
                 try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled); }
                 catch (AuthenticationFailure stopped) { closeAfterFailure(session, stopped); throw stopped; }
@@ -203,7 +224,7 @@ public final class BrowserSessionLauncher {
                         "The browser session could not start.");
             }
             closeAfterFailure(session, failure); throw failure;
-        } finally { if (pin != null) Arrays.fill(pin, '\0'); }
+        }
     }
 
     private static void closeAfterFailure(Session session, AuthenticationFailure primary) {

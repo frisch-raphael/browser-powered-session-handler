@@ -10,6 +10,7 @@ import bpsh.authentication.AuthenticationFailure;
 import bpsh.journey.ConfigurationException;
 import bpsh.journey.CredentialNames;
 import bpsh.journey.JourneyDefinition;
+import bpsh.journey.HttpAuthentication;
 import bpsh.journey.JourneyDraft;
 import bpsh.journey.SecretStore;
 import com.fasterxml.jackson.core.JsonParser;
@@ -62,20 +63,48 @@ final class NativeJourneyCodec {
             catch (Exception ex) { throw invalid("journeys.draft", "invalid draft structure"); }
         }
         object(n, p, "id", "displayName", "alias", "authenticationUrl", "rememberSecrets", "steps", "browser",
-                "extraction", "injection", "cache", "mtls", "secrets");
+                "extraction", "injection", "cache", "mtls", "httpAuthentication", "secrets");
         UUID id = uuid(n.get("id"), p + ".id");
         String display = nonblank(text(n, "displayName", p), p + ".displayName");
         if (display.codePointCount(0, display.length()) > 128) throw invalid(p + ".displayName", "maximum length is 128");
         List<AuthStep.Definition> steps = parseSteps(n.get("steps"), p + ".steps");
-        JourneyDefinition.Browser browser = parseBrowser(n.get("browser"));
-        JourneyDefinition.Extraction extraction = parseExtraction(n.get("extraction"));
+        HttpAuthentication http = present(n, "httpAuthentication") ? parseHttpAuthentication(n.get("httpAuthentication")) : null;
+        JourneyDefinition.Browser browser = parseBrowser(n.get("browser"), !steps.isEmpty() || !(present(n, "mtls") || http != null && http.enabled()));
+        if (!browser.formAuthentication() && !present(n, "mtls") && !(http != null && http.enabled()))
+            throw invalid("formAuthentication", "choose at least one authentication method");
+        JourneyDefinition.Extraction extraction = http != null && http.enabled() && !present(n, "extraction") ? null : parseExtraction(n.get("extraction"));
+        if (extraction == null && browser.formAuthentication() && !steps.isEmpty()) throw invalid("extraction", "configure a captured credential when using browser steps");
         JourneyDefinition.Injection injection = parseInjection(n.get("injection"), extraction);
         JsonNode c = n.get("cache"); object(c, "cache", "maxAgeSeconds", "refreshSkewSeconds");
         JourneyDefinition.Cache cache = new JourneyDefinition.Cache(integer(c, "maxAgeSeconds", 1800, 5, 86400), integer(c, "refreshSkewSeconds", 10, 0, 3600));
         URI authenticationUrl = httpUri(text(n, "authenticationUrl", p), p + ".authenticationUrl");
         return new JourneyDefinition(id, display, alias(text(n, "alias", p)), authenticationUrl,
                 bool(n, "rememberSecrets", false), steps, browser, extraction, injection, cache,
-                present(n, "mtls") ? parseMtls(n.get("mtls"), authenticationUrl) : null);
+                present(n, "mtls") ? parseMtls(n.get("mtls"), authenticationUrl) : null, http, null);
+    }
+    /** Strict, nonsecret HTTP identity configuration shared by recording and executable journeys. */
+    private static HttpAuthentication parseHttpAuthentication(JsonNode node) {
+        String path = "httpAuthentication";
+        object(node, path, "protocol", "username", "domain", "workstation", "origins", "enabled");
+        try {
+            HttpAuthentication.Protocol protocol;
+            try { protocol = HttpAuthentication.Protocol.valueOf(text(node, "protocol", path)); }
+            catch (IllegalArgumentException invalid) { throw invalid(path + ".protocol", "choose Basic, NTLMv1 or NTLMv2"); }
+            Set<URI> origins = new HashSet<>();
+            for (JsonNode origin : array(node.get("origins"), path + ".origins")) {
+                if (!origin.isTextual()) throw invalid(path + ".origins", "use exact HTTP(S) server addresses, for example https://app.example:8443");
+                URI value, normalized;
+                try { value = URI.create(origin.textValue()); normalized = bpsh.journey.JourneyOrigins.authenticationOrigin(value); }
+                catch (IllegalArgumentException invalid) { throw invalid(path + ".origins", "use exact HTTP(S) server addresses, for example https://app.example:8443"); }
+                if (!origins.add(normalized))
+                    throw invalid(path + ".origins", "use unique exact HTTP(S) origins");
+                if (value.getRawQuery() != null || value.getRawFragment() != null ||
+                        (value.getRawPath() != null && !value.getRawPath().isEmpty() && !value.getRawPath().equals("/")))
+                    throw invalid(path + ".origins", "origins cannot include a page path, query or fragment");
+            }
+            return new HttpAuthentication(protocol, text(node, "username", path), text(node, "domain", path), text(node, "workstation", path), origins, bool(node, "enabled", true));
+        } catch (ConfigurationException invalid) { throw invalid; }
+        catch (IllegalArgumentException invalid) { throw invalid(path, "choose Basic, NTLMv1 or NTLMv2, a username and exact allowed origins"); }
     }
     /** Strict sequence parsing shared by full documents and reviewed replacement steps. */
     static List<AuthStep.Definition> parseSteps(JsonNode node, String path) {
@@ -94,7 +123,10 @@ final class NativeJourneyCodec {
 
     /** Shares exact browser/proxy validation between full journeys and recording setup. */
     static JourneyDefinition.Browser parseBrowser(JsonNode b) {
-        object(b, "browser", "headless", "proxy", "navigationTimeoutMs", "tokenWaitTimeoutMs");
+        return parseBrowser(b, true);
+    }
+    private static JourneyDefinition.Browser parseBrowser(JsonNode b, boolean formAuthentication) {
+        object(b, "browser", "headless", "proxy", "navigationTimeoutMs", "tokenWaitTimeoutMs", "ignoreHttpsErrors", "formAuthentication");
         JourneyDefinition.Proxy proxy = null;
         if (present(b, "proxy")) {
             JsonNode q = b.get("proxy");
@@ -105,15 +137,17 @@ final class NativeJourneyCodec {
             proxy = new JourneyDefinition.Proxy(url);
         }
         return new JourneyDefinition.Browser(bool(b, "headless", false), proxy,
-                integer(b, "navigationTimeoutMs", 30_000, 1000, 300_000), integer(b, "tokenWaitTimeoutMs", 3000, 1, 300_000));
+                integer(b, "navigationTimeoutMs", 30_000, 1000, 300_000), integer(b, "tokenWaitTimeoutMs", 3000, 1, 300_000),
+                bool(b, "ignoreHttpsErrors", false), bool(b, "formAuthentication", formAuthentication));
     }
 
     /** Parses a closed setup object without reading steps, capture rules, aliases or secrets. */
     static bpsh.journey.BrowserSetup parseSetup(JsonNode node) {
-        object(node, "setup", "authenticationUrl", "browser", "mtls");
+        object(node, "setup", "authenticationUrl", "browser", "mtls", "httpAuthentication");
         URI url = httpUri(text(node, "authenticationUrl", "journeys"), "journeys.authenticationUrl");
         return new bpsh.journey.BrowserSetup(url, parseBrowser(node.get("browser")),
-                present(node, "mtls") ? parseMtls(node.get("mtls"), url) : null);
+                present(node, "mtls") ? parseMtls(node.get("mtls"), url) : null,
+                present(node, "httpAuthentication") ? parseHttpAuthentication(node.get("httpAuthentication")) : null);
     }
 
     /** Validates one explicit mapping per response token and rejects conflicting destinations. */
@@ -125,7 +159,7 @@ final class NativeJourneyCodec {
         if (tokens == null || !tokens.isArray() || tokens.size() > 16) throw invalid("injection.tokens", "requires at most 16 token mappings");
         var sources = new java.util.LinkedHashMap<String, JourneyDefinition.Extraction>();
         if (extraction instanceof JourneyDefinition.CombinedExtraction combined) combined.tokens().forEach(t -> sources.put(t.name(), t.selector()));
-        else sources.put("", extraction);
+        else if (extraction != null) sources.put("", extraction);
         var cookies = new HashSet<String>(); var headers = new HashSet<String>();
         sources.values().forEach(s -> { if (s instanceof JourneyDefinition.CookieExtraction c) cookies.add(c.name()); });
         var mapped = new HashSet<String>(); var result = new ArrayList<JourneyDefinition.TokenInjection>();
@@ -317,6 +351,9 @@ final class NativeJourneyCodec {
                     text(s, "selector", p), text(s, "value", p), text(s, "state", p), unit, operation));
         }
         ObjectNode envelope = node.deepCopy(); envelope.putArray("steps");
+        if (envelope.path("flags").has("ignoreHttpsErrors")) bool(envelope.get("flags"), "ignoreHttpsErrors", false);
+        if (envelope.path("flags").has("httpAuthentication")) bool(envelope.get("flags"), "httpAuthentication", false);
+        if (envelope.path("flags").has("formAuthentication")) bool(envelope.get("flags"), "formAuthentication", true);
         JourneyDraft base = NATIVE.treeToValue(envelope, JourneyDraft.class);
         return new JourneyDraft(base.text(), base.flags(), base.slotKind(), base.certificateSha256(), steps, base.credentials());
     }
@@ -413,12 +450,16 @@ final class NativeJourneyCodec {
      */
     static SecretStore.Values parseSecrets(JsonNode n, JourneyDefinition journey) {
         if (n != null && n.has("proxyPassword")) throw invalid("secrets.proxyPassword", "is unsupported; use a proxy URL that requires no authentication and remove this field");
-        object(n, "secrets", "mtlsPin", "stepValues");
-        Map<UUID, char[]> values = new HashMap<>(); char[] pin = null;
+        object(n, "secrets", "mtlsPin", "stepValues", "httpPassword");
+        Map<UUID, char[]> values = new HashMap<>(); char[] pin = null, httpPassword = null;
         try {
             if (n.has("mtlsPin")) {
                 if (journey.mtls() == null) throw invalid("secrets.mtlsPin", "requires mTLS configuration");
                 pin = text(n, "mtlsPin", "secrets").toCharArray();
+            }
+            if (n.has("httpPassword")) {
+                if (!bpsh.journey.JourneySecrets.hasHttpConfiguration(journey)) throw invalid("secrets.httpPassword", "requires HTTP authentication configuration");
+                httpPassword = text(n, "httpPassword", "secrets").toCharArray();
             }
             if (n.has("stepValues")) {
                 JsonNode steps = n.get("stepValues");
@@ -431,9 +472,10 @@ final class NativeJourneyCodec {
                     values.put(stepId, text(steps, key, "secrets.stepValues").toCharArray());
                 }
             }
-            return new SecretStore.Values(pin, values);
+            return new SecretStore.Values(pin, values, httpPassword);
         } finally {
             if (pin != null) Arrays.fill(pin, '\0');
+            if (httpPassword != null) Arrays.fill(httpPassword, '\0');
             values.values().forEach(v -> Arrays.fill(v, '\0'));
         }
     }
@@ -458,13 +500,14 @@ final class NativeJourneyCodec {
         ArrayNode steps = n.putArray("steps");
         for (AuthStep.Definition s : j.steps()) steps.add(stepNode(s));
         n.set("browser", NATIVE.valueToTree(j.browser()));
-        n.set("extraction", extractionNode(j.extraction()));
+        if (j.extraction() == null) n.putNull("extraction"); else n.set("extraction", extractionNode(j.extraction()));
         n.set("injection", injectionNode(j.injection()));
         n.set("cache", NATIVE.valueToTree(j.cache()));
         n.putNull("mtls");
         if (j.mtls() != null) {
             ObjectNode m = NATIVE.valueToTree(j.mtls()); ((ObjectNode) m.get("slot")).put("kind", j.mtls().slot().kind().name().toLowerCase(Locale.ROOT)); n.set("mtls", m);
         }
+        if (j.httpAuthentication() != null) n.set("httpAuthentication", NATIVE.valueToTree(j.httpAuthentication()));
         return n;
     }
     /**
@@ -509,7 +552,7 @@ final class NativeJourneyCodec {
      * @throws IllegalStateException If the snapshot is closed.
      */
     static ObjectNode secretsJson(SecretStore.Values values) {
-        ObjectNode n = NATIVE.createObjectNode(); putSecret(n, "mtlsPin", values.pin());
+        ObjectNode n = NATIVE.createObjectNode(); putSecret(n, "mtlsPin", values.pin()); putSecret(n, "httpPassword", values.httpPassword());
         if (!values.stepIds().isEmpty()) {
             ObjectNode steps = n.putObject("stepValues");
             values.stepIds().stream().sorted().forEach(id -> putSecret(steps, id.toString(), values.stepValue(id)));

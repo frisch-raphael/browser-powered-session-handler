@@ -31,6 +31,7 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
     private final Diagnostics diagnostics;
     private final AtomicReference<RequestSettings.Controls> controls;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final bpsh.authentication.http.HttpIdentityManager httpIdentities;
 
     /** Host boundary for a single actual replay send; response hooks retain the normal response path. */
     @FunctionalInterface public interface ReplayTransport { void send(HttpRequest request, long responseTimeoutMs) throws Exception; }
@@ -53,7 +54,14 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
     /** Wires actual host replay delivery without moving it into the response callback or the test adapter. */
     public HttpSessionHandler(JourneyCatalog registry, NativeTagResolver resolver, AuthTrafficGuard guard,
                               SessionRecovery recovery, Diagnostics diagnostics, AtomicReference<RequestSettings.Controls> controls, ReplayTransport transport) {
+        this(registry, resolver, guard, recovery, diagnostics, controls, transport, null);
+    }
+    /** Shares direct HTTP identity pools while leaving ordinary automatic handling independent. */
+    public HttpSessionHandler(JourneyCatalog registry, NativeTagResolver resolver, AuthTrafficGuard guard,
+                              SessionRecovery recovery, Diagnostics diagnostics, AtomicReference<RequestSettings.Controls> controls, ReplayTransport transport,
+                              bpsh.authentication.http.HttpIdentityManager httpIdentities) {
         this.registry = registry; this.resolver = resolver; this.guard = guard; this.recovery = recovery; this.diagnostics = diagnostics; this.controls = controls; this.transport = transport;
+        this.httpIdentities = httpIdentities;
     }
 
     /**
@@ -78,7 +86,7 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
                 var notes = request.annotations(); appendNote(notes, "BPSH recovery replay of request " + replay.plan.originalId() + ".");
                 return RequestToBeSentAction.continueWith(replay.clean, notes);
             }
-            ByteArray bytes = request.toByteArray(); tagged = hasTags(bytes);
+            ByteArray bytes = request.toByteArray(); boolean httpTagged = HttpAuthenticationDirective.present(bytes); tagged = hasTags(bytes) || httpTagged;
             if (ownership.classification() == AuthTrafficGuard.Classification.OWNED) {
                 if (tagged) return stopped(request, null, nested());
                 return RequestToBeSentAction.continueWith(request.withUpdatedHeader("User-Agent", ownership.userAgent()), request.annotations());
@@ -87,6 +95,8 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
                 if (tagged) return stopped(request, null, unavailable());
                 return RequestToBeSentAction.continueWith(request, request.annotations());
             }
+            var httpDirective = httpTagged ? HttpAuthenticationDirective.consume(bytes.getBytes()) : null;
+            if (httpDirective != null) return authenticatedRequest(request, httpDirective, cfg.requestWaitTimeoutMs());
             var matching = !tagged && cfg.enabled() && cfg.tools().stream().anyMatch(tool -> tool.name().equals(request.toolSource().toolType().name()))
                     ? cfg.rules().stream().filter(r -> r.enabled() && handlesUrl(r, request)).toList() : List.<RequestSettings.AutomaticRule>of();
             boolean ordinary = !matching.isEmpty();
@@ -124,6 +134,85 @@ public final class HttpSessionHandler implements HttpHandler, ProxyRequestHandle
             return failed(request, selected, tagged, ex.getCause() instanceof AuthenticationFailure safe ? safe : unknown());
         } catch (AuthenticationFailure ex) { return failed(request, selected, tagged, ex); }
         catch (RuntimeException | LinkageError ex) { return failed(request, selected, tagged, unknown()); }
+    }
+
+    private RequestToBeSentAction authenticatedRequest(HttpRequestToBeSent original, HttpAuthenticationDirective.Selection directive, int timeoutMs)
+            throws AuthenticationFailure, ExecutionException, InterruptedException {
+        if (httpIdentities == null) throw configuration("HTTP authentication is unavailable.", "Reload the current extension build.");
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        JourneyCatalog.Entry entry;
+        try { entry = registry.snapshot().resolve(directive.alias()); }
+        catch (IllegalStateException unavailable) { throw configuration("The HTTP authentication journey is missing or ambiguous.", "Choose one available saved journey alias."); }
+        if (!entry.definition().httpAuthenticationEnabled()) throw configuration("HTTP authentication is not enabled for this journey.", "Enable HTTP authentication and save the journey.");
+        var selection = httpIdentities.select(entry);
+        try (var captures = resolver.resolve(directive.request(), null, false)) {
+            NativeTagResolver.Resolved resolved;
+            try { resolved = captures.future().get(Math.max(1,deadline-System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS); }
+            catch(java.util.concurrent.TimeoutException timeout) { throw new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
+                    AuthenticationFailure.Cause.TIMEOUT,"The tagged request timed out while waiting for dependent credentials. No HTTP-auth request was sent."); }
+            byte[] complete = resolved.commit();
+            HttpRequest request = HttpRequest.httpRequest(original.httpService(), ByteArray.byteArray(complete));
+            java.net.URI target = java.net.URI.create(request.url());
+            var service = request.httpService();
+            java.net.URI actual;
+            try { actual = new java.net.URI(service.secure() ? "https" : "http", null, service.host(), service.port(), null, null, null); }
+            catch (java.net.URISyntaxException invalid) { throw configuration("Invalid tagged request destination.", "Correct the target server."); }
+            if (!bpsh.journey.JourneyOrigins.authenticationOrigin(target).equals(bpsh.journey.JourneyOrigins.authenticationOrigin(actual)))
+                throw configuration("The tagged request URL does not match its target server.", "Use the same scheme, host and port.");
+            try {
+                String host=request.headerValue("Host");
+                var declared=java.net.URI.create(actual.getScheme()+"://"+host.trim());
+                if(declared.getUserInfo()!=null || declared.getRawPath()!=null && !declared.getRawPath().isEmpty() || declared.getRawQuery()!=null || declared.getRawFragment()!=null ||
+                        !bpsh.journey.JourneyOrigins.authenticationOrigin(declared).equals(bpsh.journey.JourneyOrigins.authenticationOrigin(actual)))
+                    throw new IllegalArgumentException();
+            } catch(IllegalArgumentException|NullPointerException invalid) {throw configuration("The Host header does not match the tagged request destination.","Use the same host and port.");}
+            var headers = new java.util.ArrayList<bpsh.authentication.http.HttpAuthenticationService.Header>();
+            for (var header : request.headers()) headers.add(new bpsh.authentication.http.HttpAuthenticationService.Header(header.name(), header.value()));
+            boolean dispatched=false;
+            try(var admitted=httpIdentities.admit(selection,deadline).get();
+                var internal=entry.definition().browser().proxy()==null?null:guard.begin();
+                var builder=httpIdentities.bodies().builder(bpsh.authentication.http.HttpAuthenticationService.Request.MAX_BODY_BYTES)) {
+                if(internal!=null) {
+                    var agents=headers.stream().filter(header->header.name().equalsIgnoreCase("User-Agent")).toList();
+                    if(agents.size()>1)throw configuration("A routed HTTP-auth request has multiple User-Agent headers.","Use one User-Agent header.");
+                    headers.removeIf(header->header.name().equalsIgnoreCase("User-Agent"));
+                    headers.add(new bpsh.authentication.http.HttpAuthenticationService.Header("User-Agent",internal.decorate(agents.isEmpty()?null:agents.getFirst().value())));
+                }
+                int offset=0;
+                for(int index=0;index+3<complete.length;index++)if(complete[index]==13 && complete[index+1]==10 && complete[index+2]==13 && complete[index+3]==10) {offset=index+4;break;}
+                if(offset==0)throw configuration("Invalid tagged request body framing.","Correct the HTTP headers.");
+                builder.append(java.nio.ByteBuffer.wrap(complete,offset,complete.length-offset));
+                try(var ownedBody=builder.finish()) {
+            var outbound = new bpsh.authentication.http.HttpAuthenticationService.Request(target, request.method(), headers, ownedBody);
+            dispatched=true;
+            var delivery = admitted.exchange(outbound);
+            bpsh.authentication.http.HttpAuthenticationService.Response response;
+            try { response = delivery.get(); }
+            catch (InterruptedException interrupted) { delivery.cancel(true); throw interrupted; }
+            catch (ExecutionException failed) {
+                if(failed.getCause() instanceof bpsh.authentication.http.HttpDeliveryFailure safe) throw safe.presentation();
+                if(failed.getCause() instanceof java.util.concurrent.TimeoutException) throw new AuthenticationFailure(
+                        AuthenticationFailure.Phase.PROXY,AuthenticationFailure.Cause.TIMEOUT,
+                        "The HTTP request timed out; delivery could not be confirmed.",
+                        "Check the server-side result before resending a state-changing request.");
+                throw failed;
+            }
+            try(response;var wire=HttpAuthenticationResponse.wire(httpIdentities.bodies(),request.method(),response)) {
+            var notes = original.annotations();
+            String observation = switch(response.authentication().status()) {
+                case ACCEPTED -> "BPSH HTTP authentication observed: " + response.authentication().protocol() + ".";
+                case REJECTED -> "BPSH HTTP authentication was rejected; the server response is preserved.";
+                case UNCONFIRMED -> "BPSH returned the server response; HTTP authentication was not confirmed.";
+            };
+            if(!registry.snapshot().isCurrent(entry.identity())) observation += " The journey changed after dispatch.";
+            appendNote(notes, observation);
+            return RequestToBeSentAction.spoof(burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(wire.borrowed())), notes);
+            }
+                }
+            } catch(java.io.IOException capacity) {throw new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,AuthenticationFailure.Cause.CAPACITY,
+                    dispatched?"The HTTP response could not fit within the transport buffer limit. The request may already have been applied.":"The HTTP request could not fit within the transport buffer limit.",
+                    dispatched?"Check the server-side result before resending.":"");}
+        }
     }
 
     /**

@@ -1,6 +1,6 @@
 package bpsh.burp.ui;
 
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import java.awt.*;
 import java.util.List;
 import java.util.function.Consumer;

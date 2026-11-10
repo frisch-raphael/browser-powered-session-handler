@@ -18,7 +18,7 @@ The same distinction applies to success: extracting a cookie is one fact; using 
 
 ## Tests and what they prove
 
-**Requirement.** Something we want the system to do. Example: “When the selected cookie is absent, identify the missing cookie rather than a connection failure.” The catalog's 980 entries are requirements/assessments, not 980 new test methods.
+**Requirement.** Something we want the system to do. Example: “When the selected cookie is absent, identify the missing cookie rather than a connection failure.” The catalog's 1030 entries are requirements/assessments, not 1030 new test methods.
 
 **Test case or scenario.** A specified situation with inputs, actions and an expected result. Example: log in as `user`, remove the expected cookie from the response, then inspect the extension's result.
 

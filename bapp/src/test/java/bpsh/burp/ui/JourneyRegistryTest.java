@@ -20,7 +20,7 @@ import bpsh.journey.ConfigurationException;
 import bpsh.journey.JourneyDefinition;
 import bpsh.journey.JourneyDraft;
 import bpsh.journey.JourneyKey;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import bpsh.journey.SecretStore;
 import bpsh.authentication.session.AuthenticationCoordinator;
 import bpsh.authentication.session.CoordinatorFixtures;
@@ -148,7 +148,7 @@ public class JourneyRegistryTest {
     public @Test void strictParsingRejectsDuplicateUnknownVersionTypeAndWrongKind() throws Exception {
         String json = fixture(JourneyDocument.DocumentKind.PROJECT, false, false);
         List<String> invalid = List.of(json.replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"schemaVersion\":1"),
-                json + " {}", edit(json, "", "DO_NOT_LEAK", "DO_NOT_LEAK"), edit(json, "", "schemaVersion", 2),
+                json + " {}", edit(json, "", "DO_NOT_LEAK", "DO_NOT_LEAK"), edit(json, "", "schemaVersion", 3),
                 edit(json, "", "schemaVersion", "1"), edit(json, "/controls", "enabled", 1),
                 edit(json, "/journeys/0", "rememberSecrets", null), edit(json, "", "revision", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"),
                 edit(json, "/journeys/0/cache", "pattern", "DO_NOT_LEAK"));
@@ -833,7 +833,7 @@ public class JourneyRegistryTest {
                 assertEquals("X-CSRF-Token", saved.injection().tokens().getFirst().name());
                 edt(() -> {
                     CredentialsPanel sources = member(editor.ui, "credentials"); sources.setDefinition(RegexInjectionTest.sources(), RegexInjectionTest.mappings());
-                    ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).setSelectedIndex(3);
+                    WizardTestPages.select(((javax.swing.JTabbedPane) member(editor.ui, "wizard")), "Capture credentials");
                     var output = java.nio.file.Path.of("build", "ui-previews"); java.nio.file.Files.createDirectories(output);
                     for (int width : List.of(1280, 900)) {
                         editor.component.setSize(width, 820); layout(editor.component);
@@ -865,23 +865,23 @@ public class JourneyRegistryTest {
                     libraryKey = new JourneyKey(JourneyDefinition.Scope.LIBRARY, libraryJourney.id());
                 }
                 assertEquals(first.journeyId(), libraryKey.journeyId(), "scope must isolate page memory even when UUIDs match");
-                openJourneyPage(editor, first); edt(() -> ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).setSelectedIndex(2));
-                openJourneyPage(editor, other); edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals(0, wizard.getSelectedIndex()); wizard.setSelectedIndex(3); });
+                openJourneyPage(editor, first); edt(() -> WizardTestPages.select(((javax.swing.JTabbedPane) member(editor.ui, "wizard")), "Login steps"));
+                openJourneyPage(editor, other); edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals("Setup", WizardTestPages.selected(wizard)); WizardTestPages.select(wizard, "Capture credentials"); });
                 openJourneyPage(editor, first); edt(() -> {
-                    var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals(2, wizard.getSelectedIndex());
+                    var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals("Login steps", WizardTestPages.selected(wizard));
                     var tabs = (javax.swing.JTabbedPane) member(editor.ui, "mainTabs"); tabs.setSelectedIndex(1); tabs.setSelectedIndex(2); tabs.setSelectedIndex(0);
-                    assertEquals(2, wizard.getSelectedIndex());
+                    assertEquals("Login steps", WizardTestPages.selected(wizard));
                     ((javax.swing.JTabbedPane) member(editor.ui, "journeyScopes")).setSelectedIndex(1);
                 });
-                openJourneyPage(editor, libraryKey); edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals(0, wizard.getSelectedIndex()); wizard.setSelectedIndex(4); });
+                openJourneyPage(editor, libraryKey); edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals("Setup", WizardTestPages.selected(wizard)); WizardTestPages.select(wizard, "Test & use"); });
                 edt(() -> ((javax.swing.JTabbedPane) member(editor.ui, "journeyScopes")).setSelectedIndex(0)); awaitJourneyPage(editor, first);
-                edt(() -> { assertEquals(2, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()); ((javax.swing.JTabbedPane) member(editor.ui, "journeyScopes")).setSelectedIndex(1); }); awaitJourneyPage(editor, libraryKey);
-                edt(() -> { assertEquals(4, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()); call(editor.ui, "newJourney", new Class<?>[]{}); });
+                edt(() -> { assertEquals("Login steps", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))); ((javax.swing.JTabbedPane) member(editor.ui, "journeyScopes")).setSelectedIndex(1); }); awaitJourneyPage(editor, libraryKey);
+                edt(() -> { assertEquals("Test & use", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))); call(editor.ui, "newJourney", new Class<?>[]{}); });
                 await(() -> { try { return editor.saved(); } catch (Exception error) { return false; } });
-                edt(() -> assertEquals(0, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()));
-                openJourneyPage(editor, libraryKey); edt(() -> assertEquals(4, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()));
+                edt(() -> assertEquals("Setup", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))));
+                openJourneyPage(editor, libraryKey); edt(() -> assertEquals("Test & use", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))));
                 edt(() -> ((javax.swing.JTabbedPane) member(editor.ui, "journeyScopes")).setSelectedIndex(0)); awaitJourneyPage(editor, first);
-                openJourneyPage(editor, other); edt(() -> assertEquals(3, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()));
+                openJourneyPage(editor, other); edt(() -> assertEquals("Capture credentials", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))));
             }
         }
         public @Test void rememberedCertificatePageFallsBackWhenItIsNoLongerAvailable() throws Exception {
@@ -890,12 +890,12 @@ public class JourneyRegistryTest {
                     "certificateSha256", "a".repeat(64), "origins", List.of("https://login.example")));
             try (var editor = new Editor(stored)) {
                 var key = editor.registry.snapshot().resolve("employee").identity().key(); openJourneyPage(editor, key);
-                edt(() -> ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).setSelectedIndex(1));
+                edt(() -> WizardTestPages.select(((javax.swing.JTabbedPane) member(editor.ui, "wizard")), "Client certificate"));
                 try (var replacement = document(JourneyDocument.DocumentKind.PROJECT)) { editor.registry.replaceLoaded(JourneyDefinition.Scope.PROJECT, replacement); }
                 edt(() -> call(editor.ui, "bump", new Class<?>[]{JourneyDefinition.Scope.class}, JourneyDefinition.Scope.PROJECT));
                 openJourneyPage(editor, key);
-                edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertFalse(wizard.isEnabledAt(1)); assertEquals(0, wizard.getSelectedIndex()); });
-                openJourneyPage(editor, key); edt(() -> assertEquals(0, ((javax.swing.JTabbedPane) member(editor.ui, "wizard")).getSelectedIndex()));
+                edt(() -> { var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); assertEquals(-1, wizard.indexOfTab("Client certificate")); assertEquals("Setup", WizardTestPages.selected(wizard)); });
+                openJourneyPage(editor, key); edt(() -> assertEquals("Setup", WizardTestPages.selected(((javax.swing.JTabbedPane) member(editor.ui, "wizard")))));
             }
         }
         /** @param editor Owned local Swing editor. @param key Saved journey to open without driving an installed application. */
@@ -907,9 +907,9 @@ public class JourneyRegistryTest {
             try (var editor = new Editor(null)) {
                 edt(() -> {
                     call(editor.ui, "newJourney", new Class<?>[]{}); editor.fields().get("url").setText("http://127.0.0.1:1/login");
-                    var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); wizard.setSelectedIndex(0);
-                    call(editor.ui, "moveWizard", new Class<?>[]{int.class}, 1); assertEquals(2, wizard.getSelectedIndex());
-                    call(editor.ui, "moveWizard", new Class<?>[]{int.class}, -1); assertEquals(0, wizard.getSelectedIndex());
+                    var wizard = (javax.swing.JTabbedPane) member(editor.ui, "wizard"); WizardTestPages.select(wizard, "Setup");
+                    call(editor.ui, "moveWizard", new Class<?>[]{int.class}, 1); assertEquals("Login steps", WizardTestPages.selected(wizard));
+                    call(editor.ui, "moveWizard", new Class<?>[]{int.class}, -1); assertEquals("Setup", WizardTestPages.selected(wizard));
                     assertFalse(editor.fields().containsKey("proxyUser")); assertFalse(editor.fields().containsKey("proxyPassword"));
                     assertEquals("Remember secrets", editor.checks().get("remember").getText()); editor.checks().get("mtls").doClick();
                     try (var empty = SecretStore.Values.empty()) {
@@ -924,7 +924,7 @@ public class JourneyRegistryTest {
                         var image = new java.awt.image.BufferedImage(1280, 820, java.awt.image.BufferedImage.TYPE_INT_RGB); var graphics = image.createGraphics(); editor.component.printAll(graphics); graphics.dispose();
                         javax.imageio.ImageIO.write(image, "png", output.resolve("wizard-page-" + (page + 1) + ".png").toFile());
                     }
-                    CredentialsPanel sources = member(editor.ui, "credentials"); sources.setDefinition(CombinedCredentialsTest.SOURCES); wizard.setSelectedIndex(3);
+                    CredentialsPanel sources = member(editor.ui, "credentials"); sources.setDefinition(CombinedCredentialsTest.SOURCES); WizardTestPages.select(wizard, "Capture credentials");
                     editor.component.setSize(1280, 820); layout(editor.component);
                     var combinedImage = new java.awt.image.BufferedImage(1280, 820, java.awt.image.BufferedImage.TYPE_INT_RGB); var combinedGraphics = combinedImage.createGraphics(); editor.component.printAll(combinedGraphics); combinedGraphics.dispose();
                     javax.imageio.ImageIO.write(combinedImage, "png", output.resolve("wizard-multiple-credentials.png").toFile());

@@ -20,7 +20,7 @@ fun labFileSha(file: File): String {
 }
 
 val productionFiles = (listOf("bapp/build.gradle.kts", "bapp/settings.gradle.kts", "bapp/gradle.lockfile", "bapp/browser-assets.lock.json", "bapp/gradlew", "bapp/gradlew.bat", "bapp/settings-gradle.lockfile", "docs/designs/bapp-owned-authentication.md", "docs/designs/interface.md", "docs/designs/universal-packaging.md", "docs/product.md") +
-    listOf("bapp/src", "bapp/gradle").flatMap { subtree ->
+    listOf("bapp/src", "bapp/gradle", "bapp/third-party").flatMap { subtree ->
         predecessorRoot.resolve(subtree).walkTopDown().filter { it.isFile }.map { it.relativeTo(predecessorRoot).invariantSeparatorsPath }.toList()
     }).distinct().sorted()
 val productionHashes = productionFiles.associateWith { labFileSha(predecessorRoot.resolve(it)) }
@@ -48,7 +48,7 @@ val prepareAuthLabProduction = tasks.register("prepareAuthLabProduction") {
             check(path.startsWith(source) && Files.isRegularFile(path)) { "Audited predecessor file is missing: $name. Rerun to capture current source." }
             Files.readAllBytes(path).also { check(labSha(it) == hash) { "Audited predecessor changed: $name. Rerun the command to capture the new source." } }
         }
-        for (subtree in listOf("bapp/src", "bapp/gradle")) {
+        for (subtree in listOf("bapp/src", "bapp/gradle", "bapp/third-party")) {
             val actual = Files.walk(source.resolve(subtree)).use { paths ->
                 paths.filter { Files.isRegularFile(it) }.map { source.relativize(it).toString().replace('\\', '/') }.toList().toSet()
             }
@@ -109,6 +109,14 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
                     }
                 }
             }
+            if (taskName in listOf("authLabBrowserTest", "authLabFederationTest", "authLabTransportTest")) {
+                @Suppress("UNCHECKED_CAST")
+                val sourceLock = JsonSlurper().parse(predecessorRoot.resolve("bapp/third-party/jcifs-source.lock.json")) as Map<String, Any?>
+                val source = predecessorRoot.resolve("bapp/build/third-party/jcifs-ng-source.zip")
+                check(source.isFile && labFileSha(source) == sourceLock["sha256"]) { "Prepare the pinned jcifs source before captured browser acceptance." }
+                val target = productionSnapshot.resolve("bapp/build/third-party/jcifs-ng-source.zip")
+                target.parentFile.mkdirs(); Files.copy(source.toPath(), target.toPath())
+            }
             // Running target JVMs must never load a JAR being replaced by another lab build.
             val labClasspath = rootProject.configurations.getByName("authLabRuntime").files.sortedBy { it.name }.map { source ->
                 val hash = labFileSha(source)
@@ -145,6 +153,13 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
                 "reportDirectory" to report.absolutePath, "labJar" to jar.absolutePath,
                 "labClasspath" to labClasspath.map { it.absolutePath },
                 "labArtifactHashes" to labClasspath.associate { it.name to labSha(it.readBytes()) },
+                "testDependencies" to rootProject.configurations.getByName("testRuntimeClasspath").resolvedConfiguration.resolvedArtifacts
+                    .filter { it.id.componentIdentifier is org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+                    .filter { test -> rootProject.configurations.getByName("runtimeClasspath").resolvedConfiguration.resolvedArtifacts.none {
+                        it.moduleVersion.id.group == test.moduleVersion.id.group && it.name == test.name
+                    } }
+                    .map { mapOf("coordinates" to "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}", "sha256" to labFileSha(it.file)) }
+                    .sortedBy { it.getValue("coordinates") },
                 "overlayHashes" to labOverlayFiles().associate { labOverlayName(it) to labSha(it.readBytes()) },
                 "selectionSha256" to labSha(labWorkspace.resolve("test/authentication-lab/src/main/resources/production-selection.json").readBytes()),
                 "buildScriptHashes" to listOf("bapp/build.gradle.kts", "bapp/gradle/auth-lab-production.gradle.kts").associateWith { labSha(labWorkspace.resolve(it).readBytes()) },

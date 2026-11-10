@@ -228,12 +228,16 @@ public class NativeTagPipelineTest {
             public final AuthTrafficGuard guard = new AuthTrafficGuard(); public final Diagnostics diagnostics = new Diagnostics(logs::add);
             public final SessionRecovery recovery; public final HttpSessionHandler handler;
             public boolean supportsDrop = true;
+            public burp.api.montoya.http.message.responses.HttpResponse spoofResponse;
+            private final java.net.URI httpOrigin;
             /** @param fixture Shared deterministic coordinator and saved aliases. */
             public Host(Fixture fixture) { this(fixture, null); }
-            public Host(Fixture fixture, HttpSessionHandler.ReplayTransport transport) {
+            public Host(Fixture fixture, HttpSessionHandler.ReplayTransport transport) { this(fixture,transport,null,null); }
+            public Host(Fixture fixture,HttpSessionHandler.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
+                httpOrigin=origin;
                 recovery = new SessionRecovery(fixture.coordinator, fixture.clock::nanos);
                 burp.api.montoya.internal.ObjectFactoryLocator.FACTORY = stub(burp.api.montoya.internal.MontoyaObjectFactory.class, (method, args) -> factory(method, args));
-                handler = new HttpSessionHandler(fixture.registry, fixture.resolver, guard, recovery, diagnostics, controls, transport);
+                handler = new HttpSessionHandler(fixture.registry, fixture.resolver, guard, recovery, diagnostics, controls, transport, identities);
             }
             /** @param type SDK interface. @param call Observed public API behavior. @return Small test-only dynamic implementation. */
             public <T> T stub(Class<T> type, java.util.function.BiFunction<java.lang.reflect.Method, Object[], Object> call) {
@@ -252,11 +256,17 @@ public class NativeTagPipelineTest {
                 if (result == burp.api.montoya.http.message.requests.HttpRequest.class) {
                     Object raw = a[a.length - 1]; return request(raw instanceof String s ? s : new String(((burp.api.montoya.core.ByteArray) raw).getBytes(), StandardCharsets.ISO_8859_1), 99, false);
                 }
+                if(result==burp.api.montoya.http.message.responses.HttpResponse.class) {
+                    var raw=(burp.api.montoya.core.ByteArray)a[a.length-1];
+                    return stub(burp.api.montoya.http.message.responses.HttpResponse.class,(m,x)->m.getName().equals("toByteArray")?raw:null);
+                }
                 if (result == burp.api.montoya.http.handler.RequestToBeSentAction.class) {
                     if (!supportsDrop) throw new UnsupportedOperationException("Controlled unsupported host factory");
-                    boolean full = a.length == 4; var action = full ? a[0] : burp.api.montoya.http.handler.RequestAction.CONTINUE;
+                    boolean full = a.length == 4;
+                    if(full && a[2] instanceof burp.api.montoya.http.message.responses.HttpResponse response)spoofResponse=response;
+                    var action = full ? a[0] : burp.api.montoya.http.handler.RequestAction.CONTINUE;
                     Object request = full ? a[1] : a[0], notes = full ? a[3] : a.length > 1 ? a[1] : annotations("", null);
-                    return stub(burp.api.montoya.http.handler.RequestToBeSentAction.class, (m, x) -> switch (m.getName()) { case "action" -> action; case "request" -> request; case "annotations" -> notes; default -> null; });
+                    return stub(burp.api.montoya.http.handler.RequestToBeSentAction.class, (m, x) -> switch (m.getName()) { case "action" -> action; case "request" -> request; case "httpResponse" -> full ? a[2] : null; case "annotations" -> notes; default -> null; });
                 }
                 if (result == burp.api.montoya.http.handler.ResponseReceivedAction.class) return stub(burp.api.montoya.http.handler.ResponseReceivedAction.class, (m, x) -> m.getName().equals("response") ? a[0] : m.getName().equals("annotations") && a.length > 1 ? a[1] : null);
                 if (result == burp.api.montoya.proxy.http.ProxyRequestReceivedAction.class || result == burp.api.montoya.proxy.http.ProxyResponseReceivedAction.class) {
@@ -304,9 +314,14 @@ public class NativeTagPipelineTest {
                     Object[] a = args == null ? new Object[0] : args;
                     return switch (m.getName()) {
                         case "messageId" -> id; case "headers" -> headers; case "toByteArray" -> bytes(wire); case "annotations" -> notes; case "isInScope" -> inScope;
-                        case "httpService" -> null; case "toolSource" -> stub(burp.api.montoya.core.ToolSource.class, (method, x) -> ToolTypeForTest());
+                        case "httpService" -> httpOrigin==null?null:stub(burp.api.montoya.http.HttpService.class,(method,x)->switch(method.getName()) {
+                            case "host" -> httpOrigin.getHost();case "port" -> httpOrigin.getPort();case "secure" -> httpOrigin.getScheme().equals("https");default -> null;
+                        });
+                        case "method" -> raw.substring(0,raw.indexOf(' '));
+                        case "body" -> bytes(Arrays.copyOfRange(wire,end+4,wire.length));
+                        case "toolSource" -> stub(burp.api.montoya.core.ToolSource.class, (method, x) -> ToolTypeForTest());
                         case "headerValue" -> headers.stream().filter(h -> h.name().equalsIgnoreCase((String) a[0])).map(h -> h.value()).findFirst().orElse(null);
-                        case "url" -> { urls.incrementAndGet(); if (raw.contains("<@bpsh")) throw new AssertionError("URL helpers must not receive literal native syntax"); yield "https://app.example/protected"; }
+                        case "url" -> { urls.incrementAndGet(); if (raw.contains("<@bpsh")) throw new AssertionError("URL helpers must not receive literal native syntax"); yield httpOrigin==null?"https://app.example/protected":httpOrigin.resolve(raw.split(" ")[1]).toString(); }
                         case "hasHeader" -> headers.stream().anyMatch(h -> h.name().equalsIgnoreCase((String) a[0]));
                         case "withAddedHeader" -> request(raw.substring(0, end) + "\r\n" + a[0] + ": " + a[1] + raw.substring(end), id, inScope);
                         case "withUpdatedHeader" -> {

@@ -22,6 +22,7 @@ tasks.withType<JavaCompile>().configureEach {
 dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("io.github.littleproxy:littleproxy:2.9.1") // Same pin as the inspected native fixture.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86") // Independent MD4/DES verifier; never the production NTLM encoder.
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

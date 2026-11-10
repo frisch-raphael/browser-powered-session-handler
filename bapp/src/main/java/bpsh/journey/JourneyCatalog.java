@@ -12,7 +12,14 @@ public interface JourneyCatalog {
      * @param identity Scope, internal UUID and generation used to reject stale work.
      * @param definition Validated definition without live tokens or secret values.
      */
-    public record Entry(JourneyDefinition.Identity identity, JourneyDefinition definition) {}
+    public record Entry(JourneyDefinition.Identity identity,JourneyDefinition definition,long authenticationSecretRevision) {
+        public Entry(JourneyDefinition.Identity identity,JourneyDefinition definition) {this(identity,definition,0);}
+        public boolean sameHttpAuthentication(Entry other) {
+            return authenticationSecretRevision==other.authenticationSecretRevision && Objects.equals(definition.httpAuthentication(),other.definition.httpAuthentication())
+                    && Objects.equals(definition.mtls(),other.definition.mtls()) && Objects.equals(definition.browser().proxy(),other.definition.browser().proxy())
+                    && definition.browser().ignoreHttpsErrors()==other.definition.browser().ignoreHttpsErrors();
+        }
+    }
     /**
      * Captures one consistent registry publication for lock-free resolution.
      *

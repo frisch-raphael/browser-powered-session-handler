@@ -35,16 +35,7 @@ public final class AuthLabSupport implements AutoCloseable {
         component(id, observed, null);
     }
     public static void component(String id, Map<String, Object> observed, Map<String, Long> timings) throws Exception {
-        String path = System.getProperty("authlab.plan"); if (path == null) return;
-        var invocation = JSON.readTree(Files.readAllBytes(Path.of(path)));
-        var directory = Path.of(invocation.path("reportDirectory").asText()).resolve("component-observations"); Files.createDirectories(directory);
-        String name = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(id.getBytes(StandardCharsets.UTF_8)));
-        var safe = new java.util.LinkedHashMap<String, Object>();
-        safe.put("version", timings == null ? 1 : 2); safe.put("invocationId", invocation.path("invocationId").asText()); safe.put("requirementId", id);
-        safe.put("taskPath", ":" + invocation.path("taskName").asText()); safe.put("productionRevision", invocation.path("productionRevision").asText());
-        safe.put("observed", observed); safe.put("cleanup", "COMPLETE");
-        if (timings != null) { safe.put("configurationHash", invocation.path("configurationHash").asText()); safe.put("timings", timings); }
-        Files.writeString(directory.resolve(name + ".json"), JSON.writeValueAsString(safe), StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE_NEW);
+        lab.auth.LabObservationCapture.write(id, observed, timings);
     }
     public final JsonNode plan;
     public final Path report, environment;

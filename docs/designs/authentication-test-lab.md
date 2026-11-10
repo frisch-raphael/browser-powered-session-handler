@@ -12,7 +12,7 @@ Production acceptance overlays live under `production-tests/bpsh` and run only i
 
 ## Catalog and execution
 
-`src/main/resources/catalog/catalog.json` indexes nine data files and exact named profiles. Expanded requirement rows, expected facts, prerequisites, evidence layers and callable bindings are explicit data. The validator rejects ambiguous JSON, unknown fields, invalid domains and stale or inconsistent bindings. A binding establishes ownership, not a passing result.
+`src/main/resources/catalog/catalog.json` indexes ten data files and exact named profiles. Expanded requirement rows, expected facts, prerequisites, evidence layers and callable bindings are explicit data. The validator rejects ambiguous JSON, unknown fields, invalid domains and stale or inconsistent bindings. A binding establishes ownership, not a passing result.
 
 Each profile selects a finite union of requirement IDs and deduplicates shared execution owners. Fixture-only checks do not count as product acceptance. Out-of-scope entries remain explicit exclusions and cannot run or earn passing coverage. Manual host and capability assessments require their own actual observations.
 

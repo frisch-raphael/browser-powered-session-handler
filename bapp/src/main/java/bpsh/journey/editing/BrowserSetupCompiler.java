@@ -23,6 +23,8 @@ public final class BrowserSetupCompiler {
         var text = draft.text(); var flags = draft.flags();
         var node = JSON.createObjectNode().put("authenticationUrl", text.get("url").trim());
         var browser = node.putObject("browser").put("headless", flags.get("headless"))
+                .put("formAuthentication", flags.get("formAuthentication"))
+                .put("ignoreHttpsErrors", flags.get("ignoreHttpsErrors"))
                 .put("navigationTimeoutMs", seconds(text, "navTimeout"));
         if (!text.get("proxy").isBlank()) browser.putObject("proxy").put("url", text.get("proxy").trim());
         if (flags.get("mtls")) {
@@ -35,6 +37,14 @@ public final class BrowserSetupCompiler {
             var origins = mtls.putArray("origins");
             for (String origin : text.get("origins").split(",")) if (!origin.isBlank()) origins.add(origin.trim());
             if (!text.get("ca").isBlank()) mtls.put("trustedCaBundlePath", text.get("ca").trim());
+        }
+        if (flags.get("httpAuthentication") || java.util.List.of("httpUsername", "httpDomain", "httpWorkstation", "httpOrigins").stream().anyMatch(key -> !text.get(key).isBlank())) {
+            var http = node.putObject("httpAuthentication").put("enabled", flags.get("httpAuthentication")).put("protocol", text.get("httpProtocol"))
+                    .put("username", text.get("httpUsername")).put("domain", text.get("httpDomain"))
+                    .put("workstation", text.get("httpWorkstation"));
+            var origins = http.putArray("origins");
+            for (String origin : text.get("httpOrigins").split(",")) if (!origin.isBlank()) origins.add(origin.trim());
+            if (origins.isEmpty()) throw new ConfigurationException("httpAuthentication.origins: enter at least one exact authentication origin.");
         }
         return node;
     }

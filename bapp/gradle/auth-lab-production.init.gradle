@@ -30,6 +30,13 @@ gradle.projectsEvaluated {
             source.startsWith(original) && replacements.contains(original.relativize(source).toString().replace('\\', '/'))
         }
     }
+    if (!(plan.testDependencies instanceof List) || plan.testDependencies.isEmpty())
+        throw new GradleException('Missing captured test dependency graph.')
+    plan.testDependencies.each { dependency ->
+        if (!(dependency.coordinates ==~ /[^:]+:[^:]+:[^:]+/) || !(dependency.sha256 ==~ /[0-9a-f]{64}/))
+            throw new GradleException('Invalid captured test dependency.')
+        project.dependencies.add('testRuntimeOnly', dependency.coordinates) { transitive = false }
+    }
     project.sourceSets.test.compileClasspath += project.files(plan.labJar)
     project.sourceSets.test.runtimeClasspath += project.files(plan.labJar)
 
@@ -119,6 +126,13 @@ gradle.projectsEvaluated {
             def coordinates = { configuration -> configuration.resolvedConfiguration.resolvedArtifacts.collect {
                 "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}"
             }.sort() }
+            plan.testDependencies.each { dependency ->
+                def matches = project.configurations.testRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+                    "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}" == dependency.coordinates
+                }
+                if (matches.size() != 1 || sha(matches[0].file) != dependency.sha256)
+                    throw new GradleException("Resolved test dependency differs from its immutable capture: ${dependency.coordinates}; matches=${matches.size()}.")
+            }
             def mainGraph = coordinates(project.configurations.runtimeClasspath)
             def testGraph = coordinates(project.configurations.testRuntimeClasspath)
             def gson = { list -> list.findAll { it.startsWith('com.google.code.gson:gson:') } }

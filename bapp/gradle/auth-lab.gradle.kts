@@ -4,7 +4,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 extra["authLabInvocationId"] = UUID.randomUUID().toString()
-val focusedProfileNames = setOf("baseline", "revised", "credentials", "diagnostics", "browser", "recovery")
+val focusedProfileNames = setOf("baseline", "revised", "credentials", "diagnostics", "browser", "recovery", "http-auth")
 val requestedLabProfiles = providers.gradleProperty("labProfiles").getOrElse("baseline").split(",").toSet()
 val focusedProfiles = if (gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "authLab" } &&
     requestedLabProfiles.isNotEmpty() && focusedProfileNames.containsAll(requestedLabProfiles)) requestedLabProfiles.toList() else emptyList()

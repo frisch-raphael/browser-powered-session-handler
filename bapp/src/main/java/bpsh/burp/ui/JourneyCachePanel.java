@@ -5,6 +5,7 @@ import bpsh.journey.JourneyCatalog;
 import bpsh.authentication.credentials.TokenLifetime;
 import bpsh.authentication.credentials.TokenSnapshot;
 import bpsh.journey.JourneyDefinition;
+import bpsh.authentication.http.HttpAuthenticationProgress;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
@@ -24,6 +25,7 @@ final class JourneyCachePanel extends JPanel {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("dd MMM uuuu HH:mm:ss z").withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter COMPACT_TIME = DateTimeFormatter.ofPattern("dd MMM, HH:mm:ss").withZone(ZoneId.systemDefault());
     private final JLabel empty = new JLabel("No usable cached credentials.");
+    private final JLabel httpNote = new JLabel("Requests use the saved HTTP authentication identity for each allowed origin.");
     private final JPanel metadata = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
     private final JLabel expires = new JLabel(), refresh = new JLabel(), cached = new JLabel();
     private final Model model = new Model();
@@ -34,6 +36,8 @@ final class JourneyCachePanel extends JPanel {
     private final Consumer<String> feedback, clipboard;
     private JourneyDefinition.Identity shown;
     private long version = -1;
+    private List<HttpAuthenticationProgress> httpProgress = List.of();
+    private bpsh.journey.HttpAuthentication shownHttp;
 
     /** @param close Hides the dock and releases its displayed credential references. */
     JourneyCachePanel(Runnable close) { this(close, message -> {}); }
@@ -50,7 +54,9 @@ final class JourneyCachePanel extends JPanel {
         metadata.add(timing("Cached", cached));
         metadata.setVisible(false);
         var actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)); actions.add(UiIcons.button(UiIcons.Action.REMOVE, "Close journey cache", close));
-        var summary = new JPanel(new BorderLayout(0, 5)); summary.add(metadata); summary.add(empty, BorderLayout.SOUTH);
+        var summary = new JPanel(); summary.setLayout(new BoxLayout(summary, BoxLayout.Y_AXIS));
+        metadata.setAlignmentX(Component.LEFT_ALIGNMENT); empty.setAlignmentX(Component.LEFT_ALIGNMENT); httpNote.setAlignmentX(Component.LEFT_ALIGNMENT);
+        httpNote.setVisible(false); summary.add(metadata); summary.add(httpNote); summary.add(empty);
         var top = new JPanel(new BorderLayout(8, 0)); top.add(summary); top.add(actions, BorderLayout.EAST); add(top, BorderLayout.NORTH);
         getAccessibleContext().setAccessibleName("Journey cache"); metadata.getAccessibleContext().setAccessibleName("Cache lifetime");
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); table.setDefaultRenderer(Object.class, renderer); table.getAccessibleContext().setAccessibleName("Cached credentials");
@@ -83,11 +89,12 @@ final class JourneyCachePanel extends JPanel {
         table.setRowSelectionInterval(row, row); table.requestFocusInWindow(); menu.show(table, event.getX(), event.getY());
     }
     /** Enables copy only while a current displayed credential is selected. */
-    private void updateCopyActions() { int row = table.getSelectedRow(); boolean enabled = row >= 0 && row < model.rows.size(); copyName.setEnabled(enabled); copyValue.setEnabled(enabled); }
+    private void updateCopyActions() { int row = table.getSelectedRow(); boolean enabled = row >= 0 && row < model.rows.size() && model.rows.get(table.convertRowIndexToModel(row)).copyable(); copyName.setEnabled(enabled); copyValue.setEnabled(enabled); }
     /** @param name Whether to copy the configured token name or actual cookie name, rather than its captured value. */
     private void copy(boolean name) {
         int row = table.getSelectedRow(); if (row < 0 || row >= model.rows.size()) return;
         var credential = model.rows.get(table.convertRowIndexToModel(row));
+        if (!credential.copyable()) return;
         try { clipboard.accept(name ? credential.copyName() : credential.value()); }
         catch (IllegalStateException | SecurityException | HeadlessException error) { feedback.accept("Could not access the clipboard. Try copying again."); }
     }
@@ -97,21 +104,78 @@ final class JourneyCachePanel extends JPanel {
      * @param snapshot Current usable atomic publication, or null when absent/expired/invalidated.
      */
     void refresh(JourneyCatalog.Entry entry, TokenSnapshot snapshot) {
+        refresh(entry,snapshot,List.of());
+    }
+    /** Adds current HTTP observations independently of reusable token and cookie publications. */
+    void refresh(JourneyCatalog.Entry entry, TokenSnapshot snapshot, List<HttpAuthenticationProgress> observations) {
+        refresh(entry,snapshot,observations,null);
+    }
+    /** A draft can expose its validated recording identity without compiling unfinished capture settings. */
+    void refresh(JourneyCatalog.Entry entry, TokenSnapshot snapshot, List<HttpAuthenticationProgress> observations,
+            bpsh.journey.HttpAuthentication recordedSettings) {
         getAccessibleContext().setAccessibleDescription(entry == null ? null : "Cached credentials for " + entry.definition().alias());
-        if (entry == null || snapshot == null || !entry.identity().equals(snapshot.identity())) { clear(); return; }
-        if (entry.identity().equals(shown) && version == snapshot.version()) return;
-        clear(); shown = entry.identity(); version = snapshot.version(); metadata.setVisible(true);
-        updateTiming(snapshot.lifetime());
+        if (entry == null) { clear(); return; }
+        var httpSettings = entry.definition().httpAuthenticationEnabled() ? entry.definition().httpAuthentication() :
+                entry.definition().draft() != null && entry.definition().draft().flags().get("httpAuthentication") ? recordedSettings : null;
+        if (snapshot != null && !entry.identity().equals(snapshot.identity())) snapshot = null;
+        long incoming = snapshot == null ? -1 : snapshot.version();
+        if (entry.identity().equals(shown) && version == incoming && httpProgress.equals(observations) && java.util.Objects.equals(shownHttp,httpSettings)) return;
+        clear(); shown = entry.identity(); version = incoming; httpProgress = List.copyOf(observations); shownHttp = httpSettings;
         var rows = new ArrayList<Credential>();
-        var extraction = snapshot.extraction() == null ? entry.definition().extraction() : snapshot.extraction();
-        if (extraction instanceof JourneyDefinition.CombinedExtraction combined) {
-            for (var token : combined.tokens()) add(rows, token.name(), token.selector(), snapshot.namedTokens().get(token.name()));
-        } else add(rows, extraction instanceof JourneyDefinition.CookieExtraction cookie ? cookie.name() : "Default", extraction, snapshot.value());
+        if (snapshot != null) {
+            metadata.setVisible(true); updateTiming(snapshot.lifetime());
+            var extraction = snapshot.extraction() == null ? entry.definition().extraction() : snapshot.extraction();
+            if (extraction instanceof JourneyDefinition.CombinedExtraction combined) {
+                for (var token : combined.tokens()) add(rows, token.name(), token.selector(), snapshot.namedTokens().get(token.name()));
+            } else add(rows, extraction instanceof JourneyDefinition.CookieExtraction cookie ? cookie.name() : "Default", extraction, snapshot.value());
+        }
+        if (httpSettings != null) {
+            addHttp(rows,entry,httpSettings,snapshot,observations); httpNote.setVisible(true);
+        }
         model.rows = List.copyOf(rows); model.fireTableDataChanged(); empty.setVisible(rows.isEmpty());
         if (!rows.isEmpty()) table.setRowSelectionInterval(0, 0);
     }
     /** Drops every displayed value on close, expiry, invalidation, selection change or unload. */
-    void clear() { menu.setVisible(false); shown = null; version = -1; if (!model.rows.isEmpty()) { model.rows = List.of(); model.fireTableDataChanged(); } table.clearSelection(); updateCopyActions(); renderer.setText(""); for (var label : List.of(expires, refresh, cached)) timingValue(label, "", null); metadata.setVisible(false); empty.setVisible(true); }
+    void clear() { menu.setVisible(false); shown = null; version = -1; shownHttp = null; httpProgress = List.of(); if (!model.rows.isEmpty()) { model.rows = List.of(); model.fireTableDataChanged(); } table.clearSelection(); updateCopyActions(); renderer.setText(""); renderer.setToolTipText(null); for (var label : List.of(expires, refresh, cached)) timingValue(label, "", null); metadata.setVisible(false); httpNote.setVisible(false); empty.setVisible(true); }
+
+    private static void addHttp(List<Credential> rows,JourneyCatalog.Entry entry,bpsh.journey.HttpAuthentication settings,TokenSnapshot snapshot,List<HttpAuthenticationProgress> observations) {
+        String account = settings.domain().isEmpty() ? settings.username() : settings.domain() + "\\" + settings.username();
+        for (var origin : settings.origins().stream().sorted(java.util.Comparator.comparing(Object::toString)).toList()) {
+            var progress = observations.stream().filter(p -> p.origin() == null || p.origin().equals(origin))
+                    .max(java.util.Comparator.comparing(HttpAuthenticationProgress::time)).orElse(null);
+            String result = "Not yet observed";
+            Instant observed = null;
+            int status = 0;
+            if (progress != null) { result = httpStatus(progress.stage()); observed = progress.time(); status = progress.httpStatus(); }
+            else if (snapshot != null) {
+                var evidence = snapshot.httpObservations().stream().filter(e -> origin.equals(e.origin()))
+                        .max(java.util.Comparator.comparing(bpsh.authentication.http.HttpAuthenticationEvidence::observedAt)).orElse(null);
+                if (evidence != null) {
+                    result = switch (evidence.status()) { case ACCEPTED -> "Accepted"; case REJECTED -> "Rejected"; case UNCONFIRMED -> "Unconfirmed"; };
+                    if (evidence.observedIdentity() != null && !entry.identity().equals(evidence.observedIdentity())) result += " before the latest edit";
+                    observed = evidence.observedAt();
+                    status = evidence.httpStatus();
+                }
+            }
+            String details = result + (status == 0 ? "" : " (HTTP " + status + ")") + (observed == null ? "" : " — " + TIME.format(observed));
+            rows.add(new Credential("HTTP auth", settings.protocol() + " · " + account, "", origin.toString(), false, details));
+        }
+    }
+    private static String httpStatus(HttpAuthenticationProgress.Stage stage) {
+        return switch (stage) {
+            case ACCEPTED -> "Accepted"; case CONNECTION_REUSED -> "Accepted; connection reused";
+            case REJECTED -> "Rejected"; case UNCONFIRMED -> "Unconfirmed"; case CANCELLED -> "Cancelled";
+            case STARTED -> "Starting"; case NEGOTIATE_SENT -> "Negotiating"; case CHALLENGE_RECEIVED -> "Challenge received";
+            case AUTHENTICATE_SENT, BASIC_SENT -> "Waiting for server confirmation";
+            case TIMED_OUT -> "Timed out"; case INVALID_CHALLENGE -> "Invalid NTLM challenge";
+            case RESPONSE_FAILED -> "Authentication response failed"; case CONNECTION_CLOSED -> "Connection closed during authentication";
+            case TLS_FAILED -> "TLS failed"; case CONNECTION_FAILED -> "Connection failed"; case CAPACITY -> "Capacity exhausted";
+            case SETUP_FAILED -> "Setup failed"; case MISSING_SECRET -> "Missing password or PIN";
+            case ORIGIN_BLOCKED -> "Origin not allowed"; case AUTHORIZATION_CONFLICT -> "Application Authorization conflict";
+            case PROXY_AUTH_REQUIRED -> "Proxy authentication required"; case FAILED -> "Exchange failed";
+            case APPLICATION_DENIED -> "Application access denied"; case SERVER_ERROR -> "Server error";
+        };
+    }
     /** Displays fixed acquisition and deadline timestamps for this cache publication. */
     private void updateTiming(TokenLifetime.Window lifetime) {
         timestamp(expires, lifetime.acquiredAt().plusNanos(lifetime.usableNanos()), "Expires");
@@ -135,7 +199,10 @@ final class JourneyCachePanel extends JPanel {
     /** @param rows Owned display list. @param name User-defined credential name. @param source Configured source. @param value Captured value; null is omitted. */
     private static void add(List<Credential> rows, String name, JourneyDefinition.Extraction source, String value) { if (value != null) rows.add(new Credential(source instanceof JourneyDefinition.CookieExtraction ? "Cookie" : "Token", source instanceof JourneyDefinition.CookieExtraction cookie && !cookie.name().equals(name) ? name + " (" + cookie.name() + ")" : name, source instanceof JourneyDefinition.CookieExtraction cookie ? cookie.name() : name, value)); }
     /** Owns an inspection-only value whose diagnostic representation is deliberately redacted. */
-    private record Credential(String type, String name, String copyName, String value) { /** @return Metadata-free diagnostic label without any captured credential. */ @Override public String toString() { return "CachedCredential[redacted]"; } }
+    private record Credential(String type, String name, String copyName, String value, boolean copyable, String details) {
+        Credential(String type, String name, String copyName, String value) { this(type,name,copyName,value,true,null); }
+        /** @return Metadata-free diagnostic label without any captured credential. */ @Override public String toString() { return "CachedCredential[redacted]"; }
+    }
     /** Read-only rows for the explicitly opened cache viewer. */
     private static final class Model extends AbstractTableModel {
         List<Credential> rows = List.of();
@@ -146,6 +213,10 @@ final class JourneyCachePanel extends JPanel {
     }
     /** Treats token/cookie text as literal data, including HTML-looking values. */
     private static final class PlainRenderer extends DefaultTableCellRenderer {
-        /** @return Native themed cell with HTML interpretation disabled. */ @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) { putClientProperty("html.disable", true); super.getTableCellRendererComponent(table, value, selected, focus, row, column); setText(String.valueOf(value)); return this; }
+        /** @return Native themed cell with literal text; HTTP status details are available on hover over its origin. */ @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
+            putClientProperty("html.disable", true); super.getTableCellRendererComponent(table, value, selected, focus, row, column); setText(String.valueOf(value));
+            var credential = ((Model)table.getModel()).rows.get(table.convertRowIndexToModel(row));
+            setToolTipText(table.convertColumnIndexToModel(column) == 2 ? credential.details() : null); return this;
+        }
     }
 }

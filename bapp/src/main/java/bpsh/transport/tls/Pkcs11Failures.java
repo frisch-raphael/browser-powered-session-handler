@@ -1,4 +1,4 @@
-package bpsh.browser.mtls;
+package bpsh.transport.tls;
 
 import bpsh.authentication.AuthenticationFailure;
 import java.nio.file.AccessDeniedException;

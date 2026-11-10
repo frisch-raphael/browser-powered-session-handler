@@ -171,7 +171,7 @@ public final class PlaywrightDriverAdapter {
             return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary);
         } catch (AuthenticationFailure ex) {
             watchdog.shutdownNow(); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent()); throw ex;
-        } catch (Exception ex) {
+        } catch (Exception | LinkageError ex) {
             boolean exited = process != null && !process.isAlive();
             watchdog.shutdownNow(); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent());
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
@@ -184,7 +184,10 @@ public final class PlaywrightDriverAdapter {
      * @param exited Whether its process exited before cleanup began.
      * @return Safe setup result.
      */
-    public static AuthenticationFailure startupFailure(Exception error, boolean exited) {
+    public static AuthenticationFailure startupFailure(Throwable error, boolean exited) {
+        if (error instanceof LinkageError || error.getCause() instanceof LinkageError)
+            return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,
+                    "The bundled browser runtime could not load.", "Reload the complete universal extension JAR, then try again.");
         var cause = error instanceof java.nio.file.AccessDeniedException ? AuthenticationFailure.Cause.CONFIGURATION
                 : error instanceof java.nio.file.NoSuchFileException ? AuthenticationFailure.Cause.ASSET_MISSING : AuthenticationFailure.Cause.UNKNOWN;
         String safe = cause == AuthenticationFailure.Cause.CONFIGURATION ? "Burp cannot execute the bundled browser driver."

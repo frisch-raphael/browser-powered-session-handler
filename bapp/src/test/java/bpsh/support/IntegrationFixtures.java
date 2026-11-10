@@ -6,7 +6,7 @@ import bpsh.authentication.credentials.TokenExtractor;
 import bpsh.journey.AuthStep;
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.journey.JourneyDefinition;
-import bpsh.browser.mtls.Pkcs11IdentityManager;
+import bpsh.transport.tls.Pkcs11IdentityManager;
 import bpsh.browser.runtime.BrowserRuntimeManager;
 import bpsh.journey.SecretStore;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -27,6 +27,66 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Adapts canonical lab fixtures to native journeys, traffic observation and isolated artifact probes. */
 public final class IntegrationFixtures {
+    /** Unit-test admission seam for scopes with no concrete transport resources. */
+    public static bpsh.authentication.http.HttpAuthenticationService.Delivery httpDelivery(java.util.function.Function<bpsh.authentication.http.HttpAuthenticationService.Request,java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService.Response>> operation) {
+        return new bpsh.authentication.http.HttpAuthenticationService.Delivery() {
+            final java.util.concurrent.atomic.AtomicBoolean used=new java.util.concurrent.atomic.AtomicBoolean();
+            java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService.Response> active;
+            @Override public synchronized java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService.Response> exchange(bpsh.authentication.http.HttpAuthenticationService.Request request) {
+                if(!used.compareAndSet(false,true))return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Single-use test delivery."));
+                active=operation.apply(request);return active;
+            }
+            @Override public synchronized void close() {used.set(true);if(active!=null)active.cancel(true);}
+        };
+    }
+    public static java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService.Response> httpExchange(
+            bpsh.authentication.http.HttpAuthenticationService scope,bpsh.authentication.http.HttpAuthenticationService.Request request,long deadline) {
+        try {
+            var lease=scope.admit(deadline);var result=lease.exchange(request);
+            result.whenComplete((value,error)->lease.close());return result;
+        } catch(java.io.IOException|RuntimeException failure) {return java.util.concurrent.CompletableFuture.failedFuture(failure);}
+    }
+
+    /** Test-owned payload, separate from a runtime's measured transport allocations. */
+    public static bpsh.authentication.http.HttpMessageBody httpBody(byte[] bytes) {
+        try(var builder=new bpsh.authentication.http.HttpMessageBody.Allocator(bytes.length).builder(bytes.length)) {
+            builder.append(java.nio.ByteBuffer.wrap(bytes));return builder.finish();
+        } catch(java.io.IOException impossible) {throw new AssertionError(impossible);}
+    }
+    /** Consumes and closes an actual response after copying it into assertion-owned memory. */
+    public static byte[] httpBytes(bpsh.authentication.http.HttpAuthenticationService.Response response) {
+        try(response;var output=new java.io.ByteArrayOutputStream()) {response.body().writeTo(output);return output.toByteArray();}
+        catch(java.io.IOException failure) {throw new AssertionError(failure);}
+    }
+
+    /** Preselected certificate seam for native proxy qualification; production setup uses HttpTransportFactory. */
+    public static bpsh.browser.proxy.BrowserProxyForwarder browserProxy(bpsh.transport.httpauth.HttpTransportRuntime runtime,
+            bpsh.journey.BrowserSetup setup,bpsh.transport.tls.Pkcs11IdentityManager.Selected certificate,char[] password,java.time.Clock clock,long deadline)
+            throws bpsh.authentication.AuthenticationFailure {
+        boolean bypass=setup.mtls()==null && setup.browser().ignoreHttpsErrors();
+        var tls=new bpsh.transport.tls.JourneyTlsContexts(setup.mtls(),certificate,bypass);
+        var service=runtime.openBrowser(setup.httpAuthenticationEnabled()?setup.httpAuthentication():null,password,tls::forOrigin,
+                setup.browser().proxy()==null?null:setup.browser().proxy().url(),bypass);
+        var scope=new bpsh.authentication.http.HttpAuthenticationService() {
+            @Override public Delivery admit(long end) throws java.io.IOException {return service.admit(end);}
+            @Override public boolean isOpen() {return service.isOpen();}
+            @Override public bpsh.authentication.AuthenticationFailure failure() {return tls.failure();}
+            @Override public void close() {service.close();}
+        };
+        return new bpsh.browser.proxy.BrowserProxyForwarder(setup,scope,runtime.bodies(),clock,deadline);
+    }
+    public static bpsh.browser.proxy.BrowserProxyForwarder browserProxy(bpsh.transport.httpauth.HttpTransportRuntime runtime,
+            bpsh.journey.JourneyDefinition.Mtls mtls,bpsh.transport.tls.Pkcs11IdentityManager.Selected certificate,
+            bpsh.journey.JourneyDefinition.Proxy upstream,java.time.Clock clock) throws bpsh.authentication.AuthenticationFailure {
+        return browserProxy(runtime,new bpsh.journey.BrowserSetup(mtls.origins().getFirst(),new bpsh.journey.JourneyDefinition.Browser(true,upstream,30000,3000),mtls),
+                certificate,null,clock,System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(5));
+    }
+
+    /** Independent shared lab application; no protocol encoder is shared with production. */
+    public static lab.auth.HttpAuthenticationFixture httpAuthentication(String protocol, javax.net.ssl.SSLContext tls) throws InterruptedException {
+        return new lab.auth.HttpAuthenticationFixture(lab.auth.HttpAuthenticationFixture.Protocol.valueOf(protocol),
+                java.util.Map.of("user-a", "alpha-password", "user-b", "bravo-password"), tls);
+    }
     /** Prevents instantiation of test-boundary factories. */
     private IntegrationFixtures() {}
 
@@ -306,7 +366,7 @@ public final class IntegrationFixtures {
                 var before = cacheInventory(home);
                 if (args[0].equals("cold-probe") && !before.isEmpty()) throw new AssertionError("Cold cache was already prepared.");
                 evidence.set("beforeBundles", json.valueToTree(before));
-                try (var runtime = new BrowserRuntimeManager(); var identities = new Pkcs11IdentityManager();
+                try (var runtime = new BrowserRuntimeManager(); var identities = new Pkcs11IdentityManager(); var httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime();
                      var guard = new AuthTrafficGuard(); var values = SecretStore.Values.empty()) {
                     var steps = List.of(new AuthStep.Definition(UUID.randomUUID(), AuthStep.Type.INPUT, "#user", "fixture", null, null, null),
                             new AuthStep.Definition(UUID.randomUUID(), AuthStep.Type.CLICK, "#submit", null, null, null, null));
@@ -314,7 +374,7 @@ public final class IntegrationFixtures {
                     long started = System.nanoTime(), deadline = started + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
                     var ready = runtime.acquire(deadline, () -> false); long prepared = System.nanoTime();
                     if (args[0].equals("cache-probe") && !before.containsKey(ready.bundleDigest())) throw new AssertionError("Cache probe created a new identity.");
-                    var runner = new BrowserFlowRunner(runtime, identities, guard, Clock.systemUTC());
+                    var runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
                     var outcome = runner.run(identity, journey, values, false, deadline, () -> false);
                     long finished = System.nanoTime();
                     if (!"probe-ready".equals(outcome.token()) || finished > deadline) throw new AssertionError("Normal-budget fixture authentication failed.");
