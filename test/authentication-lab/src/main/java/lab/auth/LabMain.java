@@ -13,10 +13,12 @@ public final class LabMain {
     public static void main(String[] args) { System.exit(run(args, System.out, System.err)); }
 
     public static int run(String[] args, PrintStream out, PrintStream err) {
+        if(args.length>0&&Set.of("host-test","host-qualify","host-guest").contains(args[0]))return LabHostCoordinator.runCommand(args,out,err);
         try {
             if (args.length == 0 || args[0].equals("help")) {
                 out.println("Usage: matrix|doctor|run|serve|reset|stop|prepare-case|components --profiles baseline[,browser,...] [--run UUID] [--case ID] [--environment-root PATH]");
                 out.println("serve starts foreground controlled targets. reset/stop use a private owned descriptor; keys are never printed.");
+                out.println("host-test|host-qualify use captured --plan, --workspace, --artifact, --vm-config and --report-directory; host-guest accepts only --plan and --report-directory.");
                 return 0;
             }
             if (args.length % 2 != 1) { err.println("Invalid arguments. Use help."); return 2; }

@@ -7,6 +7,7 @@ Verifies bundled platform assets and owns extraction, immutable cache publicatio
 ## Interface
 
 - [BrowserManifestCodec](./BrowserManifestCodec.java): Bounded manifest parsing, archive metadata and path validation; performs no cache publication.
+- [BrowserArchiveCodec](./BrowserArchiveCodec.java): Streams the selected format-2 XZ resource to an exact-size ZIP with compressed SHA-256, a 128 MiB decoder ceiling and the original attempt checkpoints; owns the source stream only.
 - [BrowserRuntimeManager](./BrowserRuntimeManager.java): Verifies and extracts only the JAR's bundled browser assets, with no network/install fallback.
 - [InvalidAsset](./InvalidAsset.java): Distinguishes a proved asset invariant failure from unrelated filesystem I/O.
 - [BoundedTokenResponses](./BoundedTokenResponses.java): Streams selected decoded Chromium responses under the 1 MiB extraction ceiling.

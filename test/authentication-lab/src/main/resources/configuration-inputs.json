@@ -1,8 +1,11 @@
 {
   "configurationFiles": [
     "bapp/build.gradle.kts",
+    "bapp/gradle.properties",
+    "bapp/gradle/browser-assets.gradle.kts",
     "bapp/gradle/architecture.gradle.kts",
     "bapp/gradle/auth-lab.gradle.kts",
+    "bapp/gradle/auth-lab-host.gradle.kts",
     "bapp/settings.gradle.kts",
     "bapp/gradle/verification-metadata.xml",
     "test/authentication-lab/build.gradle.kts",
@@ -11,6 +14,7 @@
     "bapp/gradle/auth-lab-production.init.gradle",
     "test/authentication-lab/src/main/resources/configuration-inputs.json",
     "test/authentication-lab/src/main/resources/production-policy.json",
-    "test/authentication-lab/src/main/resources/production-selection.json"
+    "test/authentication-lab/src/main/resources/production-selection.json",
+    "test/authentication-lab/src/main/resources/host-scenarios.json"
   ]
 }

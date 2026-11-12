@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Exercises complete raw messages with fake authentication, without claiming real-Burp URL handling. */
 public class NativeTagPipelineTest {
+    private enum UrlCase { BURP_SCOPE, ALL_REQUESTS, SINGLE_URL }
     /** Shares a registry and bounded fake runner with actual parser/resolver code. */
     public static final class Fixture implements AutoCloseable {
         public final SecretStore secrets = new SecretStore();
@@ -178,7 +179,7 @@ public class NativeTagPipelineTest {
             if(diagnostic!=null) {
                 String note=action.annotations().notes();var messages=new ArrayList<>(host.logs);messages.add(note);
                 diagnostic.put("nativePhase",failure.phase().name());diagnostic.put("nativeCause",failure.reason().name());diagnostic.put("requestStopped",action.action()==burp.api.montoya.http.handler.RequestAction.DROP);diagnostic.put("sourceUnchanged",Arrays.equals(original,request.toByteArray().getBytes()));diagnostic.put("noReplacement",action.request()==null);
-                diagnostic.put("correctAlias",note.contains("missing"));diagnostic.put("requestMessageMatches",note.contains("Request was not sent.")&&note.contains(failure.getMessage()));diagnostic.put("logMessageMatches",host.logs.stream().anyMatch(text->text.contains("Request 901:")&&text.contains(failure.problem())));
+                diagnostic.put("correctAlias",note.contains("missing"));diagnostic.put("requestMessageMatches",note.contains("Burp was asked to drop this request.")&&note.contains(failure.getMessage()));diagnostic.put("logMessageMatches",host.logs.stream().anyMatch(text->text.contains("GLOBAL request 901:")&&text.contains(failure.problem())));
                 diagnostic.put("currentRevision",before.equals(f.registry.snapshot().resolve("employee").identity())&&f.coordinator.peek(before)==null);
                 diagnostic.put("forbiddenClaimAbsent",messages.stream().noneMatch(text->text.toLowerCase(java.util.Locale.ROOT).contains("connection")||text.toLowerCase(java.util.Locale.ROOT).contains("password")));diagnostic.put("redacted",messages.stream().noneMatch(text->text.contains("CANARY_REQUEST_SECRET")));
                 diagnostic.put("waitingRequests",f.coordinator.capacity().waitingRequests());diagnostic.put("pendingWorkers",f.clock.workers.size());diagnostic.put("extraAttempts",f.attempts-attempts);
@@ -349,7 +350,7 @@ public class NativeTagPipelineTest {
             f.failedAlias = "admin"; byte[] original = wire(header("<@employee/> <@admin/>")); byte[] preserved = original.clone();
             var operation = f.resolver.resolve(original, f.registry.snapshot().resolve("employee"), true);
             f.clock.runWorker(); f.clock.runWorker(); var failure = error(operation);
-            assertEquals(AuthenticationFailure.Cause.AUTH_REJECTED, failure.reason()); assertTrue(failure.getMessage().contains("Journey admin:"));
+            assertEquals(AuthenticationFailure.Cause.AUTH_REJECTED, failure.reason()); assertFalse(failure.getMessage().contains("Journey admin:"));
             assertEquals(f.registry.snapshot().resolve("admin").identity(), failure.journey()); assertFalse(failure.getMessage().contains("employee"));
             assertArrayEquals(preserved, original); assertEquals(0, f.coordinator.capacity().waitingRequests());
         }
@@ -521,31 +522,32 @@ public class NativeTagPipelineTest {
         /** Replaces only the SDK test JVM's factory and restores it after every hook test. */
         public final class Host implements AutoCloseable {
             public final burp.api.montoya.internal.MontoyaObjectFactory previous = burp.api.montoya.internal.ObjectFactoryLocator.FACTORY;
-            public final java.util.concurrent.atomic.AtomicReference<RequestSettings.Controls> controls = new java.util.concurrent.atomic.AtomicReference<>(RequestSettings.Controls.defaults());
+            public final RequestControlState controls = new RequestControlState(RequestSettings.Controls.defaults());
             public final java.util.concurrent.atomic.AtomicInteger largeReads = new java.util.concurrent.atomic.AtomicInteger(), urls = new java.util.concurrent.atomic.AtomicInteger(), bodyAccesses = new java.util.concurrent.atomic.AtomicInteger();
             public final List<String> logs = new java.util.concurrent.CopyOnWriteArrayList<>();
             public final AuthTrafficGuard guard = new AuthTrafficGuard(); public final Diagnostics diagnostics = new Diagnostics(logs::add);
-            public final SessionRecovery recovery; public final HttpSessionHandler handler;
+            public final SessionRecovery recovery; public final GlobalHttpSessionAdapter handler; public final ProxyHttpSessionAdapter proxy; public final SessionHandling sessions;
+            public String incomingListener = "127.0.0.1:8081";
             public boolean supportsDrop = true;
             public burp.api.montoya.http.message.responses.HttpResponse spoofResponse;
             private java.net.URI httpOrigin;
             public burp.api.montoya.core.ToolType selectedTool = burp.api.montoya.core.ToolType.EXTENSIONS;
             /** @param fixture Shared deterministic coordinator and saved aliases. */
             public Host(Fixture fixture) { this(fixture, null); }
-            public Host(Fixture fixture, HttpSessionHandler.ReplayTransport transport) {
+            public Host(Fixture fixture, RecoveryReplayDelivery.ReplayTransport transport) {
                 this(fixture.registry,fixture.resolver,fixture.coordinator,fixture.clock::nanos,transport);
             }
-            public Host(Fixture fixture,HttpSessionHandler.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
+            public Host(Fixture fixture,RecoveryReplayDelivery.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
                 this(fixture.registry,fixture.resolver,fixture.coordinator,fixture.clock::nanos,transport,identities,origin);
             }
-            public Host(JourneyWorkspace registry,NativeTagResolver resolver,AuthenticationCoordinator coordinator,java.util.function.LongSupplier nanos,HttpSessionHandler.ReplayTransport transport) {
+            public Host(JourneyWorkspace registry,NativeTagResolver resolver,AuthenticationCoordinator coordinator,java.util.function.LongSupplier nanos,RecoveryReplayDelivery.ReplayTransport transport) {
                 this(registry,resolver,coordinator,nanos,transport,null,null);
             }
-            public Host(JourneyWorkspace registry,NativeTagResolver resolver,AuthenticationCoordinator coordinator,java.util.function.LongSupplier nanos,HttpSessionHandler.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
+            public Host(JourneyWorkspace registry,NativeTagResolver resolver,AuthenticationCoordinator coordinator,java.util.function.LongSupplier nanos,RecoveryReplayDelivery.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
                 httpOrigin=origin;
                 recovery = new SessionRecovery(coordinator,nanos);
                 burp.api.montoya.internal.ObjectFactoryLocator.FACTORY = stub(burp.api.montoya.internal.MontoyaObjectFactory.class, (method, args) -> factory(method, args));
-                handler = new HttpSessionHandler(registry,resolver,guard,recovery,diagnostics,controls,transport,identities);
+                sessions = new SessionHandling(registry,resolver,guard,recovery,diagnostics,controls,transport,identities); handler = sessions.global(); proxy = sessions.proxy();
             }
             /** @param type SDK interface. @param call Observed public API behavior. @return Small test-only dynamic implementation. */
             public <T> T stub(Class<T> type, java.util.function.BiFunction<java.lang.reflect.Method, Object[], Object> call) {
@@ -559,7 +561,7 @@ public class NativeTagPipelineTest {
             /** @param method SDK factory signature. @param a Factory arguments. @return Pure in-memory host object, with no network or installed app access. */
             public Object factory(java.lang.reflect.Method method, Object[] a) {
                 var result = method.getReturnType(); String name = method.getName();
-                if (result == burp.api.montoya.core.ByteArray.class) return bytes((byte[]) a[0]);
+                if (result == burp.api.montoya.core.ByteArray.class) return bytes(a[0] instanceof Integer size ? new byte[size] : (byte[]) a[0]);
                 if (result == burp.api.montoya.core.Annotations.class) return annotations(a.length > 0 && a[0] instanceof String s ? s : "", null);
                 if (result == burp.api.montoya.http.message.requests.HttpRequest.class) {
                     Object raw = a[a.length - 1]; return request(raw instanceof String s ? s : new String(((burp.api.montoya.core.ByteArray) raw).getBytes(), StandardCharsets.ISO_8859_1), 99, false);
@@ -581,6 +583,12 @@ public class NativeTagPipelineTest {
                     Object action = a.length == 3 ? a[2] : java.lang.Enum.valueOf(burp.api.montoya.proxy.MessageReceivedAction.class, name.contains("DoNotIntercept") ? "DO_NOT_INTERCEPT" : "CONTINUE");
                     return stub(result, (m, x) -> switch (m.getName()) { case "action" -> action; case "request", "response" -> a[0]; case "annotations" -> a.length > 1 ? a[1] : annotations("", null); default -> null; });
                 }
+                if (result == burp.api.montoya.proxy.http.ProxyRequestToBeSentAction.class || result == burp.api.montoya.proxy.http.ProxyResponseToBeSentAction.class) {
+                    return stub(result, (m, x) -> switch (m.getName()) {
+                        case "request", "response" -> a[0]; case "annotations" -> a.length > 1 ? a[1] : annotations("", null);
+                        case "action" -> a.length > 2 ? a[2] : burp.api.montoya.proxy.MessageToBeSentAction.CONTINUE; default -> null;
+                    });
+                }
                 throw new AssertionError("Unexpected SDK factory boundary: " + name);
             }
             /** @param value Exact wire bytes. @return Byte-array view whose large materialization is counted. */
@@ -589,6 +597,7 @@ public class NativeTagPipelineTest {
                     case "length" -> value.length; case "getByte" -> value[(int) a[0]];
                     case "getBytes" -> { if (value.length > 65_536) largeReads.incrementAndGet(); yield value.clone(); }
                     case "subArray" -> bytes(Arrays.copyOfRange(value, (int) a[0], (int) a[1]));
+                    case "setBytes" -> { byte[] source = a[1] instanceof byte[] raw ? raw : ((burp.api.montoya.core.ByteArray) a[1]).getBytes(); System.arraycopy(source, 0, value, (int) a[0], source.length); yield null; }
                     case "indexOf" -> {
                         byte[] needle = a[0] instanceof String s ? wire(s) : ((burp.api.montoya.core.ByteArray) a[0]).getBytes();
                         boolean sensitive = a.length == 1 || (boolean) a[1]; int start = a.length > 2 ? (int) a[2] : 0, end = a.length > 3 ? (int) a[3] : value.length, found = -1;
@@ -621,7 +630,7 @@ public class NativeTagPipelineTest {
                 Object request = java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{burp.api.montoya.http.handler.HttpRequestToBeSent.class, burp.api.montoya.proxy.http.InterceptedRequest.class}, (proxy, m, args) -> {
                     Object[] a = args == null ? new Object[0] : args;
                     return switch (m.getName()) {
-                        case "messageId" -> id; case "headers" -> headers; case "toByteArray" -> bytes(wire); case "annotations" -> notes; case "isInScope" -> inScope;
+                        case "messageId" -> id; case "listenerInterface" -> incomingListener; case "headers" -> headers; case "toByteArray" -> bytes(wire); case "annotations" -> notes; case "isInScope" -> inScope;
                         case "httpService" -> httpOrigin==null?null:stub(burp.api.montoya.http.HttpService.class,(method,x)->switch(method.getName()) {
                             case "host" -> httpOrigin.getHost();case "port" -> httpOrigin.getPort();case "secure" -> httpOrigin.getScheme().equals("https");default -> null;
                         });
@@ -631,6 +640,7 @@ public class NativeTagPipelineTest {
                         case "headerValue" -> headers.stream().filter(h -> h.name().equalsIgnoreCase((String) a[0])).map(h -> h.value()).findFirst().orElse(null);
                         case "url" -> { urls.incrementAndGet(); if (raw.contains("<@bpsh")) throw new AssertionError("URL helpers must not receive literal native syntax"); yield httpOrigin==null?"https://app.example/protected":httpOrigin.resolve(raw.split(" ")[1]).toString(); }
                         case "hasHeader" -> headers.stream().anyMatch(h -> h.name().equalsIgnoreCase((String) a[0]));
+                        case "withRemovedHeader" -> request(raw.replaceAll("(?im)^" + java.util.regex.Pattern.quote((String) a[0]) + ":[^\\r\\n]*\\r\\n", ""), id, inScope);
                         case "withAddedHeader" -> request(raw.substring(0, end) + "\r\n" + a[0] + ": " + a[1] + raw.substring(end), id, inScope);
                         case "withUpdatedHeader" -> {
                             String changed = raw.replaceAll("(?im)^" + java.util.regex.Pattern.quote((String) a[0]) + ":[^\\r\\n]*", a[0] + ": " + a[1]); yield request(changed, id, inScope);
@@ -654,7 +664,7 @@ public class NativeTagPipelineTest {
                 });
             }
             /** Restores the SDK test factory and closes only this test's hook services. */
-            @Override public void close() { handler.close(); recovery.close(); guard.close(); diagnostics.close(); burp.api.montoya.internal.ObjectFactoryLocator.FACTORY = previous; }
+            @Override public void close() { sessions.close(); recovery.close(); guard.close(); diagnostics.close(); burp.api.montoya.internal.ObjectFactoryLocator.FACTORY = previous; }
         }
 
         /** @param f Deterministic acquisition fixture. @param action Blocking host callback. @return Completed action after one admitted worker executes. */
@@ -670,7 +680,7 @@ public class NativeTagPipelineTest {
         java.util.stream.Stream<org.junit.jupiter.api.DynamicTest> ordinaryAndTaggedPolicyAcrossEveryBaselineTool() {
             var cases = new ArrayList<org.junit.jupiter.api.DynamicTest>();
             for (var tool : List.of(burp.api.montoya.core.ToolType.SCANNER, burp.api.montoya.core.ToolType.PROXY, burp.api.montoya.core.ToolType.REPEATER, burp.api.montoya.core.ToolType.EXTENSIONS, burp.api.montoya.core.ToolType.INTRUDER))
-                for (var mode : RequestSettings.UrlMode.values()) for (boolean enabled : List.of(true, false)) for (boolean tagged : List.of(true, false)) {
+                for (var mode : UrlCase.values()) for (boolean enabled : List.of(true, false)) for (boolean tagged : List.of(true, false)) {
                     String id = "CORE.tool-policy.tool=" + tool.name().toLowerCase(java.util.Locale.ROOT) + "~urlMode=" + mode.name().toLowerCase(java.util.Locale.ROOT) + "~enabled=" + enabled + "~tagged=" + tagged;
                     cases.add(org.junit.jupiter.api.DynamicTest.dynamicTest("[case=" + id + "]", () -> {
                         Map<String, Object> facts,filterFacts=null;
@@ -681,21 +691,25 @@ public class NativeTagPipelineTest {
                             boolean bytesMatch = true, continued = true;
                             for (boolean toolAllowed : List.of(true, false)) for (boolean matches : List.of(true, false)) {
                                 var alternative = tool == burp.api.montoya.core.ToolType.REPEATER ? burp.api.montoya.core.ToolType.PROXY : burp.api.montoya.core.ToolType.REPEATER;
-                                var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), mode,
-                                        mode == RequestSettings.UrlMode.SINGLE_URL ? java.net.URI.create(matches ? "https://app.example/protected" : "https://different.example/") : null,
+                                var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), mode == UrlCase.SINGLE_URL ? new RequestSettings.Prefix(java.net.URI.create(matches ? "https://app.example/protected" : "https://different.example/")) : mode == UrlCase.ALL_REQUESTS ? new RequestSettings.AllRequests() : new RequestSettings.BurpScope(), null,
                                         new JourneyDefinition.Recovery(false, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
-                                host.controls.set(new RequestSettings.Controls(enabled, List.of(rule), List.of(RequestSettings.Tool.valueOf((toolAllowed ? tool : alternative).name())), defaults.requestWaitTimeoutMs(), defaults.attemptTimeoutMs(), defaults.cycleTimeoutMs(), null, null));
+                                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(enabled, List.of(rule), List.of(RequestSettings.Tool.valueOf((toolAllowed ? tool : alternative).name())), defaults.requestWaitTimeoutMs(), defaults.attemptTimeoutMs(), defaults.cycleTimeoutMs(), null, null)));
                                 String raw = header(tagged ? "Bearer <@employee/>" : "existing");
                                 var request = host.request(raw, message++, matches);
                                 int attemptsBefore=f.attempts;
-                                var action = callback(f, () -> host.handler.handleHttpRequestToBeSent(request));
-                                boolean inject = tagged || enabled && toolAllowed && (mode == RequestSettings.UrlMode.ALL_REQUESTS || matches);
+                                var action = callback(f, () -> {
+                                    if (tool != burp.api.montoya.core.ToolType.PROXY) return host.handler.handleHttpRequestToBeSent(request);
+                                    var proxyResult = host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest) request);
+                                    var globalRequest = host.request(new String(proxyResult.request().toByteArray().getBytes(),StandardCharsets.ISO_8859_1),10000+request.messageId(),matches);
+                                    return host.handler.handleHttpRequestToBeSent(globalRequest);
+                                });
+                                boolean inject = tagged || enabled && toolAllowed && (mode == UrlCase.ALL_REQUESTS || matches);
                                 byte[] expected = wire(inject ? header("Bearer employee-token") : raw), actual = action.request().toByteArray().getBytes();
                                 bytesMatch &= Arrays.equals(expected, actual); continued &= action.action() == burp.api.montoya.http.handler.RequestAction.CONTINUE;
-                                assertArrayEquals(expected, actual);
+                                assertArrayEquals(expected, actual, String.join(" | ",host.logs)+" | "+action.annotations().notes());
                                 assertEquals(burp.api.montoya.http.handler.RequestAction.CONTINUE, action.action());
                                 assertEquals(0, f.coordinator.capacity().waitingRequests());
-                                if(tool==burp.api.montoya.core.ToolType.EXTENSIONS&&!tagged&&mode==RequestSettings.UrlMode.SINGLE_URL&&enabled&&toolAllowed&&!matches)
+                                if(tool==burp.api.montoya.core.ToolType.EXTENSIONS&&!tagged&&mode==UrlCase.SINGLE_URL&&enabled&&toolAllowed&&!matches)
                                     filterFacts=Map.of("checkedRequests",1,"unchanged",Arrays.equals(wire(raw),actual),"action",action.action().name(),"extraAttempts",f.attempts-attemptsBefore,"waitingRequests",f.coordinator.capacity().waitingRequests());
                             }
                             assertEquals(tagged || enabled ? 1 : 0, f.attempts);
@@ -707,7 +721,7 @@ public class NativeTagPipelineTest {
                         }
                         AuthLabSupport.component(id, facts, Map.of("startupMs", java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(ready - start),
                                 "caseMs", java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(checked - ready), "cleanupMs", java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - checked)));
-                        if(tool==burp.api.montoya.core.ToolType.EXTENSIONS&&!tagged&&!enabled&&mode==RequestSettings.UrlMode.ALL_REQUESTS)
+                        if(tool==burp.api.montoya.core.ToolType.EXTENSIONS&&!tagged&&!enabled&&mode==UrlCase.ALL_REQUESTS)
                             AuthLabSupport.component("CORE.injection.disabled",Map.of("checkedRequests",facts.get("policyChecks"),"unchanged",facts.get("bytesMatch"),"action",(boolean)facts.get("continued")?"CONTINUE":"OTHER","extraAttempts",facts.get("attempts"),"waitingRequests",facts.get("waitingRequests")),elapsed(start,ready,checked));
                         if(filterFacts!=null)AuthLabSupport.component("CORE.injection.url-filter",filterFacts,elapsed(start,ready,checked));
                     }));
@@ -748,26 +762,26 @@ public class NativeTagPipelineTest {
         public @Test void orderedAutomaticRulesRespectActivationToolsScopesOrderAndUsedExpiration() throws Exception {
             try (var f = new Fixture(); var host = new Host(f)) {
                 var employee = f.registry.snapshot().resolve("employee"); var admin = f.registry.snapshot().resolve("admin"); var disabled = f.registry.snapshot().resolve("url");
-                var first = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(employee.identity().scope(), employee.identity().journeyId()), RequestSettings.UrlMode.BURP_SCOPE, null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
-                var second = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(admin.identity().scope(), admin.identity().journeyId()), RequestSettings.UrlMode.SINGLE_URL, java.net.URI.create("https://app.example/"), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 403, null));
-                var off = new RequestSettings.AutomaticRule(false, new RequestSettings.JourneySelection(disabled.identity().scope(), disabled.identity().journeyId()), RequestSettings.UrlMode.ALL_REQUESTS, null, first.recovery());
+                var first = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(employee.identity().scope(), employee.identity().journeyId()), new RequestSettings.BurpScope(), null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
+                var second = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(admin.identity().scope(), admin.identity().journeyId()), new RequestSettings.Prefix(java.net.URI.create("https://app.example/")), null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 403, null));
+                var off = new RequestSettings.AutomaticRule(false, new RequestSettings.JourneySelection(disabled.identity().scope(), disabled.identity().journeyId()), new RequestSettings.AllRequests(), null, first.recovery());
                 var defaults = RequestSettings.Controls.defaults();
-                host.controls.set(new RequestSettings.Controls(true, List.of(first, off, second), defaults.tools(), 60_000, 60_000, 300_000, null, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(first, off, second), defaults.tools(), 60_000, 60_000, 300_000, null, null)));
                 var sent = callback(f, () -> host.handler.handleHttpRequestToBeSent(host.request(header("stale"), 501, true)));
                 assertTrue(new String(sent.request().toByteArray().getBytes(), StandardCharsets.ISO_8859_1).contains("Bearer admin-token")); assertEquals(2, f.attempts);
                 host.handler.handleHttpResponseReceived(host.response(501, (short) 401, null, new byte[0])); assertNotNull(f.coordinator.peek(admin.identity())); assertNotNull(f.coordinator.peek(employee.identity()));
-                host.controls.set(new RequestSettings.Controls(true, List.of(second, first), defaults.tools(), 60_000, 60_000, 300_000, null, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(second, first), defaults.tools(), 60_000, 60_000, 300_000, null, null)));
                 sent = callback(f, () -> host.handler.handleHttpRequestToBeSent(host.request(header("stale"), 502, true)));
                 assertTrue(new String(sent.request().toByteArray().getBytes(), StandardCharsets.ISO_8859_1).contains("Bearer employee-token")); assertEquals(2, f.attempts);
                 sent = callback(f, () -> host.handler.handleHttpRequestToBeSent(host.request(header("stale"), 503, false)));
                 assertTrue(new String(sent.request().toByteArray().getBytes(), StandardCharsets.ISO_8859_1).contains("Bearer admin-token"));
                 host.handler.handleHttpResponseReceived(host.response(503, (short) 403, null, new byte[0])); assertNull(f.coordinator.peek(admin.identity())); assertNotNull(f.coordinator.peek(employee.identity()));
-                host.controls.set(new RequestSettings.Controls(true, List.of(first, second), List.of(RequestSettings.Tool.REPEATER), 60_000, 60_000, 300_000, null, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(first, second), List.of(RequestSettings.Tool.REPEATER), 60_000, 60_000, 300_000, null, null)));
                 var excluded = host.request(header("stale"), 504, true); assertSame(excluded, host.handler.handleHttpRequestToBeSent(excluded).request()); assertEquals(2, f.attempts);
-                host.controls.set(new RequestSettings.Controls(false, List.of(first, second), defaults.tools(), 60_000, 60_000, 300_000, null, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(false, List.of(first, second), defaults.tools(), 60_000, 60_000, 300_000, null, null)));
                 assertSame(excluded, host.handler.handleHttpRequestToBeSent(excluded).request());
-                var missing = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT, java.util.UUID.randomUUID()), RequestSettings.UrlMode.ALL_REQUESTS, null, first.recovery());
-                host.controls.set(new RequestSettings.Controls(true, List.of(first, missing), defaults.tools(), 60_000, 60_000, 300_000, null, null));
+                var missing = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT, java.util.UUID.randomUUID()), new RequestSettings.AllRequests(), null, first.recovery());
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(first, missing), defaults.tools(), 60_000, 60_000, 300_000, null, null)));
                 var rejected = host.handler.handleHttpRequestToBeSent(excluded); assertSame(excluded, rejected.request()); assertTrue(rejected.annotations().notes().contains("unavailable")); assertEquals(1, f.clock.workers.size(), "the prior observed loss owns the only recovery; missing identities start no extra work");
             }
         }
@@ -775,21 +789,20 @@ public class NativeTagPipelineTest {
             try (var f = new Fixture(); var host = new Host(f)) {
                 f.failedAlias = "employee"; var tagged = host.request(header("<@employee/>"), 1, false);
                 var stopped = callback(f, () -> host.handler.handleHttpRequestToBeSent(tagged)); assertEquals(burp.api.montoya.http.handler.RequestAction.DROP, stopped.action());
-                assertTrue(stopped.annotations().notes().contains("not sent")); assertTrue(stopped.annotations().notes().contains("employee")); assertTrue(stopped.annotations().notes().contains("existing user note"));
+                assertTrue(stopped.annotations().notes().contains("asked to drop")); assertTrue(stopped.annotations().notes().contains("employee")); assertTrue(stopped.annotations().notes().contains("existing user note"));
                 var d = RequestSettings.Controls.defaults(); var entry = f.registry.snapshot().resolve("employee");
-                host.controls.set(new RequestSettings.Controls(true, List.of(new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), RequestSettings.UrlMode.ALL_REQUESTS, null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), d.tools(), 60_000, 60_000, 300_000, null, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), new RequestSettings.AllRequests(), null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), d.tools(), 60_000, 60_000, 300_000, null, null)));
                 var ordinary = host.request(header("Existing"), 2, true); var unchanged = host.handler.handleHttpRequestToBeSent(ordinary);
-                assertSame(ordinary, unchanged.request()); assertTrue(unchanged.annotations().notes().contains("unchanged request was sent")); assertFalse(host.logs.isEmpty());
+                assertSame(ordinary, unchanged.request()); assertTrue(unchanged.annotations().notes().contains("BPSH left the request unchanged")); assertFalse(host.logs.isEmpty());
             }
         }
         public @Test void proxyOwnedCarrierIsRetainedUntilGlobalSendAndResponseLedgersRemainIndependent() throws Exception {
             try (var f = new Fixture(); var host = new Host(f); var lease = host.guard.begin()) {
                 var entry = f.registry.snapshot().resolve("employee"); var defaults = RequestSettings.Controls.defaults();
-                var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()),
-                        RequestSettings.UrlMode.ALL_REQUESTS, null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
-                host.controls.set(new RequestSettings.Controls(true, List.of(rule), defaults.tools(), 60_000, 60_000, 300_000, null, null));
+                var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), new RequestSettings.AllRequests(), null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(rule), defaults.tools(), 60_000, 60_000, 300_000, null, null)));
                 String raw = header("existing").replace("\r\n\r\n", "\r\nUser-Agent: " + lease.decorate("Actual full agent") + "\r\n\r\n"); var request = host.request(raw, 77, false);
-                var proxy = host.handler.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) request);
+                var proxy = host.proxy.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) request);
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.DO_NOT_INTERCEPT, proxy.action());
                 var global = callback(f, () -> host.handler.handleHttpRequestToBeSent(request));
                 assertEquals("Actual full agent", global.request().headerValue("User-Agent")); assertTrue(f.clock.workers.isEmpty());
@@ -797,9 +810,9 @@ public class NativeTagPipelineTest {
                 assertSame(response, host.handler.handleHttpResponseReceived(response).response());
                 assertEquals(0, f.attempts, "Owned login traffic must not authenticate itself even when its URL and 401 match automatic handling.");
                 assertTrue(f.clock.workers.isEmpty()); assertEquals(0, f.coordinator.capacity().waitingRequests());
-                var proxyResponse = host.handler.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response);
+                var proxyResponse = host.proxy.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response);
                 assertEquals(burp.api.montoya.proxy.MessageReceivedAction.DO_NOT_INTERCEPT, proxyResponse.action());
-                assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.handler.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response).action());
+                assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.proxy.handleResponseReceived((burp.api.montoya.proxy.http.InterceptedResponse) response).action());
             }
         }
         public @Test void staleAndNestedOwnedRequestsStopWithoutAcquisitionWhileNormalProxyTrafficKeepsUserRules() throws Exception {
@@ -812,7 +825,7 @@ public class NativeTagPipelineTest {
                     assertEquals(burp.api.montoya.http.handler.RequestAction.DROP, host.handler.handleHttpRequestToBeSent(nested).action());
                 }
                 var normal = host.request(header("existing"), 3, false);
-                assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.handler.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) normal).action()); assertTrue(f.clock.workers.isEmpty());
+                assertEquals(burp.api.montoya.proxy.MessageReceivedAction.CONTINUE, host.proxy.handleRequestReceived((burp.api.montoya.proxy.http.InterceptedRequest) normal).action()); assertTrue(f.clock.workers.isEmpty());
             }
         }
         public @ParameterizedTest(name="[case=CORE.tag-failure.paused-{0}]") @ValueSource(booleans = {false, true})
@@ -843,9 +856,9 @@ public class NativeTagPipelineTest {
                     finally { delivered.countDown(); }
                 })) {
                     hostRef.set(host); var entry = f.registry.snapshot().resolve("employee");
-                    var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), RequestSettings.UrlMode.ALL_REQUESTS, null,
+                    var rule = new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(entry.identity().scope(), entry.identity().journeyId()), new RequestSettings.AllRequests(), null,
                             new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null));
-                    host.controls.set(new RequestSettings.Controls(true, List.of(rule), RequestSettings.Controls.defaults().tools(), 60_000, 60_000, 300_000, null, null));
+                    host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(rule), RequestSettings.Controls.defaults().tools(), 60_000, 60_000, 300_000, null, null)));
                     f.coordinator.acquire(List.of(entry)); f.clock.runWorker();
                     String raw = "POST /protected HTTP/1.1\r\nHost: app.example\r\n" + (hasAgent ? "User-Agent: application-agent\r\n" : "") + "Authorization: Bearer stale\r\nCookie: unrelated=keep\r\nContent-Length: 9\r\n\r\nbody=data";
                     host.handler.handleHttpRequestToBeSent(host.request(raw, 50, true));
@@ -880,8 +893,8 @@ public class NativeTagPipelineTest {
                 var upload = host.request(header("existing") + "x".repeat(5 << 20), 1, false);
                 assertSame(upload, host.handler.handleHttpRequestToBeSent(upload).request()); assertEquals(0, host.largeReads.get());
                 f.coordinator.acquire(List.of(f.registry.snapshot().resolve("employee"))); f.clock.runWorker(); var token = f.coordinator.peek(f.registry.snapshot().resolve("employee").identity());
-                host.controls.set(new RequestSettings.Controls(true, List.of(), RequestSettings.Controls.defaults().tools(), 60_000, 60_000, 300_000, null, null));
-                host.recovery.record(2, List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true, List.of(), RequestSettings.Controls.defaults().tools(), 60_000, 60_000, 300_000, null, null)));
+                host.recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
                 host.handler.handleHttpResponseReceived(host.response(2, (short) 401, "application/octet-stream", new byte[5 << 20])); assertNull(f.coordinator.peek(token.identity())); assertEquals(0, host.largeReads.get()); assertEquals(0, host.bodyAccesses.get());
             }
         }
@@ -899,7 +912,7 @@ public class NativeTagPipelineTest {
         public @Test void attributedOversizedRegexBodyIsSkippedBeforeFetchingHostBodyBytes() throws Exception {
             try (var f = new Fixture(); var host = new Host(f)) {
                 var entry = f.registry.snapshot().resolve("employee"); f.coordinator.acquire(List.of(entry)); f.clock.runWorker(); var token = f.coordinator.peek(entry.identity());
-                host.recovery.record(1, List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.REGEX, null, "sign in"))), false);
+                host.recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.REGEX, null, "sign in"))), false);
                 host.handler.handleHttpResponseReceived(host.response(1, (short) 200, "text/html", new byte[65_537]));
                 assertNotNull(f.coordinator.peek(token.identity())); assertEquals(0, host.largeReads.get()); assertEquals(0, host.bodyAccesses.get());
             }

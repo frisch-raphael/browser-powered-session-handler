@@ -51,8 +51,8 @@ final class Pkcs11DiscoveryProcess {
         catch (Exception | LinkageError error) {
             throw problem("The security-device discovery helper could not be started or read.", "Check Burp's Java runtime and temporary-file access.");
         } finally {
-            if (child != null && child.isAlive()) child.destroyForcibly();
-            try { Files.deleteIfExists(result); } catch (java.io.IOException | SecurityException ignored) { /* result contains public device metadata only */ }
+            try { Pkcs11Processes.stop(child); }
+            finally { try { Files.deleteIfExists(result); } catch (java.io.IOException | SecurityException ignored) { /* result contains public device metadata only */ } }
         }
     }
 

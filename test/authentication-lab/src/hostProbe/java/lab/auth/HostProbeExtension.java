@@ -3,6 +3,9 @@ package lab.auth;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.core.Registration;
+import burp.api.montoya.http.handler.*;
+import burp.api.montoya.proxy.http.*;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.RequestOptions;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -25,9 +28,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.*;
+import lab.auth.gui.HostProbeShape;
 
-/** One manual Montoya dispatch for H01's EXTENSIONS origin; contains no authentication or replay engine. */
-public final class HostProbeExtension implements BurpExtension {
+/** Manual local dispatch and opt-in passive callback evidence; contains no authentication or replay engine. */
+public final class HostProbeExtension implements BurpExtension, HttpHandler, ProxyRequestHandler, ProxyResponseHandler {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean busy = new AtomicBoolean();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(task -> {
@@ -44,11 +48,49 @@ public final class HostProbeExtension implements BurpExtension {
     private final JLabel status = new JLabel("Choose the local lab origin and a prepared HTTP request file.");
     private MontoyaApi api;
     private Path requestFile;
+    private final java.util.List<Registration> registrations = new java.util.ArrayList<>();
+    private final java.util.List<JsonObjectNode> callbackEvents = new java.util.ArrayList<>();
+    private volatile java.util.List<CaptureTarget> captureTargets = java.util.List.of();
+    private volatile String captureCase = "manual";
+    private boolean captureOverflow;
+    private LabHostGuiProtocol.Session guiSession;
+    private final JCheckBox observe = new JCheckBox("Observe selected fixture traffic");
+    private final JTextField observationOrigins = new JTextField();
+    private final JTextField observationCase = new JTextField("manual");
+    private final JLabel observationStatus = new JLabel("Observation is off. No application requests are sent by this mode.");
+
+    /** Literal local fixture origin, compared without reading URL targets or resolving addresses. */
+    private record CaptureTarget(String host, int port, boolean secure) {}
 
     @Override public void initialize(MontoyaApi api) {
         this.api = api;
         api.extension().setName("Authentication lab host probe");
-        api.extension().registerUnloadingHandler(() -> { closed.set(true); worker.shutdownNow(); });
+        String guiRoot=System.getProperty("lab.host.gui.root");
+        if(guiRoot!=null) {
+            try {
+                var session=LabHostGuiProtocol.session(Path.of(guiRoot));
+                guiSession=session;
+                var metadata=LabHostGuiProtocol.identity(session);metadata.addProperty("burpVersion",api.burpSuite().version().toString());
+                metadata.addProperty("javaVersion",System.getProperty("java.version"));metadata.addProperty("os",System.getProperty("os.name"));
+                metadata.addProperty("pid",ProcessHandle.current().pid());
+                metadata.addProperty("startedEpochMs",ProcessHandle.current().info().startInstant().orElseThrow().toEpochMilli());
+                metadata.addProperty("maxHeapBytes",Runtime.getRuntime().maxMemory());
+                var configured=LabJson.parse(api.burpSuite().exportProjectOptionsAsJson("proxy.request_listeners")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("proxy").getAsJsonArray("request_listeners");
+                var ports=new com.google.gson.JsonArray();
+                for(var entry:configured)if(entry.getAsJsonObject().get("running").getAsBoolean())ports.add(entry.getAsJsonObject().get("listener_port").getAsInt());
+                metadata.add("listenerPorts",ports);
+                LabJson.writeNew(session.root().resolve("probe-ready.json"),metadata);
+            }catch(Exception unavailable){/* Missing passive proof blocks the owner; private failures are never logged. */}
+        }
+        registrations.add(api.http().registerHttpHandler(this));
+        registrations.add(api.proxy().registerRequestHandler(this));
+        registrations.add(api.proxy().registerResponseHandler(this));
+        api.extension().registerUnloadingHandler(() -> {
+            closed.set(true); captureTargets = java.util.List.of(); worker.shutdownNow();
+            for (var registration : registrations) try { registration.deregister(); } catch (RuntimeException ignored) {}
+            synchronized (callbackEvents) { callbackEvents.clear(); }
+        });
         SwingUtilities.invokeLater(() -> {
             if (closed.get()) return;
             var panel = new JPanel(new BorderLayout(8, 8));
@@ -69,8 +111,113 @@ public final class HostProbeExtension implements BurpExtension {
             panel.add(top, BorderLayout.NORTH); panel.add(new JScrollPane(result)); panel.add(status, BorderLayout.SOUTH);
             choose.addActionListener(event -> chooseRequest(panel));
             send.addActionListener(event -> sendOnce());
-            api.userInterface().registerSuiteTab("Auth lab probe", panel);
+            var tabs = new JTabbedPane(); tabs.addTab("Send once", panel); tabs.addTab("Observe callbacks", observationPanel());
+            registrations.add(api.userInterface().registerSuiteTab("Auth lab probe", tabs));
         });
+    }
+
+    /** Builds local capture/filter/export controls without adding a remote-control service. */
+    private JPanel observationPanel() {
+        var panel = new JPanel(new BorderLayout(8,8)); panel.setBorder(BorderFactory.createEmptyBorder(12,12,12,12));
+        var fields = new JPanel(new GridLayout(0,2,8,8));
+        observationOrigins.setName("authlab.observation.origins");observationCase.setName("authlab.observation.case");
+        observationStatus.setName("authlab.observation.status");observe.setName("authlab.observation.enabled");
+        fields.add(new JLabel("Local fixture origins")); fields.add(observationOrigins);
+        fields.add(new JLabel("Case label")); fields.add(observationCase);
+        observationOrigins.setToolTipText("Comma-separated HTTP(S) origins using localhost, 127.0.0.1 or [::1]. Only these fixture destinations are observed.");
+        observationCase.setToolTipText("Use 1-80 letters, digits, dots, underscores or hyphens. This label is local metadata; it is not added to requests.");
+        var actions = new JPanel(); var clear = new JButton("Clear capture"); var export = new JButton("Export capture...");
+        actions.add(observe); actions.add(clear); actions.add(export);
+        observe.addActionListener(e -> configureObservation());
+        clear.addActionListener(e -> { synchronized(callbackEvents) { callbackEvents.clear(); captureOverflow=false; } observationStatus.setText("Capture cleared."); });
+        export.addActionListener(e -> exportObservation(panel));
+        var help = new JTextArea("Records callback metadata, synthetic request nonce, credential header counts, fixture cookie-name and native-tag presence. No URLs, request bodies or credential values are recorded. More than 1,000 events, invalid correlation or truncated shape inspection marks the capture incomplete. Callback observations do not prove server-side acceptance.");
+        help.setEditable(false); help.setLineWrap(true); help.setWrapStyleWord(true); help.setOpaque(false); help.setFont(UIManager.getFont("Label.font"));
+        panel.add(fields,BorderLayout.NORTH); var center = new JPanel(new BorderLayout(8,8));center.add(actions,BorderLayout.NORTH);center.add(help);panel.add(center);panel.add(observationStatus,BorderLayout.SOUTH);return panel;
+    }
+
+    /** Validates explicit local targets without network requests or changes to Proxy settings. */
+    private void configureObservation() {
+        captureTargets = java.util.List.of();
+        if(!observe.isSelected()) { observationStatus.setText("Observation stopped. Existing capture is retained until Clear capture or unload.");return; }
+        try {
+            var targets = new java.util.ArrayList<CaptureTarget>();
+            for(String value:observationOrigins.getText().split(",",-1)) {
+                URI uri=URI.create(value.trim());String host=uri.getHost();
+                if(host==null||!Set.of("http","https").contains(uri.getScheme())||uri.getRawUserInfo()!=null||uri.getRawQuery()!=null||uri.getRawFragment()!=null
+                        ||!(uri.getRawPath().isEmpty()||uri.getRawPath().equals("/")))throw new IllegalArgumentException();
+                host=host.toLowerCase(java.util.Locale.ROOT).replace("[","").replace("]","");
+                if(!Set.of("127.0.0.1","localhost","::1").contains(host))throw new IllegalArgumentException();
+                int port=uri.getPort()<0?(uri.getScheme().equals("https")?443:80):uri.getPort();
+                if(port<1||port>65535)throw new IllegalArgumentException();targets.add(new CaptureTarget(host,port,uri.getScheme().equals("https")));
+            }
+            String label=observationCase.getText().trim();if(!label.matches("[A-Za-z0-9._-]{1,80}"))throw new IllegalArgumentException();
+            captureCase=label;captureTargets=java.util.List.copyOf(targets);observationStatus.setText("Observing selected fixture traffic. Maximum 1,000 events.");
+        } catch(RuntimeException error) {observe.setSelected(false);observationStatus.setText("Enter local HTTP(S) origins and a case label using the formats in their tooltips.");}
+    }
+
+    /** Exports only bounded safe observations; request bytes and authentication are outside this mode. */
+    private void exportObservation(JPanel parent) {
+        var chooser=new JFileChooser();chooser.setDialogTitle("Export callback observations");
+        if(chooser.showSaveDialog(parent)!=JFileChooser.APPROVE_OPTION)return;
+        var record=JsonObjectNode.jsonObjectNode();record.putString("burpVersion",api.burpSuite().version().toString());
+        record.putNumber("version",1);record.putString("case",captureCase);
+        if(guiSession!=null) {
+            record.putString("invocationId",guiSession.invocationId().toString());record.putString("platform",guiSession.platform());
+            record.putString("runNonce",guiSession.runNonce().toString());record.putString("productSha256",guiSession.productSha256());
+            record.putString("helperSha256",guiSession.helperSha256());
+        }
+        var rows=burp.api.montoya.utilities.json.JsonArrayNode.jsonArrayNode();
+        synchronized(callbackEvents) { for(var event:callbackEvents)rows.add(event);record.putBoolean("overflow",captureOverflow);record.putBoolean("complete",!captureOverflow); }
+        record.put("events",rows);record.putString("scope","Passive callback observations only; server acceptance requires independent fixture evidence.");
+        try { Files.writeString(chooser.getSelectedFile().toPath(),record.toJsonString(),java.nio.charset.StandardCharsets.UTF_8);observationStatus.setText("Callback capture exported."); }
+        catch(java.io.IOException error) {observationStatus.setText("Could not write the selected capture file. Choose a writable location.");}
+    }
+
+    /** Retains fixed metadata only for explicitly selected local fixture services. */
+    private void observe(String phase,String family,HttpRequest request,int id,String tool,String listener,int statusCode) {
+        if(closed.get()||request==null||captureTargets.isEmpty())return;
+        try {
+            var service=request.httpService();String host=service.host().toLowerCase(java.util.Locale.ROOT).replace("[","").replace("]","");
+            if(!captureTargets.contains(new CaptureTarget(host,service.port(),service.secure())))return;
+            var headers=request.headers().stream().limit(1001).map(h->new HostProbeShape.Header(h.name(),h.value())).toList();
+            boolean largeBody=request.body().length()>HostProbeShape.LIMIT;
+            var shape=HostProbeShape.inspect(headers,request.path(),largeBody?new byte[0]:request.body().getBytes(),largeBody);
+            synchronized(callbackEvents) {
+                if(closed.get())return;
+                if(callbackEvents.size()>=1000) {captureOverflow=true;return;}
+                captureOverflow|=headers.size()>1000||shape.invalidNonce()||shape.truncated();
+                var row=JsonObjectNode.jsonObjectNode();row.putNumber("sequence",callbackEvents.size()+1);row.putString("case",captureCase);
+                row.putString("family",family);row.putNumber("id",id);row.putString("phase",phase);row.putString("tool",tool);
+                if(listener!=null&&listener.matches("[A-Za-z0-9._:\\[\\]*-]{1,128}"))row.putString("listener",listener);
+                row.putString("httpVersion",request.httpVersion());row.putNumber("status",statusCode);
+                if(shape.nonce()!=null)row.putString("nonce",shape.nonce());
+                row.putBoolean("invalidNonce",shape.invalidNonce());row.putBoolean("shapeTruncated",shape.truncated());
+                row.putNumber("authorizationHeaders",shape.authorizationHeaders());row.putNumber("cookieHeaders",shape.cookieHeaders());
+                row.putBoolean("c1",shape.c1());row.putBoolean("c2",shape.c2());row.putBoolean("nativeTag",shape.nativeTag());
+                row.putBoolean("sentinel",shape.sentinel());row.putBoolean("httpAuthenticationDirective",shape.httpDirective());
+                callbackEvents.add(row);
+            }
+        } catch(RuntimeException error) { synchronized(callbackEvents) {captureOverflow=true;} }
+    }
+
+    @Override public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent request) {
+        observe("to_send","GLOBAL",request,request.messageId(),request.toolSource().toolType().name(),null,0);return RequestToBeSentAction.continueWith(request,request.annotations());
+    }
+    @Override public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived response) {
+        observe("response_received","GLOBAL",response.initiatingRequest(),response.messageId(),response.toolSource().toolType().name(),null,response.statusCode());return ResponseReceivedAction.continueWith(response,response.annotations());
+    }
+    @Override public ProxyRequestReceivedAction handleRequestReceived(InterceptedRequest request) {
+        observe("received","PROXY",request,request.messageId(),"PROXY",request.listenerInterface(),0);return ProxyRequestReceivedAction.continueWith(request,request.annotations());
+    }
+    @Override public ProxyRequestToBeSentAction handleRequestToBeSent(InterceptedRequest request) {
+        observe("to_send","PROXY",request,request.messageId(),"PROXY",request.listenerInterface(),0);return ProxyRequestToBeSentAction.continueWith(request,request.annotations());
+    }
+    @Override public ProxyResponseReceivedAction handleResponseReceived(InterceptedResponse response) {
+        observe("response_received","PROXY",response.initiatingRequest(),response.messageId(),"PROXY",response.listenerInterface(),response.statusCode());return ProxyResponseReceivedAction.continueWith(response,response.annotations());
+    }
+    @Override public ProxyResponseToBeSentAction handleResponseToBeSent(InterceptedResponse response) {
+        observe("response_to_send","PROXY",response.initiatingRequest(),response.messageId(),"PROXY",response.listenerInterface(),response.statusCode());return ProxyResponseToBeSentAction.continueWith(response,response.annotations());
     }
 
     private void chooseRequest(JPanel parent) {

@@ -391,11 +391,13 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
 
     @Override public void close() {
         if (!closed.compareAndSet(false, true)) return;
-        for(var lease:leases)lease.close();
-        for (var delivery : pending) delivery.completeExceptionally(new IOException("This HTTP authentication identity has been retired."));
-        client.close(CloseMode.IMMEDIATE);
-        synchronized (password) { Arrays.fill(password, '\0'); }
-        established.clear();
+        try {
+            var cleanup = new ArrayList<Runnable>();
+            for (var lease : leases) cleanup.add(lease::close);
+            for (var delivery : pending) cleanup.add(() -> delivery.completeExceptionally(new IOException("This HTTP authentication identity has been retired.")));
+            cleanup.add(() -> client.close(CloseMode.IMMEDIATE));
+            bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
+        } finally { synchronized (password) { Arrays.fill(password, '\0'); } established.clear(); }
     }
 
     private record ScopePrincipal(String name) implements Principal { @Override public String getName() { return name; } }

@@ -75,13 +75,18 @@ public final class ControlledApplication implements AutoCloseable {
     private final Semaphore slots = new Semaphore(64);
     private final LoginFlows flows;
     private final Map<HttpAuthenticationFixture.Protocol,HttpAuthenticationFixture> httpAuthentication = new LinkedHashMap<>();
+    private static final Map<String,String> HTTP_ACCOUNTS=Map.of("user-a","alpha-password","user-b","bravo-password");
+    static Map<String,String> hostFixtureSecrets() {
+        return Map.of("FORM_A",FixtureIdentityStore.fixturePassword("user").reveal(),"FORM_B",FixtureIdentityStore.fixturePassword("user2").reveal(),
+                "HTTP_A",HTTP_ACCOUNTS.get("user-a"),"HTTP_B",HTTP_ACCOUNTS.get("user-b"));
+    }
     ControlledApplication(LabRun run) throws IOException {
         this.run = run; appOwner = Origin.http("127.0.0.1"); app = appOwner.server();
         try { alternateOwner = Origin.http("127.0.0.1"); alternate = alternateOwner.server(); }
         catch (IOException ex) { appOwner.close(); throw ex; }
         try {
             if (run.spec().profiles().contains("http-auth")) for (var protocol : HttpAuthenticationFixture.Protocol.values())
-                httpAuthentication.put(protocol,new HttpAuthenticationFixture(protocol,Map.of("user-a","alpha-password","user-b","bravo-password"),null));
+                httpAuthentication.put(protocol,new HttpAuthenticationFixture(protocol,HTTP_ACCOUNTS,null));
         } catch (InterruptedException | RuntimeException failure) {
             httpAuthentication.values().forEach(HttpAuthenticationFixture::close);appOwner.close();alternateOwner.close();
             if(failure instanceof InterruptedException)Thread.currentThread().interrupt();
@@ -103,7 +108,11 @@ public final class ControlledApplication implements AutoCloseable {
         finally { try { appOwner.close(); } finally { alternateOwner.close(); } }
     }
     private void handle(HttpExchange exchange) throws IOException {
+        var correlation=exchange.getRequestHeaders().get("X-AuthLab-Request");
+        if(correlation!=null&&correlation.size()==1&&correlation.getFirst().matches("h[0-9a-f]{16}"))
+            exchange.getResponseHeaders().set("X-AuthLab-Request",correlation.getFirst());
         LabRun.CaseLease lease = null; boolean entered = false;
+        long observation=0; var acceptedFacts=new LinkedHashMap<String,Object>();
         if (!slots.tryAcquire()) { json(exchange, 503, Map.of("error", "fixture_capacity")); exchange.close(); return; }
         try {
             String path = exchange.getRequestURI().getPath();
@@ -118,14 +127,21 @@ public final class ControlledApplication implements AutoCloseable {
             if(path.equals("/http-auth/observations") && exchange.getRequestMethod().equals("GET")) {
                 json(exchange,200,Map.of("applications",httpAuthentication.entrySet().stream().map(entry->Map.of(
                         "protocol",entry.getKey().name(),"observations",entry.getValue().observations,
+                        "requests",entry.getValue().requests,"truncated",entry.getValue().observationOverflow.get(),
                         "handshakes",entry.getValue().handshakes.get(),"posts",entry.getValue().applicationPosts.get(),
+                        "applicationAuthorizations",entry.getValue().applicationAuthorizations.get(),
                         "leakedDirectives",entry.getValue().leakedDirectives.get())).toList()));return;
             }
             String[] parts = path.split("/", 4);
             if (parts.length < 4 || !parts[1].equals("cases")) throw LabRun.error(404, "NOT_FOUND");
             lease = run.find(parts[2], generation(exchange)); lease.enter(); entered = true;
             String route = parts[3];
-            if (route.startsWith("protected/")) protectedRoute(exchange, lease, route.substring(10));
+            if (route.startsWith("protected/")) {
+                byte[] body=exchange.getRequestBody().readNBytes(LabHostObservations.BODY_LIMIT+1);
+                var shape=LabHostObservations.shape(exchange.getRequestHeaders(),exchange.getRequestMethod(),route.substring(10),body);
+                observation=lease.hostObservations.begin(lease.id(),lease.generation(),exchange.getLocalAddress().getPort(),shape);
+                protectedRoute(exchange,lease,route.substring(10),acceptedFacts);
+            }
             else if (flows.handle(exchange, lease, route)) lease.routed.incrementAndGet();
             else throw LabRun.error(404, "NOT_FOUND");
         } catch (LabRun.ControlException ex) {
@@ -134,9 +150,17 @@ public final class ControlledApplication implements AutoCloseable {
             json(exchange, status, Map.of("error", ex.code()));
         } catch (IllegalArgumentException ex) { json(exchange, 400, Map.of("error", "BAD_INPUT")); }
         catch (Exception ex) { json(exchange, 500, Map.of("error", "INTERNAL")); }
-        finally { if (entered) lease.leave(); exchange.close(); slots.release(); }
+        finally {
+            try {
+                if(observation!=0) {
+                    @SuppressWarnings("unchecked") var roles=(List<String>)acceptedFacts.getOrDefault("roles",List.of());
+                    lease.hostObservations.complete(observation,exchange.getResponseCode(),(String)acceptedFacts.get("account"),
+                            (String)acceptedFacts.get("issuance"),roles);
+                }
+            } finally { if(entered)lease.leave();exchange.close();slots.release(); }
+        }
     }
-    private static void protectedRoute(HttpExchange exchange, LabRun.CaseLease lease, String subset) throws IOException {
+    private static void protectedRoute(HttpExchange exchange, LabRun.CaseLease lease, String subset,Map<String,Object> acceptedFacts) throws IOException {
         String method = exchange.getRequestMethod();
         if (!method.equals("GET") && !method.equals("POST")) { json(exchange, 405, Map.of("error", "method_not_allowed")); return; }
         boolean independent = subset.equals("independent-cookies");
@@ -166,6 +190,9 @@ public final class ControlledApplication implements AutoCloseable {
             response.put("issuanceId", independent ? null : accepted.issuanceIds().getFirst());
             if (independent) response.put("issuanceIds", accepted.issuanceIds());
             response.put("acceptedRoles", accepted.roles()); response.put("actionId", action);
+            acceptedFacts.put("account",accepted.accountId());
+            acceptedFacts.put("issuance",independent?null:accepted.issuanceIds().getFirst());
+            acceptedFacts.put("roles",accepted.roles().stream().map(Enum::name).toList());
             lease.event(LabRun.Phase.PROTECTED, "protected-accepted", List.of(Map.of("kind", "account", "value", accepted.accountId())));
         }
         json(exchange, 200, response);

@@ -1,6 +1,11 @@
 {
   "version": 1,
   "additionalComponentMethods": [
+    "bpsh.burp.ui.JourneyRegistryTest.hostExamplesUseTheNativeCodecWithBothAccountsProtocolsAndDeterministicHostCache",
+    "bpsh.browser.BrowserFailureClassifierTest.unknownLaunchFailureDoesNotInventSandboxOrOperatingSystemAdvice",
+    "bpsh.browser.BrowserFailureClassifierTest.typedLaunchTimeoutIsReportedWithoutExposingVendorText",
+    "bpsh.burp.http.HttpAuthenticationHookTest.uncertainOrInterruptedDeliveryWarnsBeforeResending",
+    "bpsh.burp.ui.AutoSaveLoginTest.completedTestSummarizesSafeFailureAndStepWithoutRawExceptionOrInput",
     "bpsh.burp.http.NativeTagPipelineTest.missingRepresentableLocationEncodingAndReferenceCombinations",
     "bpsh.burp.http.NativeTagPipelineTest$ProductionHooks.ordinaryAndTaggedPolicyAcrossEveryBaselineTool",
     "bpsh.burp.ui.DiagnosticsTest.missingCookieNamesTheSelectedOutputWithoutClaimingAConnectionFailure",
@@ -37,7 +42,17 @@
     "bpsh.transport.httpauth.NtlmMessagesTest.malformedOffsetsLengthsAndTargetInformationFailBeforeLibraryParsing",
     "bpsh.transport.httpauth.HttpClientAuthenticationTransportTest.selectedProtocolNeverFallsBackToADifferentServerChallenge",
     "bpsh.transport.httpauth.HttpClientAuthenticationTransportTest.boundsHeadersBeforeIntermediateAuthenticationOrFinalResponse",
-    "bpsh.transport.httpauth.HttpTransportRuntimeTest.globalBodyBudgetRejectsBeforeAllocatingAndReleasesEveryOwner"
+    "bpsh.transport.httpauth.HttpTransportRuntimeTest.globalBodyBudgetRejectsBeforeAllocatingAndReleasesEveryOwner",
+    "bpsh.pattern.BoundedRegexTest.boundedCompilationPreservesFlagsAndRedactsFailures",
+    "bpsh.journey.persistence.AutomaticRuleCodecTest.currentTypedRulesRoundTripAndUnsupportedLayoutsAreRejected",
+    "bpsh.burp.http.RequestRuleMatcherTest.urlAndIncomingPortConditionsMatchIndependentlyAndTogether",
+    "bpsh.burp.http.RequestControlStateTest.concurrentRequestsObserveOneCompleteAppliedSnapshot",
+    "bpsh.burp.http.ProxyListenersTest.configuredChoicesAndCallbackPortsAreParsedWithoutFallback",
+    "bpsh.burp.http.SessionRoutingTest.proxyAndGlobalAdaptersProcessEachRequestOnceWithoutMetadataSharing",
+    "bpsh.burp.http.SessionRoutingTest.taggedExcludedToolUsesProxyRecoveryWithoutJoiningEqualGlobalIds",
+    "bpsh.burp.http.SessionRoutingTest.capturedNativeLookingDataCannotTriggerAnotherGlobalCredentialPass",
+    "bpsh.burp.ui.AutoSaveLoginTest.invalidCompiledRulesAndFailedStorageKeepTheAppliedPublication",
+    "bpsh.burp.ui.AutoSaveLoginTest.listenerExportsAreCoalescedOffEdtWithoutSavingOrStartingAuthentication"
   ],
   "federationMethods": [
     "bpsh.browser.FederationJourneyIntegrationTest.realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",

@@ -22,6 +22,11 @@ public final class ProductionLabExamples {
     }
     private static void export() throws Exception {
         var plan=AuthLabSupport.JSON.readTree(Files.readAllBytes(Path.of(System.getProperty("authlab.plan"))));
+        String exportMode=plan.path("mode").asText("");
+        if(!Set.of("","HOST").contains(exportMode))throw new IllegalArgumentException("Unknown export mode.");
+        boolean hostMode=exportMode.equals("HOST");
+        String hostPrefix=plan.path("hostAliasPrefix").asText("host");
+        if(!Set.of("host","host_failure").contains(hostPrefix)||!hostMode&&plan.has("hostAliasPrefix"))throw new IllegalArgumentException("Invalid host alias prefix.");
         UUID runId=UUID.fromString(plan.path("liveRunId").asText());Path root=Path.of(plan.path("liveRunsRoot").asText()).toRealPath();
         Path descriptor=null;
         try(var invocations=Files.list(root)) {
@@ -56,6 +61,15 @@ public final class ProductionLabExamples {
             for(var target:targets.path("cases")) {
                 String id=target.path("caseId").asText();String mode=federationMode(id);List<String> roles=roles(id);if(roles==null&&mode==null&&!lab.auth.TransportFixtures.SERVABLE.contains(id))continue;
                 long version=target.path("generation").asLong();if(version<=0)throw new IllegalArgumentException("Invalid live case version.");
+                if(hostMode) {
+                    if(id.equals("BROW.basic.json"))for(String suffix:List.of("a","b")) {
+                        String alias=hostPrefix+"_"+suffix;
+                        var definition=ProductionLabAdapter.hostLoginDefinition(new ProductionLabAdapter.LoginTarget(id,version,application,alternate),suffix.equals("a")?"user":"user2",alias).journey();
+                        exports.put(alias,ProductionLabAdapter.export(definition));
+                        references.add(Map.of("file",alias+".json","caseId",id,"caseGeneration",version,"alias",alias));
+                    }
+                    continue;
+                }
                 if(id.startsWith("TLS.")) {
                     var topology=targets.path("transport");
                     if(!topology.path("caseId").asText().equals(id)||topology.path("caseGeneration").asLong()!=version||!topology.path("softwareOnly").asBoolean())throw new IllegalArgumentException("Invalid live transport case.");
@@ -95,13 +109,31 @@ public final class ProductionLabExamples {
                 add(exports,references,input,roles,id,"lab_"+id.replaceAll("[^A-Za-z0-9_]","_").toLowerCase(Locale.ROOT));
                 if(id.equals("BROW.basic.json"))add(exports,references,input,List.of("B","C1","C2"),id+".combined","lab_combined");
             }
+            if(hostMode) {
+                if(!exports.keySet().equals(Set.of(hostPrefix+"_a",hostPrefix+"_b")))throw new IllegalArgumentException("Missing current host form case.");
+                var protocols=new HashSet<String>();
+                for(var target:targets.path("httpAuthentication")) {
+                    String protocol=target.path("protocol").asText();
+                    if(!Set.of("BASIC","NTLM_V1","NTLM_V2").contains(protocol)||!protocols.add(protocol))throw new IllegalArgumentException("Invalid HTTP fixture inventory.");
+                    URI httpOrigin=origin(target.path("origin").asText()),request=URI.create(target.path("request").asText());
+                    if(!TokenExtractor.origin(request).equals(TokenExtractor.origin(httpOrigin))||!"/whoami".equals(request.getPath())
+                            ||request.getRawUserInfo()!=null||request.getRawQuery()!=null||request.getRawFragment()!=null)throw new IllegalArgumentException("Foreign HTTP fixture target.");
+                    for(String suffix:List.of("a","b")) {
+                        String alias=hostPrefix+"_"+protocol.toLowerCase(Locale.ROOT)+"_"+suffix;
+                        var definition=ProductionLabAdapter.hostHttpDefinition(request,bpsh.journey.HttpAuthentication.Protocol.valueOf(protocol),"user-"+suffix,alias);
+                        exports.put(alias,ProductionLabAdapter.export(definition));
+                        references.add(Map.of("file",alias+".json","protocol",protocol,"alias",alias));
+                    }
+                }
+                if(!protocols.equals(Set.of("BASIC","NTLM_V1","NTLM_V2")))throw new IllegalArgumentException("Missing HTTP fixture inventory.");
+            }
             if(exports.isEmpty())throw new IllegalArgumentException("No supported live browser examples.");
             stage="confirm that the live targets have not changed";
             if(!targets.equals(targets(http,control,owner.path("controlKey").asText(),generation)))throw new IllegalArgumentException("Live targets changed while exporting.");
             stage="write the generated native files";
             Path report=Path.of(plan.path("reportDirectory").asText()).toRealPath(),directory=Files.createDirectory(report.resolve("native-examples"));
             for(var entry:exports.entrySet())Files.writeString(directory.resolve(entry.getKey()+".json"),entry.getValue(),StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW);
-            Files.writeString(directory.resolve("README.txt"),"Generated by the actual captured extension serializer for live run "+runId+", generation "+generation+".\nImport individual JSON files in the extension. Each alias is distinct. Ordinary fixture forms use user2/pass2; enter pass2 in the secure input. No password, PIN, runtime token or control key is exported.\nThe controlled combined example captures bearer AND both cookies from one journey. Browser OIDC captures bearer/client/selected IdP cookie; backend OIDC and SAML capture the client cookie available to the browser; the broker captures bearer/client/selected upstream cookie. These are prepared definitions, not authentication results. Use the matching protected endpoint and inspect its account/issuance result.\nTransport examples use the active transport inventory's resourceUri. Employee must return account user; admin must return account admin. The same-CN pair has two distinct fingerprint selections. Negative examples must fail without yielding a usable credential. Software certificate examples require a fresh Burp process inheriting the private SOFTHSM2_CONF path from the inventory and the disposable PIN from its owned fixture.json; never use a real token PIN or an existing process with an unknown store. No global environment change is required.\nKeep authLabServe running. Controlled URLs carry case generations and are rejected after retirement. Federation named origins can be reused after reset; regenerate the matching example whenever the active case changes. Stop closes the services.\n",StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW);
+            Files.writeString(directory.resolve("README.txt"),hostMode ? "Host examples generated by the captured native serializer for run "+runId+", generation "+generation+".\nTwo form accounts capture B,C1 with a maximum cache age of 3500 seconds and a skew of 10 seconds. Host fixture issuance lasts 3600 seconds; dedicated expiry fixtures retain their normal lifetime. Three HTTP authentication protocols each have A/B identities. Enter synthetic fixture secrets through the private GUI input; this export contains no passwords, runtime credentials or control keys. Authentication was not executed.\n" : "Generated by the actual captured extension serializer for live run "+runId+", generation "+generation+".\nImport individual JSON files in the extension. Each alias is distinct. Ordinary fixture forms use user2/pass2; enter pass2 in the secure input. No password, PIN, runtime token or control key is exported.\nThe controlled combined example captures bearer AND both cookies from one journey. Browser OIDC captures bearer/client/selected IdP cookie; backend OIDC and SAML capture the client cookie available to the browser; the broker captures bearer/client/selected upstream cookie. These are prepared definitions, not authentication results. Use the matching protected endpoint and inspect its account/issuance result.\nTransport examples use the active transport inventory's resourceUri. Employee must return account user; admin must return account admin. The same-CN pair has two distinct fingerprint selections. Negative examples must fail without yielding a usable credential. Software certificate examples require a fresh Burp process inheriting the private SOFTHSM2_CONF path from the inventory and the disposable PIN from its owned fixture.json; never use a real token PIN or an existing process with an unknown store. No global environment change is required.\nKeep authLabServe running. Controlled URLs carry case generations and are rejected after retirement. Federation named origins can be reused after reset; regenerate the matching example whenever the active case changes. Stop closes the services.\n",StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW);
             Files.writeString(report.resolve("native-examples-completion.json"),AuthLabSupport.JSON.writeValueAsString(Map.of("runId",runId.toString(),"generation",generation,"files",references,"authenticationExecuted",false)),StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW);
             System.out.println("Native examples prepared: "+exports.size()+"; authentication was not executed. Output: "+directory);
         }

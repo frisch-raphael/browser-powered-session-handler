@@ -175,15 +175,15 @@ Reload selected only restores a saved journey into its editor.
    ends response-only execution early explains skipped remaining steps in the log.
    Cookie-based journeys complete all configured login steps before accepting
    captured credentials, including when the login page already sets a session cookie.
-   When an explicit Test login or Retry finishes, show a native result dialog
-   naming the journey and the captured token/cookie names and count, or the safe
-   error and identified failed step. Configuration errors and HTTP authentication
-   failures instead reveal the relevant settings page and show specific inline
-   guidance, without an error dialog. Focus the identified field; when a rejected
+   When an explicit Test login or Retry succeeds, show a native result dialog
+   naming the journey and the captured token/cookie names and count. Errors with
+   an identified field, settings group or step instead reveal that location and
+   show specific inline guidance, without an error dialog. Generic errors without
+   an associated UI location may use a popup. Focus the identified field; when a rejected
    account cannot be narrowed to a field, show the observed error at the HTTP
    authentication group. Background validation never changes page or focus.
    Captured values remain in Journey cache. Refresh the completed controls before
-   opening a result dialog; after dismissal, reveal an identified failed step. Automatic authentication
+   opening a result dialog. Automatic authentication
    stays non-modal. Do not show obsolete results after editing, changing journeys,
    cancelling the test or unloading the extension; unload dismisses an open result.
    Copy BPSH tag offers named credentials and explicit encodings without
@@ -237,6 +237,24 @@ expiry and control-character checks as JSON tokens. Response contents and token
 values never appear in diagnostics.
 
 ## Conditional settings and feedback
+
+An explicit Test login or Retry failure associated with a field, settings group or
+journey step opens that page, expands the relevant controls, displays the complete
+safe error beside the control and focuses it. Do not show an error popup first.
+A generic failure without an associated UI location may use a popup. Background
+authentication failures must not move the user's focus or open a popup.
+
+Burp request notes report the extension's observed action, the failing journey
+only when known, the specific safe error and any supported next action. Automatic
+failure says BPSH left the request unchanged; it does not claim delivery. A drop
+note says Burp was asked to drop the request, without promising server-side
+absence. Direct HTTP-auth delivery uncertainty must retain its warning to check
+the server before resending. Never infer a bad password, missing library or
+sandbox permission from an unclassified exception, or expose vendor exception
+text, URLs, selectors or credentials. Format journey attribution once. A recovery
+rule match is reported as a match, not proof that the session expired; distinguish
+requested replay, submission to Burp and replay failure, keeping the original
+response. Preserve existing user notes and avoid adding an identical note twice.
 
 The bottom toolbar contains Event log, Journey cache and contextual action
 buttons only. Do not display authentication state, loaded/saved messages, waiting
@@ -318,7 +336,15 @@ references. Only explicitly opened inspection reads credential values; they
 remain excluded from logs, storage, exports and general diagnostic strings.
 
 Session handling contains an ordered table of automatic journeys with an On
-checkbox, saved identity, URL scope and expiration summary. Add chooses an unused
+checkbox, saved identity, URL scope, Proxy port and expiration summary. URL handling
+uses Burp target scope, All requests or Custom URL. Custom URL shares one input
+with a Use regex checkbox (off for a literal prefix); its exact tooltip is
+"Regex matched anywhere in the URL." Regex is case-sensitive by default and
+searches anywhere in the unmodified URL. URL and incoming-port restrictions must
+both match. Proxy port offers Any listener and distinct existing configured ports.
+Saved missing/stopped ports remain selected with advisory labels; they never
+silently become Any listener. Refresh on entry/focus and dropdown opening runs
+off the EDT, preserves unfinished edits and never saves or starts login. Add chooses an unused
 saved Project/User journey. Move up/down changes execution and injection order;
 Remove deletes the rule only. Sorting never changes execution order. Missing
 saved identities remain visible and never fall back to another journey. Selecting
@@ -331,10 +357,13 @@ from Token and is configured per automatic rule: HTTP status, response text (RE2
 or either condition. Waiting Settings remain separate, in seconds, and use the
 same independent debounce. Invalid edits retain the last valid applied controls.
 
-Show only Failure status and/or RE2 expression as appropriate. Clearing an option
-removes irrelevant values. Field/row errors use human captions and reveal the
-corresponding source when execution is requested. Autosave does not validate
-unfinished fields or steal focus. Errors explain the observed problem and a concrete next action; internal
+Show only Failure status and/or RE2 expression as appropriate. Failure status accepts
+up to three digits, defaults to 401 when status detection is enabled, and requires
+a value from 100 to 599 when used. Empty or out-of-range edits show inline guidance
+and retain the last valid applied controls. Clearing an option removes irrelevant
+values. Field/row errors use human captions and reveal the
+corresponding source when execution is requested. Background validation leaves
+unfinished inputs in place and never steals focus. Errors explain the observed problem and a concrete next action; internal
 terms such as cycle budget and main-frame transport do not appear in guidance.
 
 ## Draft and identity safety
@@ -418,8 +447,40 @@ The HTTPS Login URL's exact canonical server is included in the client-certifica
 
 Step failure navigation uses stable step UUIDs and the exact journey generation, never parsed log text or the current visible row. Journey attribution and paused-recovery wrapping must preserve that target. Response-only early completion records skipped-step metadata without executing the remaining steps. Any cookie capture requires successful completion of the configured sequence; an anonymous cookie must not turn a failed login step into a success.
 
-Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
 
 Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 
 Settings keeps the selected authentication policy explanation visible below its selector. It states whether a request waits or is sent unchanged, when background credentials take effect, and that valid cached credentials are added immediately. Tooltips and accessible descriptions use the same selected-policy explanation.
+
+## Authentication resource controls
+
+Settings exposes finite numeric global and per-journey request limits, defaulting
+to 64 and 16. They cover direct HTTP-authentication callbacks as well as token
+handling. The Unlimited controls are removed. Capacity refusal follows ordinary
+send-unchanged versus explicit fail-closed policy. The Setup proxy tooltip names
+browser login, recording and Basic/NTLM delivery and explains that an empty field
+means direct and Burp upstream-proxy settings are not inherited.
+
+A sandboxed Chromium launch is required. Unknown launch failures report that
+Chromium could not start, without inferring missing libraries or sandbox
+permissions. A typed startup timeout is identified separately. Test errors with
+no associated UI input may use a generic popup; input/step errors use the inline
+route above. Recording retains its existing error route.
+Recorded option values and event rows disable Swing HTML before their first text
+assignment, while their literal saved/replayed values remain unchanged.
+
+Formatted help uses the [Swing tooltip contract](swing-tooltips.md). The actual
+tooltip opts into HTML after the host UI installs; its control and caption use
+the shared factory and builder. Preserve headings, paragraph breaks and wrapping,
+with plain accessible descriptions. Disabling HTML in saved-data renderers does
+not prohibit formatting their separately owned help tooltips.
+
+## Proxy failure feedback
+
+Failed tagged Proxy processing requests Burp's native DROP action. The tested
+Burp version may still forward that request; guaranteed blocking is not required.
+Show the observed failure and say that Burp was asked to drop the request, without
+claiming delivery was prevented. No internal stop header, ticket or extra global
+credential pass is used. Global-owned request failures retain native global drop
+handling. See the [routing design](session-handling-by-url-and-proxy-port.md#proxy-failure-policy-native-drop-is-best-effort).

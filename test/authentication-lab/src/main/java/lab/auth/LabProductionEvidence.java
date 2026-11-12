@@ -243,6 +243,8 @@ public final class LabProductionEvidence {
     /** A report's actual context, source, XML, observations and cleanup must all agree. */
     public static boolean collect(Path directory, Path workspace) throws Exception {
         directory = directory.toRealPath(); workspace = workspace.toRealPath();
+        var earlyContext = LabJson.read(owned(directory, directory.resolve("report-context.json")), 1_048_576);
+        if (LabHostEvidence.TASK.equals(text(earlyContext, "taskPath"))) return LabHostEvidence.collect(directory, workspace);
         var plan = read(owned(directory, directory.resolve("plan.json")));
         byte[] contextBytes = Files.readAllBytes(owned(directory, directory.resolve("report-context.json")));
         var context = ScenarioCatalog.parseJson(contextBytes).getAsJsonObject();
@@ -485,7 +487,7 @@ public final class LabProductionEvidence {
         return List.of(new ScenarioCatalog.Fact("outcome",outcome));
     }
     static boolean supported(ScenarioCatalog.Requirement row) {
-        return LabHttpAuthenticationEvidence.supports(row.id())||LabConfigurationEvidence.supports(row.id())||LabResourceEvidence.supports(row.id())||LabInjectionEvidence.supports(row.id())||LabTagFailureEvidence.supports(row.id())||LabLimitEvidence.supports(row.id())||row.id().equals("CORE.tag-failure.output-contains-tag")||LabTagSelectionEvidence.supports(row.id())||LabEncodingEvidence.supports(row.id())||LabOutputEvidence.supports(row.id())||LabLifetimeEvidence.supports(row.id())||row.id().equals(LabRecoveryBrowserEvidence.ID)||LabRetryEvidence.supports(row.id())||LabBrowserEvidence.supports(row.id())||row.group().startsWith("TLS.")||row.group().startsWith("FED.")||Set.of("CORE.tool-policy", "CORE.tag-matrix", "CORE.recovery", "BROW.fresh").contains(row.group()) || row.id().equals("CORE.encoding.literal-prefix") || diagnosticSpec(row) != null;
+        return row.layer()==ScenarioCatalog.Layer.HOST && row.binding()!=null && row.binding().executor().equals("HOST") || LabHttpAuthenticationEvidence.supports(row.id())||LabConfigurationEvidence.supports(row.id())||LabResourceEvidence.supports(row.id())||LabInjectionEvidence.supports(row.id())||LabTagFailureEvidence.supports(row.id())||LabLimitEvidence.supports(row.id())||row.id().equals("CORE.tag-failure.output-contains-tag")||LabTagSelectionEvidence.supports(row.id())||LabEncodingEvidence.supports(row.id())||LabOutputEvidence.supports(row.id())||LabLifetimeEvidence.supports(row.id())||row.id().equals(LabRecoveryBrowserEvidence.ID)||LabRetryEvidence.supports(row.id())||LabBrowserEvidence.supports(row.id())||row.group().startsWith("TLS.")||row.group().startsWith("FED.")||Set.of("CORE.tool-policy", "CORE.tag-matrix", "CORE.recovery", "BROW.fresh").contains(row.group()) || row.id().equals("CORE.encoding.literal-prefix") || diagnosticSpec(row) != null;
     }
     static List<ScenarioCatalog.Fact> establishedFacts(ScenarioCatalog.Requirement row, JsonObject actual) {
         if(LabHttpAuthenticationEvidence.supports(row.id()))return LabHttpAuthenticationEvidence.facts(row.id(),actual);

@@ -37,6 +37,7 @@ public final class LabRun implements AutoCloseable {
         }
         public static FaultSpec holdLogin(String gate) { return new FaultSpec(Phase.LOGIN, 1, "HOLD", null, null, gate); }
     }
+    private record ScheduledFault(FaultSpec spec,int absoluteOccurrence) { }
     public static final class ControlException extends RuntimeException {
         final int status; final String code;
         ControlException(int status, String code) { super(code); this.status = status; this.code = code; }
@@ -45,6 +46,7 @@ public final class LabRun implements AutoCloseable {
     }
     static final Gson JSON = new GsonBuilder().serializeNulls().create();
     private final RunSpec spec;
+    private final long issuanceLifetimeSeconds;
     private final UUID runId = UUID.randomUUID();
     private final FixtureIdentityStore.Secret controlKey = FixtureIdentityStore.randomSecret();
     private final Map<String, CaseLease> cases = new LinkedHashMap<>();
@@ -63,8 +65,9 @@ public final class LabRun implements AutoCloseable {
     private volatile Path servingFederationRuntime;
     private volatile TransportFixtures.Material servingTransportMaterial;
 
-    private LabRun(RunSpec spec) throws IOException {
+    private LabRun(RunSpec spec,long issuanceLifetimeSeconds) throws IOException {
         this.spec = spec;
+        this.issuanceLifetimeSeconds=issuanceLifetimeSeconds;
         Path environment = spec.environmentRoot().toAbsolutePath().normalize(); Files.createDirectories(environment);
         Path invocation = environment.resolve(spec.invocationId().toString()); Files.createDirectories(invocation);
         directory = Files.createDirectory(invocation.resolve(runId.toString())); restrict(directory);
@@ -81,7 +84,9 @@ public final class LabRun implements AutoCloseable {
             control.stop(0); controls.shutdownNow(); evidence.close(); throw ex;
         }
     }
-    public static LabRun start(RunSpec spec) throws IOException { return new LabRun(spec); }
+    public static LabRun start(RunSpec spec) throws IOException { return new LabRun(spec,60); }
+    /** Host GUI recipes test routing and explicit revocation, with a lifetime covering the whole owned run. */
+    public static LabRun startHost(RunSpec spec) throws IOException { return new LabRun(spec,3600); }
     public UUID runId() { return runId; }
     public long generation() { return generation; }
     public URI applicationUri() { return application.origin(); }
@@ -218,13 +223,14 @@ public final class LabRun implements AutoCloseable {
     public final class CaseLease implements AutoCloseable {
         private final String id;
         private final long generation;
-        final FixtureIdentityStore identities = new FixtureIdentityStore();
+        final FixtureIdentityStore identities = new FixtureIdentityStore(issuanceLifetimeSeconds);
         final long preparedNanos = System.nanoTime();
         final Map<String, LoginFlows.Transaction> transactions = new HashMap<>();
-        final List<FaultSpec> faults = new ArrayList<>();
+        private final List<ScheduledFault> faults = new ArrayList<>();
         final Map<Phase, Integer> occurrences = new EnumMap<>(Phase.class);
         final Map<String, Gate> gates = new LinkedHashMap<>();
         final List<Map<String, Object>> events = new ArrayList<>();
+        final LabHostObservations hostObservations = new LabHostObservations();
         final AtomicLong ingress = new AtomicLong(), routed = new AtomicLong(), actions = new AtomicLong();
         private long eventSequence;
         private int active;
@@ -264,14 +270,32 @@ public final class LabRun implements AutoCloseable {
         synchronized void enter() { check(); active++; caseState = "RUNNING"; ingress.incrementAndGet(); }
         synchronized void leave() { active--; notifyAll(); }
         public synchronized void armFault(FaultSpec fault) {
-            check(); if (faults.contains(fault)) throw error(409, "STATE_CONFLICT"); faults.add(fault);
+            check();Objects.requireNonNull(fault);scheduleFault(fault,fault.occurrence());
+        }
+        /** Typed host recipes may schedule 1-32 hits ahead without changing the absolute catalog/control contract. */
+        public synchronized void armRelativeFault(FaultSpec fault) {
+            check();Objects.requireNonNull(fault);
+            long absolute=(long)occurrences.getOrDefault(fault.phase(),0)+fault.occurrence();
+            if(absolute<1||absolute>10_000)throw error(400,"BAD_INPUT");
+            scheduleFault(fault,(int)absolute);
+        }
+        synchronized boolean hasFaultCheckpoint(String checkpoint) {
+            check();Objects.requireNonNull(checkpoint);
+            return faults.stream().anyMatch(fault->checkpoint.equals(fault.spec().checkpoint()));
+        }
+        private void scheduleFault(FaultSpec fault,int absolute) {
+            if(faults.stream().anyMatch(scheduled->scheduled.absoluteOccurrence()==absolute&&scheduled.spec().phase()==fault.phase()
+                    &&scheduled.spec().kind().equals(fault.kind())&&scheduled.spec().role()==fault.role()
+                    &&Objects.equals(scheduled.spec().status(),fault.status())&&Objects.equals(scheduled.spec().checkpoint(),fault.checkpoint())))
+                throw error(409,"STATE_CONFLICT");
+            faults.add(new ScheduledFault(fault,absolute));
             if (fault.checkpoint() != null) gates.computeIfAbsent(fault.checkpoint(), k -> new Gate());
         }
         List<FaultSpec> hit(Phase phase) {
             List<FaultSpec> selected;
             synchronized (this) {
                 check(); int occurrence = occurrences.merge(phase, 1, Integer::sum);
-                selected = faults.stream().filter(f -> f.phase() == phase && f.occurrence() == occurrence).toList();
+                selected = faults.stream().filter(f -> f.spec().phase() == phase && f.absoluteOccurrence() == occurrence).map(ScheduledFault::spec).toList();
                 event(phase, "phase-entered", List.of());
             }
             for (var fault : selected) if (fault.kind().equals("HOLD")) {
@@ -328,7 +352,8 @@ public final class LabRun implements AutoCloseable {
             if(id.startsWith("FED."))counters.replaceAll((name,value)->null);
             return Map.of("runId", runId.toString(), "caseId", id, "generation", generation, "state", caseState,
                     "checkpoints", gates.entrySet().stream().map(e -> Map.of("name", e.getKey(), "state", closed ? "RETIRED" : e.getValue().released ? "RELEASED" : "WAITING")).toList(),
-                    "counters", counters, "events", List.copyOf(events), "truncated", eventSequence > 10_000);
+                    "counters", counters, "events", List.copyOf(events), "truncated", eventSequence > 10_000,
+                    "hostObservations", hostObservations.snapshot());
         }
         @Override public void close() {
             close(System.nanoTime()+TimeUnit.SECONDS.toNanos(5));

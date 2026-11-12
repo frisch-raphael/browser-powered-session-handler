@@ -148,6 +148,9 @@ public final class AuthTrafficGuard implements AutoCloseable {
      */
     public static boolean containsNativeTag(String value) { return value != null && value.contains("<@"); }
 
+    /** @param value Candidate User-Agent value. @return Whether it contains reserved ownership syntax without classifying or retaining it. */
+    public static boolean containsReservedMarker(String value) { return value != null && RESERVED.matcher(value).find(); }
+
     /**
      * Builds a reserved-suffix error without echoing the unknown, expired or copied marker.
      * @return Terminal configuration failure with explicit Retry/remove-suffix guidance.

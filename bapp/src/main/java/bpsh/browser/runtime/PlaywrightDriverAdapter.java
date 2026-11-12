@@ -53,6 +53,9 @@ public final class PlaywrightDriverAdapter {
         private final Method closeConnection;
         private final ScheduledExecutorService watchdog;
         private final AtomicBoolean closed = new AtomicBoolean();
+        private final java.util.Set<ProcessHandle> children;
+        private volatile boolean terminated;
+        private final java.util.concurrent.atomic.AtomicLong cleanupDeadline;
         private final Path temporary, temporaryParent;
 
         /**
@@ -65,11 +68,13 @@ public final class PlaywrightDriverAdapter {
          * @param temporary Private directory used by this driver and its browser children.
          * @throws IOException If the captured temporary parent cannot be resolved.
          */
-        private Session(Process process, Playwright playwright, Object connection, PlaywrightRecorderAdapter.Tap recordingTap, BrowserRuntimeManager.Ready runtime, Method closeConnection, ScheduledExecutorService watchdog, Path temporary) throws IOException {
+        private Session(Process process, Playwright playwright, Object connection, PlaywrightRecorderAdapter.Tap recordingTap, BrowserRuntimeManager.Ready runtime, Method closeConnection, ScheduledExecutorService watchdog, Path temporary, java.util.Set<ProcessHandle> children, java.util.concurrent.atomic.AtomicLong cleanupDeadline) throws IOException {
             this.process = process; this.playwright = playwright; this.connection = connection;
             this.recordingTap = recordingTap;
             this.runtime = runtime;
             this.closeConnection = closeConnection; this.watchdog = watchdog;
+            this.children = children;
+            this.cleanupDeadline = cleanupDeadline;
             this.temporary = temporary; this.temporaryParent = temporary.getParent().toRealPath();
         }
 
@@ -92,6 +97,10 @@ public final class PlaywrightDriverAdapter {
          * @return Owned Node PID for scoped cleanup/acceptance assertions; no command or credentials.
          */
         long processId() { return process.pid(); }
+        /** Confirms termination of the owned driver and every captured descendant, independent of protocol events. */
+        public boolean terminated() { return terminated; }
+        /** Bounds graceful browser/context protocol closes before forced owned-process shutdown. */
+        public void beginCleanup() { owner(); cleanupDeadline.compareAndSet(Long.MAX_VALUE, System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); }
 
         /**
          * Rejects cross-thread use of the Playwright event loop before touching its connection.
@@ -103,17 +112,27 @@ public final class PlaywrightDriverAdapter {
         /** Closes the pipe and owned process tree on its worker; published browser binaries are untouched. */
         @Override public void close() throws AuthenticationFailure {
             owner(); if (!closed.compareAndSet(false, true)) return;
+            boolean interrupted = Thread.interrupted();
             recordingTap.releaseRecorder();
             watchdog.shutdownNow();
-            List<ProcessHandle> children = process.descendants().toList();
+            children.addAll(process.descendants().toList());
             try { closeConnection.invoke(connection); } catch (Exception ignored) { /* process cleanup remains mandatory */ }
             try { if (!process.waitFor(500, TimeUnit.MILLISECONDS)) terminate(process); }
-            catch (InterruptedException ex) { Thread.currentThread().interrupt(); terminate(process); }
+            catch (InterruptedException ex) { interrupted = true; terminate(process); }
             finally {
                 children.forEach(PlaywrightDriverAdapter::terminate); if (process.isAlive()) terminate(process);
                 long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-                for (ProcessHandle child : children) if (child.isAlive()) try { child.onExit().get(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS); } catch (Exception ignored) { /* cleanup reports remaining file locks */ }
-                cleanup(temporary, temporaryParent);
+                try {
+                    if (process.isAlive()) process.waitFor(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS);
+                    watchdog.awaitTermination(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS);
+                    for (ProcessHandle child : children) if (child.isAlive()) child.onExit().get(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException stopped) { interrupted = true; }
+                catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException ignored) { /* Report actual liveness below. */ }
+                try {
+                    terminated = !process.isAlive() && children.stream().noneMatch(ProcessHandle::isAlive) && watchdog.isTerminated();
+                    cleanup(temporary, temporaryParent);
+                    if (!terminated) throw setup("The owned browser processes did not finish closing.", "");
+                } finally { if (interrupted) Thread.currentThread().interrupt(); }
             }
         }
     }
@@ -132,6 +151,8 @@ public final class PlaywrightDriverAdapter {
         if (System.getenv("DEBUG") != null && System.getenv("DEBUG").contains("pw:channel"))
             throw setup("Playwright debug logging is enabled and could expose login values.", "Remove pw:channel from the DEBUG environment variable and restart Burp.");
         Process process = null; Path temporary = null;
+        var children = java.util.concurrent.ConcurrentHashMap.<ProcessHandle>newKeySet();
+        var cleanupDeadline = new java.util.concurrent.atomic.AtomicLong(Long.MAX_VALUE);
         ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "bpsh-driver-budget"); thread.setDaemon(true); return thread;
         });
@@ -149,10 +170,10 @@ public final class PlaywrightDriverAdapter {
             Process owned = process;
             watchdog.scheduleWithFixedDelay(() -> {
                 try {
-                    if (cancelled.getAsBoolean() || deadlineNanos - System.nanoTime() <= 0) terminate(owned);
+                    if (cancelled.getAsBoolean() || deadlineNanos - System.nanoTime() <= 0 || (cleanupDeadline.get() != Long.MAX_VALUE && cleanupDeadline.get() - System.nanoTime() <= 0)) { children.addAll(owned.descendants().toList()); terminate(owned); }
                 } catch (RuntimeException ex) {
                     // A broken lifecycle predicate must not silently disable the process budget.
-                    terminate(owned);
+                    children.addAll(owned.descendants().toList()); terminate(owned);
                 }
             }, 0, 50, TimeUnit.MILLISECONDS);
             ClassLoader loader = Playwright.class.getClassLoader();
@@ -168,7 +189,7 @@ public final class PlaywrightDriverAdapter {
             Playwright playwright = (Playwright) connectionType.getMethod("initializePlaywright").invoke(connection);
             Field driverProcess = playwright.getClass().getDeclaredField("driverProcess"); driverProcess.setAccessible(true); driverProcess.set(playwright, process);
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
-            return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary);
+            return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary, children, cleanupDeadline);
         } catch (AuthenticationFailure ex) {
             watchdog.shutdownNow(); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent()); throw ex;
         } catch (Exception | LinkageError ex) {
@@ -236,32 +257,49 @@ public final class PlaywrightDriverAdapter {
      * @throws AuthenticationFailure If process file locks or containment checks prevent safe cleanup.
      */
     private static void cleanup(Path directory, Path expectedParent) throws AuthenticationFailure {
+        boolean interrupted = Thread.interrupted();
+        // Windows can retain profile file locks briefly after the owned processes exit.
+        // Keep the retry finite while allowing those handles to finish closing.
+        long retryUntil = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         try {
-            if (!Files.exists(directory, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
-            if (Files.isSymbolicLink(directory) || !directory.toAbsolutePath().normalize().getParent().toRealPath().equals(expectedParent.toRealPath())
-                    || !directory.getFileName().toString().startsWith("bpsh-attempt-") || !directory.toRealPath().getParent().equals(expectedParent.toRealPath()))
-                throw new IOException("Unsafe owned temporary path.");
-            Files.walkFileTree(directory, new SimpleFileVisitor<>() {
-                /**
-                 * Deletes a leaf of the checked invocation-owned tree without following symbolic links.
-                 *
-                 * @param file Owned leaf/link.
-                 * @param attrs No-follow attributes.
-                 * @return Continue.
-                 * @throws IOException On delete failure.
-                 */
-                @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException { Files.delete(file); return FileVisitResult.CONTINUE; }
-                /**
-                 * Removes an emptied invocation-owned directory, preserving traversal failures for the caller.
-                 *
-                 * @param dir Owned directory.
-                 * @param error Traversal error.
-                 * @return Continue.
-                 * @throws IOException On traversal/delete failure.
-                 */
-                @Override public FileVisitResult postVisitDirectory(Path dir, IOException error) throws IOException { if (error != null) throw error; Files.delete(dir); return FileVisitResult.CONTINUE; }
-            });
-        } catch (IOException ex) { throw setup("The browser's temporary files could not be deleted from " + directory + ".", ""); }
+            while (true) {
+                try { cleanupOwned(directory, expectedParent); return; }
+                catch (IOException failure) {
+                    if (!(failure instanceof java.nio.file.FileSystemException) || !System.getProperty("os.name", "").startsWith("Windows")
+                            || System.nanoTime() >= retryUntil)
+                        throw setup("The browser's temporary files could not be deleted from " + directory + ".", "");
+                    try { Thread.sleep(25); } catch (InterruptedException stopped) { interrupted = true; }
+                }
+            }
+        } finally { if (interrupted) Thread.currentThread().interrupt(); }
+    }
+
+    /** Rechecks containment on every retry; unsafe targets never enter the deletion walk. */
+    private static void cleanupOwned(Path directory, Path expectedParent) throws IOException {
+        if (!Files.exists(directory, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
+        if (Files.isSymbolicLink(directory) || !directory.toAbsolutePath().normalize().getParent().toRealPath().equals(expectedParent.toRealPath())
+                || !directory.getFileName().toString().startsWith("bpsh-attempt-") || !directory.toRealPath().getParent().equals(expectedParent.toRealPath()))
+            throw new IOException("Unsafe owned temporary path.");
+        Files.walkFileTree(directory, new SimpleFileVisitor<>() {
+            /**
+             * Deletes a leaf of the checked invocation-owned tree without following symbolic links.
+             *
+             * @param file Owned leaf/link.
+             * @param attrs No-follow attributes.
+             * @return Continue.
+             * @throws IOException On delete failure.
+             */
+            @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException { Files.delete(file); return FileVisitResult.CONTINUE; }
+            /**
+             * Removes an emptied invocation-owned directory, preserving traversal failures for the caller.
+             *
+             * @param dir Owned directory.
+             * @param error Traversal error.
+             * @return Continue.
+             * @throws IOException On traversal/delete failure.
+             */
+            @Override public FileVisitResult postVisitDirectory(Path dir, IOException error) throws IOException { if (error != null) throw error; Files.delete(dir); return FileVisitResult.CONTINUE; }
+        });
     }
 
     /**

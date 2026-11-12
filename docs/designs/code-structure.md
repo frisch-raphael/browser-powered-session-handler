@@ -22,6 +22,7 @@ bpsh/
   burp/
     http/                    Montoya hooks, tags, injection, recovery and diagnostics
     ui/                      Swing editor and explicit user actions
+  pattern/                   Shared bounded RE2 compilation
   platform/files/            Restricted file creation attributes
 ```
 
@@ -41,9 +42,10 @@ bpsh/
 
 - `journey` uses JDK types only and imports no application or adapter packages.
 - Authentication contracts and request settings may use journey values. Session policy depends on the read-only catalog and credential contracts, never editing, persistence, UI, browser or Montoya.
+- `pattern` is a shared leaf with no application dependencies; it bounds RE2 source and program size without retaining pattern-bearing failures. Recovery and Burp URL matching own their flags and messages.
 - Credential extraction may use Jackson/RE2 for bounded parsing, but does not import Playwright, Montoya or Swing.
 - Editing depends on journey values, request settings and the explicit persistence boundary. Concrete storage owns document validation and I/O; the catalog never exposes those operations.
-- Browser execution adapts core attempt contracts. Browser asset resources live in browser.runtime. HTTP delivery workers and identity pools live in transport.httpauth, and destination TLS/device ownership lives in transport.tls. The composition root injects the same HTTP runtime into browser and direct-request execution.
+- Browser execution adapts core attempt contracts. Browser asset resources live in browser.runtime. HTTP delivery workers and identity pools live in transport.httpauth, and destination TLS/device ownership lives in transport.tls. The composition root injects the same HTTP runtime into browser and direct-request execution. The TLS owner exposes opaque JCA signing references to terminable PKCS#11 child processes; native providers and signing stay out of the host JVM. This keeps isolation inside transport.tls without a reverse dependency on transport.httpauth.
 - Burp UI/HTTP adapters depend on core contracts. Only the composition root wires the complete graph.
 - Package paths, permitted edges, framework exclusions and absence of cycles are enforced by `verifyArchitecture`, included in `check`.
 

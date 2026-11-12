@@ -48,7 +48,7 @@ final class BrowserManifestCodec {
             object(n, "formatVersion", "platform", "playwrightJavaVersion", "browserName", "browserVersion", "browserRevision",
                     "driverPackageVersion", "nodeVersion", "browserRoot", "browserExecutable", "nodeExecutable", "driverEntryPoint", "helpers",
                     "archive", "unpackedBytes", "entries");
-            number(n.get("formatVersion"), 1, 1);
+            number(n.get("formatVersion"), 2, 2);
             if (!text(n, "platform").equals(expectedPlatform))
                 throw failure(AuthenticationFailure.Cause.UNSUPPORTED_PLATFORM, "This browser bundle was built for a different operating system or processor architecture.", "Reload the complete universal extension JAR.");
             require(text(n, "playwrightJavaVersion").equals("1.64.0") && text(n, "browserName").equals("chromium"), "Unsupported bundled runtime version.");
@@ -56,9 +56,10 @@ final class BrowserManifestCodec {
             require(text(n, "browserRevision").matches("[0-9]+"), "Invalid browser revision.");
             String browserRoot = path(text(n, "browserRoot"), limits), browser = path(text(n, "browserExecutable"), limits);
             String node = path(text(n, "nodeExecutable"), limits), driver = path(text(n, "driverEntryPoint"), limits);
-            JsonNode archive = n.get("archive"); object(archive, "resource", "sha256", "bytes");
+            JsonNode archive = n.get("archive"); object(archive, "resource", "sha256", "bytes", "expandedBytes");
             require(text(archive, "resource").equals(platformResource(ARCHIVE_RESOURCE, expectedPlatform)), "Unexpected archive resource.");
             String archiveHash = hashText(text(archive, "sha256")); long archiveBytes = number(archive.get("bytes"), 1, limits.zipBytes());
+            long expandedBytes = number(archive.get("expandedBytes"), 1, limits.zipBytes());
             long declaredTotal = number(n.get("unpackedBytes"), 0, limits.totalBytes()), sum = 0;
             Map<String, Entry> entries = new HashMap<>(); Map<String, String> filesystemNames = new HashMap<>();
             Set<String> directories = new HashSet<>();
@@ -106,7 +107,7 @@ final class BrowserManifestCodec {
                 require(text(helper, "revision").matches("[0-9]+"), "Invalid helper revision.");
                 String value = path(text(helper, "path"), limits); resolve(value, entries, directories, limits); helpers.add(value);
             }
-            return new Manifest(expectedPlatform, browserRoot, browser, node, driver, archiveHash, archiveBytes, sum,
+            return new Manifest(expectedPlatform, browserRoot, browser, node, driver, archiveHash, archiveBytes, expandedBytes, sum,
                     Map.copyOf(entries), Set.copyOf(directories), List.copyOf(helpers));
         } catch (AuthenticationFailure ex) { throw ex; }
         catch (Exception ex) {

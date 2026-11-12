@@ -12,6 +12,7 @@ Wires one shared service graph and owns host registration and ordered unload.
 - [burp](./burp/README.md): child boundary.
 - [journey](./journey/README.md): child boundary.
 - [platform](./platform/README.md): child boundary.
+- [pattern](./pattern/README.md): shared bounded RE2 compilation.
 - [request](./request/README.md): child boundary.
 
 ## Invariants

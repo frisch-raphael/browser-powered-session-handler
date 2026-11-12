@@ -32,6 +32,7 @@ public final class RefreshBindings {
                 var row = element.getAsJsonObject();
                 if (!row.has("binding") || row.get("binding").isJsonNull()) continue;
                 var binding = row.getAsJsonObject("binding");
+                if (binding.has("executor")&&"MANUAL".equals(binding.get("executor").getAsString())) continue;
                 var hashes = binding.getAsJsonObject("sourceHashes");
                 for (var source : hashes.entrySet()) {
                     Path input = workspace.resolve(source.getKey()).normalize();
@@ -45,6 +46,7 @@ public final class RefreshBindings {
                 String configuration = configurations.get(task);
                 if (configuration == null) { configuration = task.equals(":auth-lab:test")
                         ? LabEvidence.configurationFingerprint(workspace)
+                        : task.equals(LabHostEvidence.TASK) ? LabHostEvidence.configurationFingerprint(workspace)
                         : LabProductionEvidence.configurationFingerprint(workspace, task); configurations.put(task, configuration); }
                 binding.addProperty("configurationHash", configuration);
                 count++;

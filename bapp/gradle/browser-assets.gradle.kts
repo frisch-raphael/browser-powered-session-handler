@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import org.apache.commons.compress.archivers.zip.ZipFile
+import org.tukaani.xz.FilterOptions
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.X86Options
+import org.tukaani.xz.XZ
+import org.tukaani.xz.XZOutputStream
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ProxySelector
@@ -26,6 +31,7 @@ buildscript {
     dependencies {
         classpath("com.fasterxml.jackson.core:jackson-databind:2.17.1")
         classpath("org.apache.commons:commons-compress:1.28.0")
+        classpath("org.tukaani:xz:1.12")
     }
     configurations.getByName("classpath").resolutionStrategy.activateDependencyLocking()
 }
@@ -212,27 +218,35 @@ fun loadVerifiedSource(source: JsonNode, cache: Path, offline: Boolean, resolved
     return path
 }
 
-/** Reuses only the compiled pure-data manifest parser, never the runtime/installer factory. */
-fun withManifestValidator(action: ((ByteArray, String) -> Unit) -> Unit) {
+/** Reuses the compiled manifest/archive codecs, never the runtime/installer factory. */
+fun withAssetCodecs(action: ((ByteArray, String) -> Unit, (java.io.InputStream, java.io.OutputStream, JsonNode) -> Unit) -> Unit) {
     val classes = project.extensions.getByType<JavaPluginExtension>().sourceSets.getByName("main").output.classesDirs.files
     java.net.URLClassLoader((classes + runtime.files).map { it.toURI().toURL() }.toTypedArray(), ClassLoader.getPlatformClassLoader()).use { loader ->
         val manager = loader.loadClass("bpsh.browser.runtime.BrowserRuntimeManager")
         val limitsType = loader.loadClass("bpsh.browser.runtime.BrowserRuntimeManager" + "$" + "Limits")
         val standard = limitsType.getDeclaredMethod("standard").apply { isAccessible = true }.invoke(null)
         val parse = manager.getDeclaredMethod("parseManifest", ByteArray::class.java, String::class.java, limitsType).apply { isAccessible = true }
-        action { bytes, target ->
+        val codec = loader.loadClass("bpsh.browser.runtime.BrowserArchiveCodec")
+        val decode = codec.getDeclaredMethod("decode", java.io.InputStream::class.java, java.io.OutputStream::class.java,
+            Long::class.javaPrimitiveType, String::class.java, Long::class.javaPrimitiveType).apply { isAccessible = true }
+        action({ bytes, target ->
             try { parse.invoke(null, bytes, target, standard); Unit }
-            catch (ex: java.lang.reflect.InvocationTargetException) { throw IllegalArgumentException("Runtime validator rejected candidate.", ex.cause) }
-        }
+            catch (ex: java.lang.reflect.InvocationTargetException) { throw IllegalArgumentException("Runtime manifest validator rejected payload.", ex.cause) }
+        }, { input, output, metadata ->
+            val archive = metadata.path("archive")
+            try { decode.invoke(null, input, output, archive.path("bytes").longValue(), archive.path("sha256").textValue(), archive.path("expandedBytes").longValue()); Unit }
+            catch (ex: java.lang.reflect.InvocationTargetException) { throw IllegalArgumentException("Runtime archive validator rejected payload.", ex.cause) }
+        })
     }
 }
 
 /** Bounded selected source member and its output metadata. */
-data class MappedAsset(val source: Path, val member: String, val path: String, val bytes: Long, val link: Boolean, val executable: Boolean)
+data class MappedAsset(val source: Path, val member: String, val path: String, val bytes: Long, val crc: Long, val link: Boolean, val executable: Boolean)
 
 /** Shared real/synthetic mapper, ZIP writer, consumer validator and target-pair publisher. */
 fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>, driver: Path,
-                         output: Path, buildRoot: Path, validate: (ByteArray, String) -> Unit) {
+                         output: Path, buildRoot: Path, validate: (ByteArray, String) -> Unit,
+                         decode: (java.io.InputStream, java.io.OutputStream, JsonNode) -> Unit) {
     validateTarget(platform); val target = string(platform, "platform")
     java.util.zip.ZipFile(driver.toFile()).use { jar ->
         val registry = jar.getInputStream(jar.getEntry("driver/package/browsers.json")).use { assetMapper.readTree(it) }
@@ -260,8 +274,9 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
                     val name = safePath(if (remainder.isEmpty()) to else "$to/$remainder")
                     require(names.add(name.lowercase(java.util.Locale.ROOT))) { "Duplicate or case-colliding asset path." }
                     require(entry.size in 0..(if (link) 4096L else (1L shl 30)))
+                    require(entry.crc in 0..0xffffffffL) { "Source member lacks a valid CRC." }
                     val executable = !link && if (target == "windows-x64") name.endsWith(".exe", true) else (entry.unixMode and 73) != 0
-                    mapped.add(MappedAsset(path, entry.name, name, entry.size, link, executable)); require(mapped.size <= 100_000)
+                    mapped.add(MappedAsset(path, entry.name, name, entry.size, entry.crc, link, executable)); require(mapped.size <= 100_000)
                 }
             }
         }
@@ -269,16 +284,18 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
     Files.createDirectories(output.parent); val stage = Files.createTempDirectory(output.parent, ".$target-")
     try {
         val zip = stage.resolve("browser-assets.zip")
-        val manifest = assetMapper.createObjectNode().put("formatVersion", 1).put("playwrightJavaVersion", "1.64.0")
+        val manifest = assetMapper.createObjectNode().put("formatVersion", 2).put("playwrightJavaVersion", "1.64.0")
         platform.fields().forEachRemaining { (key, value) -> if (key != "sources") manifest.set<JsonNode>(key, value) }
         val entries = manifest.putArray("entries"); var total = 0L
-        val openSources = sources.map { it.second }.distinct().associateWith { ZipFile.builder().setFile(it.toFile()).get() }
+        val openSources = mutableMapOf<Path, ZipFile>()
         try {
+            sources.map { it.second }.distinct().forEach { openSources[it] = ZipFile.builder().setFile(it.toFile()).get() }
             org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream(zip).use { out ->
                 mapped.sortedBy { it.path }.forEach { member ->
                     val source = openSources.getValue(member.source)
                     val entry = org.apache.commons.compress.archivers.zip.ZipArchiveEntry(member.path)
                     entry.time = 0L; entry.setUnixMode(if (member.link) 41471 else if (member.executable) 33261 else 33188)
+                    entry.method = ZipEntry.STORED; entry.size = member.bytes; entry.crc = member.crc
                     out.putArchiveEntry(entry)
                     source.getInputStream(source.getEntry(member.member)).use { input ->
                         if (member.link) {
@@ -301,10 +318,23 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
                 }
             }
         } finally { openSources.values.forEach { it.close() } }
-        require(Files.size(zip) in 1..(2L shl 30))
+        val expandedBytes = Files.size(zip); require(expandedBytes in 1..(2L shl 30))
+        val compressed = stage.resolve("browser-assets.zip.xz")
+        val lzma = LZMA2Options(9).apply { setDictSize(64 shl 20) }
+        val filters = arrayOf<FilterOptions>(X86Options(), lzma)
+        logger.lifecycle("Encoding $target sequentially: XZ encoder ${FilterOptions.getEncoderMemoryUsage(filters)} KiB, decoder ${FilterOptions.getDecoderMemoryUsage(filters)} KiB; build JVM max heap ${Runtime.getRuntime().maxMemory()} bytes.")
+        Files.newOutputStream(compressed).use { file ->
+            XZOutputStream(file, filters, XZ.CHECK_CRC64).use { out ->
+                Files.newInputStream(zip).use { input -> input.copyTo(out, 65536) }
+            }
+        }
+        require(Files.size(compressed) in 1..(2L shl 30))
         manifest.put("unpackedBytes", total)
-        manifest.putObject("archive").put("resource", "META-INF/bpsh/$target/browser-assets.zip").put("sha256", hash(zip)).put("bytes", Files.size(zip))
+        manifest.putObject("archive").put("resource", "META-INF/bpsh/$target/browser-assets.zip.xz")
+            .put("sha256", hash(compressed)).put("bytes", Files.size(compressed)).put("expandedBytes", expandedBytes)
         val bytes = assetMapper.writeValueAsBytes(manifest); validate(bytes, target)
+        decode(Files.newInputStream(compressed), java.io.OutputStream.nullOutputStream(), manifest)
+        Files.delete(zip)
         Files.write(stage.resolve("browser-assets.json"), bytes)
         deleteBuildTree(output, buildRoot)
         // Windows scanners can briefly retain the newly closed ZIP/manifest directory.
@@ -324,8 +354,10 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
 /** Prepares all three target archives without executing a native program. */
 tasks.register("prepareBrowserAssets") {
     group = "build"; dependsOn("compileJava"); mustRunAfter("verifyIntegrationTestClasses")
-    inputs.file(assetLock); inputs.files(runtime)
-    inputs.files(provider { project.extensions.getByType<JavaPluginExtension>().sourceSets.getByName("main").output.classesDirs.asFileTree.matching { include("BrowserRuntimeManager*.class") } })
+    inputs.file(assetLock); inputs.files(runtime); inputs.file(layout.projectDirectory.file("gradle/browser-assets.gradle.kts"))
+    inputs.files(provider { project.extensions.getByType<JavaPluginExtension>().sourceSets.getByName("main").output.classesDirs.asFileTree.matching {
+        include("bpsh/browser/runtime/BrowserRuntimeManager*.class", "bpsh/browser/runtime/BrowserManifestCodec*.class", "bpsh/browser/runtime/BrowserArchiveCodec*.class")
+    } })
     outputs.dir(generatedAssets)
     doLast {
         val lock = assetMapper.readTree(Files.readString(assetLock.asFile.toPath(), Charsets.UTF_8))
@@ -359,11 +391,11 @@ tasks.register("prepareBrowserAssets") {
                 Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE)
             } finally { Files.deleteIfExists(temporary) }
         }
-        withManifestValidator { validate ->
+        withAssetCodecs { validate, decode ->
             supportedTargets.forEach { target ->
                 val platform = lock.path("platforms").single { string(it, "platform") == target }; validateTarget(platform)
                 val sources = platform.path("sources").map { it to loadVerifiedSource(it, cache, gradle.startParameter.isOffline, resolved, download) }
-                prepareTargetPayload(platform, sources, driver, generatedAssets.get().asFile.toPath().resolve("META-INF/bpsh/$target"), buildRoot, validate)
+                prepareTargetPayload(platform, sources, driver, generatedAssets.get().asFile.toPath().resolve("META-INF/bpsh/$target"), buildRoot, validate, decode)
                 logger.lifecycle("Prepared verified $target browser payload.")
             }
         }
@@ -433,15 +465,15 @@ tasks.register("verifyBrowserAssetProducer") {
         fun sources(platform: JsonNode, folder: Path) = platform.path("sources").map {
             it to loadVerifiedSource(it, folder.resolve("cache"), true, resolved, noDownload)
         }
-        withManifestValidator { validate ->
+        withAssetCodecs { validate, decode ->
             supportedTargets.forEach { target ->
                 case("complete-" + target) {
                     val folder = root.resolve(target)
                     val extra = if (target == "windows-x64") emptyList() else listOf(Triple("alias", "extra-helper".toByteArray(), 41471))
                     val platform = fixture(target, folder, extra)
-                    prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate)
+                    prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode)
                     val metadata = assetMapper.readTree(Files.readAllBytes(folder.resolve("out/browser-assets.json")))
-                    check(metadata.path("archive").path("resource").asText() == "META-INF/bpsh/" + target + "/browser-assets.zip")
+                    check(metadata.path("archive").path("resource").asText() == "META-INF/bpsh/" + target + "/browser-assets.zip.xz")
                     val rows = metadata.path("entries").associateBy { it.path("path").asText() }
                     check(rows.getValue(string(platform, "browserExecutable")).path("executable").booleanValue())
                     check(!rows.getValue("browsers/chromium-1248/data.js").path("executable").booleanValue())
@@ -449,23 +481,30 @@ tasks.register("verifyBrowserAssetProducer") {
                         check(rows.getValue("browsers/chromium-1248/extra-helper").path("executable").booleanValue())
                         check(rows.getValue("browsers/chromium-1248/alias").path("target").asText() == "extra-helper")
                     }
-                    ZipFile.builder().setFile(folder.resolve("out/browser-assets.zip").toFile()).get().use { zip ->
+                    check(metadata.path("formatVersion").intValue() == 2)
+                    check(Files.list(folder.resolve("out")).use { paths -> paths.map { it.fileName.toString() }.toList().toSet() }
+                        == setOf("browser-assets.json", "browser-assets.zip.xz"))
+                    val decoded = folder.resolve("decoded.zip")
+                    Files.newOutputStream(decoded).use { out -> decode(Files.newInputStream(folder.resolve("out/browser-assets.zip.xz")), out, metadata) }
+                    ZipFile.builder().setFile(decoded.toFile()).get().use { zip ->
+                        check(zip.entries.asSequence().all { it.method == ZipEntry.STORED })
                         check(zip.getEntry(string(platform, "nodeExecutable")).unixMode == 33261)
                         check(zip.getEntry("browsers/chromium-1248/extra-helper").unixMode == if (target == "windows-x64") 33188 else 33261)
                     }
-                    prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("repeat"), buildRoot, validate)
-                    listOf("browser-assets.json", "browser-assets.zip").forEach { check(Files.mismatch(folder.resolve("out").resolve(it), folder.resolve("repeat").resolve(it)) == -1L) }
+                    Files.delete(decoded)
+                    prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("repeat"), buildRoot, validate, decode)
+                    listOf("browser-assets.json", "browser-assets.zip.xz").forEach { check(Files.mismatch(folder.resolve("out").resolve(it), folder.resolve("repeat").resolve(it)) == -1L) }
                 }
             }
             case("unrelated-targets-remain-identical") {
                 val otherTargets = listOf("windows-x64", "macos-x64")
-                val before = otherTargets.associateWith { target -> listOf("browser-assets.json", "browser-assets.zip").map { hash(root.resolve(target).resolve("out").resolve(it)) } }
-                val oldLinux = hash(root.resolve("linux-x64/out/browser-assets.zip"))
+                val before = otherTargets.associateWith { target -> listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) } }
+                val oldLinux = hash(root.resolve("linux-x64/out/browser-assets.zip.xz"))
                 val folder = root.resolve("changed-linux")
                 val platform = fixture("linux-x64", folder, listOf(Triple("new-data", "different input".toByteArray(), 33188)))
-                prepareTargetPayload(platform, sources(platform, folder), driver, root.resolve("linux-x64/out"), buildRoot, validate)
-                check(hash(root.resolve("linux-x64/out/browser-assets.zip")) != oldLinux)
-                otherTargets.forEach { target -> check(before.getValue(target) == listOf("browser-assets.json", "browser-assets.zip").map { hash(root.resolve(target).resolve("out").resolve(it)) }) }
+                prepareTargetPayload(platform, sources(platform, folder), driver, root.resolve("linux-x64/out"), buildRoot, validate, decode)
+                check(hash(root.resolve("linux-x64/out/browser-assets.zip.xz")) != oldLinux)
+                otherTargets.forEach { target -> check(before.getValue(target) == listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) }) }
             }
             val invalid = listOf(
                 "traversal" to listOf(Triple("../escape", ordinary, 33188)),
@@ -478,18 +517,18 @@ tasks.register("verifyBrowserAssetProducer") {
                 "bad-utf8-link" to listOf(Triple("alias", byteArrayOf(-1), 41471)))
             invalid.forEach { (name, extras) -> case(name) {
                 val folder = root.resolve(name); val platform = fixture("linux-x64", folder, extras)
-                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate) }
+                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode) }
                 check(!Files.exists(folder.resolve("out")))
             } }
             case("missing-copy-prefix") {
                 val folder = root.resolve("missing-prefix"); val platform = fixture("linux-x64", folder)
                 (platform.path("sources")[0].path("copies")[0] as com.fasterxml.jackson.databind.node.ObjectNode).put("from", "missing")
-                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate) }
+                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode) }
             }
             case("missing-selector") {
                 val folder = root.resolve("missing-selector"); val platform = fixture("linux-x64", folder) as com.fasterxml.jackson.databind.node.ObjectNode
                 platform.put("browserExecutable", "browsers/missing")
-                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate) }
+                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode) }
             }
             case("offline-miss") {
                 val folder = root.resolve("offline"); val platform = fixture("linux-x64", folder)
@@ -507,13 +546,13 @@ tasks.register("verifyBrowserAssetProducer") {
             }
             case("failed-candidate-preserves-published-pair") {
                 val folder = root.resolve("preserve"); val platform = fixture("linux-x64", folder)
-                prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate)
-                val before = listOf("browser-assets.json", "browser-assets.zip").map { hash(folder.resolve("out").resolve(it)) }
+                prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode)
+                val before = listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) }
                 val bad = fixture("linux-x64", folder.resolve("bad"), listOf(Triple("alias", "../escape".toByteArray(), 41471)))
-                reject { prepareTargetPayload(bad, sources(bad, folder.resolve("bad")), driver, folder.resolve("out"), buildRoot, validate) }
-                check(before == listOf("browser-assets.json", "browser-assets.zip").map { hash(folder.resolve("out").resolve(it)) })
+                reject { prepareTargetPayload(bad, sources(bad, folder.resolve("bad")), driver, folder.resolve("out"), buildRoot, validate, decode) }
+                check(before == listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) })
                 Files.write(folder.resolve("blocked"), ordinary)
-                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("blocked/out"), buildRoot, validate) }
+                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("blocked/out"), buildRoot, validate, decode) }
             }
         }
         check(downloads == 0)
@@ -583,6 +622,24 @@ tasks.register("assemblePlatformRuntime") {
                 }
             }
         }
+        // XZ 1.12's Maven binary contains no license file; retain its upstream COPYING in this notice merger.
+        // https://github.com/tukaani-project/xz-java/blob/v1.12/COPYING (0BSD)
+        val xzNotice = directory.resolve("META-INF/notices/org.tukaani.xz-1.12/COPYING")
+        Files.createDirectories(xzNotice.parent)
+        Files.writeString(xzNotice, """
+            Copyright (C) The XZ for Java authors and contributors
+
+            Permission to use, copy, modify, and/or distribute this
+            software for any purpose with or without fee is hereby granted.
+            THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+            WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+            WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL
+            THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR
+            CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+            LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+            NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+            CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+        """.trimIndent() + "\n")
         services.forEach { (name, providers) ->
             val target = directory.resolve(name); Files.createDirectories(target.parent)
             Files.writeString(target, providers.joinToString("\n", postfix = "\n"))
@@ -673,6 +730,9 @@ tasks.named<Jar>("jar") {
     manifest.attributes("Multi-Release" to "true")
     from(assembledRuntime); from(generatedAssets); from(thirdPartyOutput)
     doLast {
+        val artifactBytes = archiveFile.get().asFile.length()
+        require(artifactBytes < (512L shl 20)) { "Universal JAR must remain below 512 MiB for Burp loading-memory headroom; actual $artifactBytes bytes." }
+        if (artifactBytes > (500L shl 20)) logger.warn("Universal JAR exceeds the 500 MiB engineering target: $artifactBytes bytes.")
         java.util.zip.ZipFile(archiveFile.get().asFile).use { jar ->
             val names = jar.entries().asSequence().map { it.name }.toList()
             require(names.toSet().size == names.size) { "Duplicate output JAR entries." }
@@ -685,9 +745,10 @@ tasks.named<Jar>("jar") {
                 && names.none { it.startsWith("org/commonmark/") }) { "Retired runtime classes/dependencies leaked into the native platform JAR." }
             require(names.none { it.startsWith("driver/") }) { "Duplicate driver execution resources leaked into the universal JAR." }
             require(names.any { it.startsWith("META-INF/notices/") }) { "Third-party notices missing." }
+            require(names.any { it.startsWith("META-INF/notices/org.tukaani.xz-1.12/") }) { "XZ license missing." }
             val pairs = names.filter { !it.endsWith("/") && it.startsWith("META-INF/bpsh/") }
             val thirdPartyNames=listOf("jcifs-ng-source.zip","jcifs-ng-LICENSE.txt","jcifs-ng.md","jcifs-ng-provenance.json").map { "META-INF/bpsh/third-party/$it" }
-            val expected=supportedTargets.flatMap { listOf("META-INF/bpsh/$it/browser-assets.json", "META-INF/bpsh/$it/browser-assets.zip") } + thirdPartyNames
+            val expected=supportedTargets.flatMap { listOf("META-INF/bpsh/$it/browser-assets.json", "META-INF/bpsh/$it/browser-assets.zip.xz") } + thirdPartyNames
             require(pairs.toSet() == expected.toSet()) { "Universal browser/third-party inventory differs." }
             val provenance=jar.getInputStream(jar.getEntry("META-INF/bpsh/third-party/jcifs-ng-provenance.json")).use { assetMapper.readTree(it) }
             val sourceDigest=MessageDigest.getInstance("SHA-256")
@@ -703,21 +764,16 @@ tasks.named<Jar>("jar") {
                     require(library.getInputStream(entry).use { it.readBytes() }.contentEquals(jar.getInputStream(actual).use { it.readBytes() })) { "Packaged jcifs class differs from selected library." }
                 }
             }
-            withManifestValidator { validate ->
+            withAssetCodecs { validate, decode ->
                 supportedTargets.forEach { target ->
                     val raw = jar.getInputStream(jar.getEntry("META-INF/bpsh/$target/browser-assets.json")).use { it.readNBytes((32 shl 20) + 1) }
                     validate(raw, target); val metadata = assetMapper.readTree(raw)
-                    val archive = jar.getEntry("META-INF/bpsh/$target/browser-assets.zip") ?: error("Browser archive missing.")
+                    val archive = jar.getEntry("META-INF/bpsh/$target/browser-assets.zip.xz") ?: error("Browser archive missing.")
                     require(archive.size == metadata.path("archive").path("bytes").longValue())
-                    val digest = MessageDigest.getInstance("SHA-256")
-                    jar.getInputStream(archive).use { input ->
-                        val buffer = ByteArray(65536)
-                        while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
-                    }
-                    require(HexFormat.of().formatHex(digest.digest()) == metadata.path("archive").path("sha256").asText()) { "Packaged asset digest mismatch." }
+                    decode(jar.getInputStream(archive), java.io.OutputStream.nullOutputStream(), metadata)
                 }
             }
-            logger.lifecycle("Verified universal JAR and all three archive digests: ${archiveFile.get().asFile.name}")
+            logger.lifecycle("Verified universal JAR ($artifactBytes bytes) and all three bounded archive decodes: ${archiveFile.get().asFile.name}")
         }
     }
 }

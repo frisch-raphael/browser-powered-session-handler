@@ -22,6 +22,7 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     implementation("org.bouncycastle:bcutil-jdk18on:1.86")
     implementation("org.apache.commons:commons-compress:1.28.0")
+    implementation("org.tukaani:xz:1.12")
     implementation("net.java.dev.jna:jna:5.19.1")
 
     testImplementation("net.portswigger.burp.extensions:montoya-api:2026.4")

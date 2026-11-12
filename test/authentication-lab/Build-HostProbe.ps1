@@ -7,22 +7,18 @@ $jarTool = Join-Path $JdkHome 'bin/jar.exe'
 if (-not (Test-Path -LiteralPath $jarTool -PathType Leaf)) { throw 'The selected JDK has no jar.exe.' }
 $workspace = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
 $gradle = Join-Path $workspace 'bapp/gradlew.bat'
-$classes = Join-Path $PSScriptRoot 'build/classes/java/hostProbe'
 $output = Join-Path $PSScriptRoot 'build/host-probe/authentication-lab-host-probe.jar'
 $previousJavaHome = $env:JAVA_HOME
 try {
     $env:JAVA_HOME = $JdkHome
-    & $gradle -p (Join-Path $workspace 'bapp') ':auth-lab:compileHostProbeJava' --offline --console=plain
+    & $gradle -p (Join-Path $workspace 'bapp') ':auth-lab:hostProbeJar' --offline --console=plain
     if ($LASTEXITCODE -ne 0) { throw 'Host probe compilation failed.' }
-    New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Null
-    & $jarTool --create --file $output -C $classes .
-    if ($LASTEXITCODE -ne 0) { throw 'Host probe packaging failed.' }
     $entries = & $jarTool --list --file $output
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the host probe artifact.' }
-    $unexpected = @($entries | Where-Object { $_ -notmatch '^(META-INF/|META-INF/MANIFEST\.MF|lab/|lab/auth/|lab/auth/HostProbeExtension(?:\$[^/]*)?\.class)$' })
+    $unexpected = @($entries | Where-Object { $_ -notmatch '^(META-INF(?:/.*)?|com/|com/google/|com/google/gson(?:/.*)?|lab/|lab/auth/|lab/auth/gui(?:/.*)?|lab/auth/(?:HostProbeExtension|LabJson|LabHostGuiProtocol)(?:\$[^/]*)?\.class)$' })
     if ($unexpected.Count -gt 0) { throw 'The host probe contains unexpected classes or resources.' }
     Write-Output ('Host probe: ' + $output)
     Write-Output ('SHA-256: ' + (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant())
-    Write-Output 'This development-only JAR contains no lab dependencies or authentication engine. No Burp acceptance is claimed by building it.'
+    Write-Output 'This developer helper contains the passive probe, public JDK GUI driver and pinned Gson. It contains no authentication engine. Building it grants no Burp acceptance.'
 }
 finally { $env:JAVA_HOME = $previousJavaHome }

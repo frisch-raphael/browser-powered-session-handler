@@ -123,7 +123,7 @@ public final class AuthenticationCoordinator implements AutoCloseable {
     /** Safe current state for a journey; waitingRequests excludes Test/UI callers. */
     public record Status(Phase phase, boolean usableToken, int waitingRequests, AuthenticationFailure failure,
                          int attempts, boolean recovery, boolean acceptedUse, AuthenticationStage setupStage) {}
-    /** Current waiter and browser capacity; Unlimited is represented by null in the controls. */
+    /** Current admitted waiter and browser capacity. */
     public record Capacity(int waitingRequests, int runningAttempts, int queuedCycles) {}
 
     /** Owns a single request-wide completion and cancellation handle, not the shared browser cycle. */

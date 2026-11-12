@@ -19,13 +19,18 @@ fun labFileSha(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
-val productionFiles = (listOf("bapp/build.gradle.kts", "bapp/settings.gradle.kts", "bapp/gradle.lockfile", "bapp/browser-assets.lock.json", "bapp/gradlew", "bapp/gradlew.bat", "bapp/settings-gradle.lockfile", "docs/designs/bapp-owned-authentication.md", "docs/designs/interface.md", "docs/designs/universal-packaging.md", "docs/product.md") +
-    listOf("bapp/src", "bapp/gradle", "bapp/third-party").flatMap { subtree ->
+val auditedTrees = listOf("bapp/src", "bapp/gradle", "bapp/third-party", "test/authentication-lab/src/main/java",
+    "test/authentication-lab/src/test/java", "test/authentication-lab/src/hostGui", "test/authentication-lab/src/hostProbe",
+    "test/authentication-lab/production-tests")
+val auditedConfiguration = (JsonSlurper().parse(labWorkspace.resolve("test/authentication-lab/src/main/resources/configuration-inputs.json")) as Map<*, *>)["configurationFiles"] as List<*>
+val productionFiles = (listOf("bapp/build.gradle.kts", "bapp/gradle.properties", "bapp/settings.gradle.kts", "bapp/gradle.lockfile", "bapp/browser-assets.lock.json", "bapp/gradlew", "bapp/gradlew.bat", "bapp/settings-gradle.lockfile", "docs/designs/bapp-owned-authentication.md", "docs/designs/interface.md", "docs/designs/universal-packaging.md", "docs/designs/burp-host-acceptance-plan.md", "docs/product.md", "test/authentication-lab/Build-HostProbe.ps1") +
+    auditedConfiguration.map { it.toString() } +
+    auditedTrees.flatMap { subtree ->
         predecessorRoot.resolve(subtree).walkTopDown().filter { it.isFile }.map { it.relativeTo(predecessorRoot).invariantSeparatorsPath }.toList()
     }).distinct().sorted()
 val productionHashes = productionFiles.associateWith { labFileSha(predecessorRoot.resolve(it)) }
 val labBoundary = labSha(productionHashes.entries.joinToString("\n") { "${it.key}:${it.value}" }.toByteArray(Charsets.UTF_8))
-val labAudit = labPolicy + mapOf("files" to productionHashes, "boundaryHash" to labBoundary,
+val labAudit = labPolicy + mapOf("files" to productionHashes, "sourceTrees" to auditedTrees, "boundaryHash" to labBoundary,
     "head" to providers.exec { workingDir(predecessorRoot); commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
     "productionRoot" to predecessorRoot.canonicalPath, "packaging" to "universal", "workingCopy" to true)
 val captureRoot = project(":auth-lab").layout.buildDirectory.dir("captures/${rootProject.extra["authLabInvocationId"]}").get().asFile
@@ -48,7 +53,7 @@ val prepareAuthLabProduction = tasks.register("prepareAuthLabProduction") {
             check(path.startsWith(source) && Files.isRegularFile(path)) { "Audited predecessor file is missing: $name. Rerun to capture current source." }
             Files.readAllBytes(path).also { check(labSha(it) == hash) { "Audited predecessor changed: $name. Rerun the command to capture the new source." } }
         }
-        for (subtree in listOf("bapp/src", "bapp/gradle", "bapp/third-party")) {
+        for (subtree in auditedTrees) {
             val actual = Files.walk(source.resolve(subtree)).use { paths ->
                 paths.filter { Files.isRegularFile(it) }.map { source.relativize(it).toString().replace('\\', '/') }.toList().toSet()
             }
@@ -69,7 +74,7 @@ val prepareAuthLabProduction = tasks.register("prepareAuthLabProduction") {
     }
 }
 
-listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "authLabTransportTest", "authLabExamples").forEach { taskName ->
+listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "authLabTransportTest", "authLabExamples", "authLabHostExporter").forEach { taskName ->
     tasks.register<Exec>(taskName) {
         group = "authentication lab"
         description = "Run scoped production checks in the audited isolated predecessor."
@@ -232,6 +237,11 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
         }
         doLast {
             val code = executionResult.get().exitValue
+            if(taskName=="authLabHostExporter") {
+                check(code==0&&report.resolve("exporter-runtime.json").isFile) { "Captured native exporter preparation failed. Retain $report" }
+                logger.lifecycle("Captured native exporter prepared; no authentication or host acceptance executed.")
+                return@doLast
+            }
             if(taskName=="authLabExamples") {
                 check(code==0&&report.resolve("native-examples-completion.json").isFile) { "Native examples were not prepared. Retained directory: $report" }
                 val completion=JsonSlurper().parse(report.resolve("native-examples-completion.json")) as Map<*,*>

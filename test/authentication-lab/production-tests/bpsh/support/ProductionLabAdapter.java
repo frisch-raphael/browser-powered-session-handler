@@ -114,6 +114,26 @@ public final class ProductionLabAdapter {
     }
     /** The same native definition builder serves operational tests and live manual exports. */
     public static LoginDefinition loginDefinition(LoginTarget target,List<String> roles,String account,String alias) throws Exception {
+        return loginDefinition(target,roles,account,alias,"Controlled "+target.id,1800);
+    }
+    /** The host run's 3600-second fixture lifetime exceeds this cache, avoiding incidental refresh during GUI recipes. */
+    public static LoginDefinition hostLoginDefinition(LoginTarget target,String account,String alias) throws Exception {
+        if(!target.id.equals("BROW.basic.json")||!List.of("user","user2").contains(account)
+                ||!java.util.Set.of("host_a","host_b","host_failure_a","host_failure_b").contains(alias))throw new IllegalArgumentException("Unprepared host form.");
+        var built=loginDefinition(target,List.of("B","C1"),account,alias,"Host "+alias,3500);var definition=built.journey();
+        URI start=URI.create(definition.authenticationUrl()+"&bpsh_host_journey="+alias);
+        return new LoginDefinition(new JourneyDefinition(definition.id(),definition.displayName(),definition.alias(),start,definition.rememberSecrets(),definition.steps(),
+                definition.browser(),definition.extraction(),definition.injection(),definition.cache(),definition.mtls(),definition.httpAuthentication(),definition.draft()),built.secureInput());
+    }
+    /** A native direct-HTTP identity, prepared without authenticating or exporting a password. */
+    public static JourneyDefinition hostHttpDefinition(URI request,bpsh.journey.HttpAuthentication.Protocol protocol,String account,String alias) {
+        if(!List.of("user-a","user-b").contains(account))throw new IllegalArgumentException("Unprepared host account.");
+        return new JourneyDefinition(UUID.randomUUID(),"Host "+alias,alias,request,false,List.of(),
+                new JourneyDefinition.Browser(true,null,5_000,1_500),null,JourneyDefinition.Injection.perToken(List.of()),
+                new JourneyDefinition.Cache(3500,10),null,new bpsh.journey.HttpAuthentication(protocol,account,
+                protocol==bpsh.journey.HttpAuthentication.Protocol.BASIC?"":"LAB","",java.util.Set.of(TokenExtractor.origin(request))),null);
+    }
+    private static LoginDefinition loginDefinition(LoginTarget target,List<String> roles,String account,String alias,String displayName,int cacheSeconds) throws Exception {
         var steps = new ArrayList<AuthStep.Definition>();
         boolean fresh = target.id.startsWith("BROW.fresh.");
         if (fresh) steps.add(BrowserJourneyIntegrationTest.step(AuthStep.Type.WAIT_SELECTOR, "#fresh-check-complete", null));
@@ -158,8 +178,8 @@ public final class ProductionLabAdapter {
         var injection = JourneyDefinition.Injection.perToken(roles.contains("B") && !target.id.endsWith("deep-link")
                 ? List.of(new JourneyDefinition.TokenInjection(roles.size() == 1 ? null : name("B"), JourneyDefinition.InjectionType.BEARER, null)) : List.of());
         URI start = fresh ? target.url("fresh/" + target.id.substring("BROW.fresh.".length()) + "/start") : target.url("start");
-        var journey = new JourneyDefinition(UUID.randomUUID(), "Controlled " + target.id, alias, start, false, steps,
-                new JourneyDefinition.Browser(true, null, 5_000, 1_500), extraction, injection, new JourneyDefinition.Cache(1800, 10), null);
+        var journey = new JourneyDefinition(UUID.randomUUID(), displayName, alias, start, false, steps,
+                new JourneyDefinition.Browser(true, null, 5_000, 1_500), extraction, injection, new JourneyDefinition.Cache(cacheSeconds, 10), null);
         return new LoginDefinition(journey,secure.id());
     }
     /** Shared real-provider definition, with no provider client or authentication implementation. */

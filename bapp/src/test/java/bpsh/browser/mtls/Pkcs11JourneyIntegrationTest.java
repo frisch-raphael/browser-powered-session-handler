@@ -101,7 +101,35 @@ class Pkcs11JourneyIntegrationTest {
                 String[] aliases = selected.keyManager().getClientAliases("RSA", null); assertNotNull(aliases); assertEquals(1, aliases.length);
                 assertNull(selected.keyManager().getPrivateKey(aliases[0]).getEncoded(), "private key remains on SoftHSM");
             }
+            var previousHelpers = identities.keyHelpers();
+            assertEquals(1, previousHelpers.size());
+            var previousSelection = select(employee); assertTrue(previousSelection.usable());
+            assertEquals(2, identities.listCertificates(employee, correct, true, deadline(), () -> false).size());
+            assertTrue(previousHelpers.stream().noneMatch(ProcessHandle::isAlive), "An explicit retry must terminate its previous helper");
+            assertFalse(previousSelection.usable()); assertTrue(select(employee).usable());
         } finally { Arrays.fill(wrong, '\0'); Arrays.fill(correct, '\0'); }
+    }
+
+    @Test @Order(7) void retryInvalidatesCachedTlsScopesBeforeTheyReuseAReplacedKeyOwner() throws Exception {
+        var origin = URI.create("https://localhost");
+        var certificate = mtls("employee", List.of(origin), root.resolve("ca.crt").toString());
+        var setup = new bpsh.journey.BrowserSetup(origin, new JourneyDefinition.Browser(true, null, 10000, 1000), certificate);
+        var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, java.util.UUID.randomUUID(), 1);
+        var spec = new bpsh.authentication.http.HttpTransportFactory.ScopeSpec(java.util.UUID.randomUUID(),
+                bpsh.authentication.http.HttpTransportFactory.Purpose.DIRECT, identity, 0, setup, false);
+        char[] pin = pin();
+        try (var values = new SecretStore.Values(pin, Map.of()); var scope = httpTransport.open(spec, values, deadline()).get(10, TimeUnit.SECONDS)) {
+            assertTrue(scope.isOpen());
+            var helpers = identities.keyHelpers();
+            assertEquals(1, helpers.size()); helpers.getFirst().destroyForcibly(); helpers.getFirst().onExit().get(5, TimeUnit.SECONDS);
+            assertFalse(scope.isOpen());
+            for (int attempt = 0; attempt < 2; attempt++) assertEquals(AuthenticationFailure.Cause.DEVICE_SESSION_LOST,
+                    assertThrows(AuthenticationFailure.class, () -> identities.select(certificate, pin, false, deadline(), () -> false)).reason());
+            assertTrue(identities.keyHelpers().stream().noneMatch(ProcessHandle::isAlive), "A failed helper must not automatically resubmit a PIN");
+            identities.listCertificates(certificate, pin, true, deadline(), () -> false);
+            assertFalse(scope.isOpen(), "A cached scope must retire its old helper's key after explicit recovery");
+            try (var replacement = httpTransport.open(spec, values, deadline()).get(10, TimeUnit.SECONDS)) { assertTrue(replacement.isOpen()); }
+        } finally { Arrays.fill(pin, '\0'); }
     }
 
     @Test @Order(2) void recordingReusesTheConfiguredCertificateAndPinAndClosesOnStopOrCancel() throws Exception {

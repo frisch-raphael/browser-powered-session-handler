@@ -11,6 +11,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Verifies actionable outcomes and repeated-warning suppression independently of Burp's logger. */
 public class DiagnosticsTest {
+    public @Test void deliveryUncertaintyIsNotContradictedByTheRequestOutcome() {
+        try (var diagnostics = new Diagnostics(ignored -> {})) {
+            var failure = new bpsh.authentication.http.HttpDeliveryFailure(true, new java.io.IOException("CANARY_SECRET")).presentation();
+            var notice = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), "employee", failure, true);
+            assertTrue(notice.text().contains("Burp was asked to drop this request."));
+            assertTrue(notice.text().contains("may have reached the server"));
+            assertTrue(notice.text().contains("Check the server-side result"));
+            assertFalse(notice.text().contains("not sent"));
+            assertFalse(notice.text().contains("CANARY"));
+        }
+    }
+
+    public @Test void requestWithoutKnownJourneyDoesNotInventAnUnresolvedJourney() {
+        try (var diagnostics = new Diagnostics(ignored -> {})) {
+            var failure = new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE, AuthenticationFailure.Cause.CAPACITY, "The waiting-request limit was reached.");
+            var notice = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.PROXY, 1), null, failure, false);
+            assertEquals("BPSH left the request unchanged. The waiting-request limit was reached.", notice.text());
+        }
+    }
     public @Test void errorsWithoutConfirmedRecoveryDisplayOnlyTheProblem() {
         var logs = new ArrayList<String>();
         try (var diagnostics = new Diagnostics(() -> 0, logs::add)) {
@@ -30,18 +49,18 @@ public class DiagnosticsTest {
         try (var diagnostics = new Diagnostics(now::get, logs::add)) {
             var failure = new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE, AuthenticationFailure.Cause.CAPACITY, "The global waiting-request limit was reached.", "Let authentication finish and resend, or adjust the enabled global limit.");
             for (int i = 0; i < 20; i++) {
-                var notice = diagnostics.request(i, "Employee", failure, true); assertTrue(notice.requestStopped()); assertTrue(notice.text().contains("not sent")); assertTrue(notice.text().contains("employee"));
+                var notice = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, i), "Employee", failure, true); assertTrue(notice.dropRequested()); assertTrue(notice.text().contains("asked to drop")); assertTrue(notice.text().contains("employee"));
             }
-            assertEquals(1, logs.size()); now.set(5_000_000_000L); diagnostics.request(21, "employee", failure, true);
+            assertEquals(1, logs.size()); now.set(5_000_000_000L); diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 21), "employee", failure, true);
             assertEquals(2, logs.size()); assertTrue(logs.getLast().contains("19 similar messages suppressed"));
-            var ordinary = diagnostics.request(22, "employee", failure, false); assertFalse(ordinary.requestStopped()); assertTrue(ordinary.text().contains("unchanged request was sent"));
+            var ordinary = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 22), "employee", failure, false); assertFalse(ordinary.dropRequested()); assertTrue(ordinary.text().contains("BPSH left the request unchanged"));
         }
     }
     public @Test void unsafeAliasIsNotLoggedAndUnknownCauseRemainsUnknown() {
         var logs = new ArrayList<String>();
         try (var diagnostics = new Diagnostics(() -> 0, logs::add)) {
             var failure = CoordinatorFixtures.failure(AuthenticationFailure.Cause.UNKNOWN);
-            var notice = diagnostics.request(1, "secret\r\nInjected: value", failure, true);
+            var notice = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), "secret\r\nInjected: value", failure, true);
             assertFalse(notice.text().contains("secret")); assertFalse(notice.text().contains("password"));
             assertTrue(notice.text().contains(failure.problem())); assertTrue(notice.text().contains(failure.recovery()));
             assertEquals(AuthenticationFailure.Cause.UNKNOWN, failure.reason());
@@ -51,8 +70,8 @@ public class DiagnosticsTest {
     public @Test void brokenLoggingSinkCannotPreventAnAnnotationAndCloseStopsEmissions() {
         AtomicLong calls = new AtomicLong();
         var diagnostics = new Diagnostics(() -> 0, value -> { calls.incrementAndGet(); throw new IllegalStateException("host logger unavailable"); });
-        assertNotNull(diagnostics.request(1, "employee", CoordinatorFixtures.failure(AuthenticationFailure.Cause.UNKNOWN), true)); diagnostics.close();
-        assertNotNull(diagnostics.request(2, "admin", CoordinatorFixtures.failure(AuthenticationFailure.Cause.UNKNOWN), true)); assertEquals(1, calls.get());
+        assertNotNull(diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), "employee", CoordinatorFixtures.failure(AuthenticationFailure.Cause.UNKNOWN), true)); diagnostics.close();
+        assertNotNull(diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), "admin", CoordinatorFixtures.failure(AuthenticationFailure.Cause.UNKNOWN), true)); assertEquals(1, calls.get());
     }
     public @Test void backgroundGuidanceIsRateLimitedWithoutClaimingARequestWasNotSent() {
         var logs = new ArrayList<String>();

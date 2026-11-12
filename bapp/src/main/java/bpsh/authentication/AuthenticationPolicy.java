@@ -8,8 +8,8 @@ public interface AuthenticationPolicy {
     int attemptTimeoutMs();
     /** @return Shared cycle budget in milliseconds. */
     int cycleTimeoutMs();
-    /** @return Global admitted waiter limit, or null for unlimited. */
+    /** @return Global admitted waiter limit, or null for an implementation-defined default. */
     Integer maxWaitingRequestsGlobal();
-    /** @return Per-journey admitted waiter limit, or null for unlimited. */
+    /** @return Per-journey admitted waiter limit, or null for an implementation-defined default. */
     Integer maxWaitingRequestsPerJourney();
 }

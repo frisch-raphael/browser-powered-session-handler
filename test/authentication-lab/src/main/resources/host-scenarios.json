@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "platforms": ["windows", "linux"],
+  "scenarios": ["routing", "tags", "repeater", "http-auth", "recovery", "rejected-replay", "intercept", "unload", "ordinary-failure"],
+  "requirements": [
+    {"id": "H01.tool=proxy~mode=automatic-combined-injection", "scenarios": ["routing", "intercept"], "protocol": null},
+    {"id": "H01.tool=proxy~mode=native-tags", "scenarios": ["tags"], "protocol": null},
+    {"id": "H01.tool=repeater~mode=automatic-combined-injection", "scenarios": ["repeater"], "protocol": null},
+    {"id": "H01.tool=repeater~mode=native-tags", "scenarios": ["tags", "repeater"], "protocol": null},
+    {"id": "H02.ordinary-unchanged", "scenarios": ["ordinary-failure"], "protocol": null},
+    {"id": "H02.tagged-stop", "scenarios": ["tags", "repeater"], "protocol": null},
+    {"id": "H03.successful-replay", "scenarios": ["recovery"], "protocol": null},
+    {"id": "H03.rejected-replacement-pauses", "scenarios": ["rejected-replay"], "protocol": null},
+    {"id": "H06.unload-reload", "scenarios": ["unload"], "protocol": null},
+    {"id": "HOST.http-auth.basic", "scenarios": ["http-auth"], "protocol": "BASIC"},
+    {"id": "HOST.http-auth.ntlm-v1", "scenarios": ["http-auth"], "protocol": "NTLM_V1"},
+    {"id": "HOST.http-auth.ntlm-v2", "scenarios": ["http-auth"], "protocol": "NTLM_V2"}
+  ]
+}

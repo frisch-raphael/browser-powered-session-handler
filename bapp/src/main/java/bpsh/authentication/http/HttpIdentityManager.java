@@ -213,6 +213,14 @@ public final class HttpIdentityManager implements AutoCloseable {
             if(closed)return;closed=true;
             retired=new ArrayList<>(scopes.values());retired.addAll(tests);scopes.clear();tests.clear();
         }
-        retired.forEach(Scope::retire);timer.shutdownNow();
+        var cleanup = new ArrayList<Runnable>();
+        retired.forEach(scope -> cleanup.add(scope::retire)); cleanup.add(timer::shutdownNow);
+        bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
+    }
+    /** Observes timer termination during off-EDT service cleanup. */
+    public void awaitClosed(long millis) {
+        try {
+            if (!timer.awaitTermination(millis, TimeUnit.MILLISECONDS)) throw new IllegalStateException("HTTP identity timer did not terminate.");
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException("HTTP identity cleanup was interrupted."); }
     }
 }

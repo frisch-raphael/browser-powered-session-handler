@@ -29,7 +29,7 @@ final class JourneyForms {
     static void row(JPanel panel, String label, Component value) {
         Integer nextRow = (Integer) panel.getClientProperty("bpsh.nextRow"); int y = nextRow == null ? 0 : nextRow; panel.putClientProperty("bpsh.nextRow", y + 1);
         var c = new GridBagConstraints(); c.gridx = 0; c.gridy = y; c.anchor = GridBagConstraints.NORTHWEST; c.insets = new Insets(6, 8, 6, 8);
-        if (!label.isBlank()) { var caption = new JLabel(label); caption.setLabelFor(value); if (value instanceof JComponent input) caption.setToolTipText(input.getToolTipText()); if (value instanceof JComponent component) component.putClientProperty("rowLabel", caption); panel.add(caption, c); c.gridx = 1; }
+        if (!label.isBlank()) { var caption = UiTooltips.label(label); caption.setLabelFor(value); if (value instanceof JComponent input) UiTooltips.copy(input, caption); if (value instanceof JComponent component) component.putClientProperty("rowLabel", caption); panel.add(caption, c); c.gridx = 1; }
         else c.gridwidth = 2;
         c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; panel.add(value instanceof JTextField input ? InlineValidation.wrap(input) : value, c);
     }

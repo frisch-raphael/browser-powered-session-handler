@@ -138,11 +138,11 @@ final class NativeJson {
      */
     static int integer(JsonNode n, String name, int fallback, int min, int max) { return n.has(name) ? (int) number(n.get(name), name, min, max) : fallback; }
     /**
-     * Reads a positive admission limit while preserving explicit Unlimited semantics.
+     * Reads a positive admission limit; absent values select the controls' finite defaults.
      *
      * @param n Validated controls object.
      * @param name Known global or per-journey waiting-limit field.
-     * @return Null for absent/null (Unlimited), otherwise an integer from one through Integer.MAX_VALUE.
+     * @return Null for absent/null (default), otherwise an integer from one through Integer.MAX_VALUE.
      * @throws bpsh.journey.ConfigurationException If a supplied finite limit is mistyped or out of range.
      */
     static Integer limit(JsonNode n, String name) { return present(n, name) ? (int) number(n.get(name), name, 1, Integer.MAX_VALUE) : null; }

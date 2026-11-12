@@ -62,7 +62,7 @@ public class AuthenticationCoordinatorTest {
 
     public @Test void manyRequestsShareOneAttemptAndReleaseEveryReservation() throws Exception {
         long began=System.nanoTime();Map<String,Object> observed,resources;
-        try (var f = new Fixture(RequestSettings.Controls.defaults())) {
+        try (var f = new Fixture(new RequestSettings.Controls(false, List.of(), RequestSettings.SUPPORTED_TOOLS, 60_000, 60_000, 300_000, 256, 256))) {
             var callers = java.util.stream.IntStream.range(0, 100).mapToObj(i -> f.acquire(0)).toList();
             assertEquals(100, f.coordinator.capacity().waitingRequests()); assertEquals(1, f.clock.workers.size());
             f.clock.runWorker(); assertEquals(1, f.attempts.get());
@@ -139,7 +139,7 @@ public class AuthenticationCoordinatorTest {
     }
     public @Test void concurrentLossesShareThreeRecoveryAttemptsAndInitialAcquisitionIsCountedSeparately() throws Exception {
         long began=System.nanoTime();Map<String,Object> observed;
-        try (var f = new Fixture(RequestSettings.Controls.defaults())) {
+        try (var f = new Fixture(new RequestSettings.Controls(false, List.of(), RequestSettings.SUPPORTED_TOOLS, 60_000, 60_000, 300_000, 256, 256))) {
             f.acquire(0); f.clock.runWorker(); var original = f.coordinator.peek(f.entry(0).identity());
             var rule = new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null);
             f.fail.set(CoordinatorFixtures.failure(AuthenticationFailure.Cause.TRANSPORT));
@@ -423,7 +423,7 @@ public class AuthenticationCoordinatorTest {
         AuthLabSupport.component("CORE.resources."+variant,observed,Map.of("startupMs",0L,"caseMs",TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-began),"cleanupMs",0L));
     }
     public @Test void simultaneousRequestsStillShareExactlyOneCycleAndAtomicReservations() throws Exception {
-        try (var f = new Fixture(RequestSettings.Controls.defaults())) {
+        try (var f = new Fixture(new RequestSettings.Controls(false, List.of(), RequestSettings.SUPPORTED_TOOLS, 60_000, 60_000, 300_000, 256, 256))) {
             var threads = java.util.concurrent.Executors.newFixedThreadPool(8);
             try {
                 var tasks = java.util.stream.IntStream.range(0, 200).mapToObj(i -> threads.submit(() -> f.acquire(0))).toList();

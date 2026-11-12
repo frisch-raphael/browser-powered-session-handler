@@ -38,6 +38,23 @@ class BrowserAssetsTest {
     static final ObjectMapper JSON = new ObjectMapper();
     static final String PLATFORM = "windows-x64";
 
+    @Test void transientWindowsPublicationDenialsRetryTheVerifiedStageAndKeepCancellation() throws Exception {
+        var bundle = new Bundle(); var attempts = new AtomicInteger();
+        try (var runtime = manager(bundle, BrowserRuntimeManager.Limits.standard(), (from, to) -> {
+            if (attempts.incrementAndGet() < 3) throw new java.nio.file.AccessDeniedException("owned-stage");
+            publish(from, to);
+        })) {
+            assertNotNull(runtime.acquire(deadline(), () -> false)); assertEquals(3, attempts.get()); assertEquals(1, bundle.archives.get());
+        }
+        var cancelled = new AtomicBoolean(); var denied = new Bundle();
+        try (var runtime = new BrowserRuntimeManager(denied, temp.resolve("cancelled"), PLATFORM, BrowserRuntimeManager.Limits.standard(), (from, to) -> {
+            cancelled.set(true); throw new java.nio.file.AccessDeniedException("owned-stage");
+        })) {
+            assertEquals(AuthenticationFailure.Cause.CANCELLED, assertThrows(AuthenticationFailure.class, () -> runtime.acquire(deadline(), cancelled::get)).reason());
+            assertEquals(1, denied.archives.get());
+        }
+    }
+
     /** Stores independent manifest/archive bytes and counts archive resource reads. */
     static final class Bundle implements BrowserRuntimeManager.Resources {
         byte[] manifest, archive;
@@ -57,7 +74,7 @@ class BrowserAssetsTest {
         /** Rebuilds the ZIP and exact digest/size declarations from the selected test files. */
         void rebuild() throws Exception {
             archive = zip(files, List.of(), false);
-            ObjectNode n = JSON.createObjectNode().put("formatVersion", 1).put("platform", platform).put("playwrightJavaVersion", "1.64.0")
+            ObjectNode n = JSON.createObjectNode().put("formatVersion", 2).put("platform", platform).put("playwrightJavaVersion", "1.64.0")
                     .put("browserName", "chromium").put("browserVersion", "156.0.8078.4").put("browserRevision", "1248")
                     .put("driverPackageVersion", "1.64.1").put("nodeVersion", "24.22.1").put("browserRoot", "browsers")
                     .put("browserExecutable", "browsers/chromium/chrome.exe").put("nodeExecutable", "driver/node.exe").put("driverEntryPoint", "driver/package/cli.js");
@@ -66,13 +83,23 @@ class BrowserAssetsTest {
                 rows.addObject().put("path", entry.getKey()).put("type", "file").put("bytes", entry.getValue().length)
                         .put("sha256", sha(entry.getValue())).put("executable", entry.getKey().endsWith(".exe")); total += entry.getValue().length;
             }
-            n.put("unpackedBytes", total); n.putObject("archive").put("resource", BrowserRuntimeManager.platformResource(BrowserRuntimeManager.ARCHIVE_RESOURCE, platform)).put("sha256", sha(archive)).put("bytes", archive.length);
+            n.put("unpackedBytes", total); n.putObject("archive").put("resource", BrowserRuntimeManager.platformResource(BrowserRuntimeManager.ARCHIVE_RESOURCE, platform))
+                    .put("sha256", sha(archive)).put("bytes", archive.length).put("expandedBytes", expandedBytes());
             manifest = JSON.writeValueAsBytes(n);
         }
         /** @param edit Manifest mutation for one invalid/boundary case. */
         void edit(Consumer<ObjectNode> edit) throws Exception { ObjectNode n = (ObjectNode) JSON.readTree(manifest); edit.accept(n); manifest = JSON.writeValueAsBytes(n); }
         /** Rebinds archive metadata after constructing a malformed but correctly hashed ZIP. */
-        void bindArchive() throws Exception { edit(n -> ((ObjectNode) n.get("archive")).put("sha256", sha(archive)).put("bytes", archive.length)); }
+        void bindArchive() throws Exception {
+            long expanded = expandedBytes();
+            edit(n -> ((ObjectNode) n.get("archive")).put("sha256", sha(archive)).put("bytes", archive.length).put("expandedBytes", expanded));
+        }
+        /** @return Decoded length of the tiny in-memory fixture ZIP, independent of production bounds. */
+        long expandedBytes() throws IOException {
+            try (var input = new org.tukaani.xz.XZInputStream(new ByteArrayInputStream(archive), 128 * 1024)) {
+                return input.transferTo(java.io.OutputStream.nullOutputStream());
+            }
+        }
         /** @param name Fixed resource name. @return Test bytes without filesystem/network fallback. */
         @Override public java.io.InputStream open(String name) throws IOException {
             if (name.equals(BrowserRuntimeManager.platformResource(BrowserRuntimeManager.MANIFEST_RESOURCE, platform))) return new ByteArrayInputStream(manifest);
@@ -100,7 +127,7 @@ class BrowserAssetsTest {
             for (var entry : files.entrySet()) { var z = new ZipArchiveEntry(entry.getKey()); z.setUnixMode(0100644); out.putArchiveEntry(z); out.write(entry.getValue()); out.closeArchiveEntry(); }
             for (String name : extra) { var z = new ZipArchiveEntry(name); z.setUnixMode(symlink ? 0120777 : name.endsWith("/") ? 040755 : 0100644); out.putArchiveEntry(z); out.write(name.endsWith("/") ? new byte[0] : "driver/node.exe".getBytes()); out.closeArchiveEntry(); }
         }
-        return bytes.toByteArray();
+        return BrowserArchiveCodecTest.encode(bytes.toByteArray());
     }
 
     @Test void unsupportedTargetsTouchNeitherResourcesNorCache() throws Exception {
@@ -166,13 +193,16 @@ class BrowserAssetsTest {
         assertFalse(Files.exists(temp.resolve("cache")));
     }
     @Test void strictManifestVersionTypeFieldsAndSelectorsAreChecked() throws Exception {
-        List<Consumer<ObjectNode>> invalid = List.of(n -> n.put("formatVersion", 2), n -> n.put("formatVersion", "1"), n -> n.put("unexpected", "value"),
+        List<Consumer<ObjectNode>> invalid = List.of(n -> n.put("formatVersion", 1), n -> n.put("formatVersion", "2"), n -> n.put("unexpected", "value"),
                 n -> n.put("nodeExecutable", "missing.exe"), n -> n.put("driverEntryPoint", "browsers"), n -> n.put("browserRoot", "driver/node.exe"),
                 n -> ((ObjectNode) n.get("entries").get(1)).put("executable", false), n -> n.put("unpackedBytes", Long.MAX_VALUE),
                 n -> ((ObjectNode) n.get("archive")).put("resource", "https://example.invalid/browser.zip"),
+                n -> ((ObjectNode) n.get("archive")).put("expandedBytes", 0),
+                n -> ((ObjectNode) n.get("archive")).put("expandedBytes", (2L << 30) + 1),
+                n -> ((ObjectNode) n.get("archive")).remove("expandedBytes"),
                 n -> ((ObjectNode) n.get("entries").get(0)).put("bytes", 1.5), n -> ((ObjectNode) n.get("entries").get(0)).put("executable", "true"));
         for (var change : invalid) { Bundle b = new Bundle(); b.edit(change); assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(b.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard())); }
-        Bundle duplicate = new Bundle(); duplicate.manifest = new String(duplicate.manifest).replace("\"formatVersion\":1", "\"formatVersion\":1,\"formatVersion\":1").getBytes();
+        Bundle duplicate = new Bundle(); duplicate.manifest = new String(duplicate.manifest).replace("\"formatVersion\":2", "\"formatVersion\":2,\"formatVersion\":2").getBytes();
         assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(duplicate.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard()));
     }
     @Test void wrongPlatformAndMissingResourcesHaveSpecificGuidance() throws Exception {
@@ -249,7 +279,7 @@ class BrowserAssetsTest {
     }
     @Test void loweredLimitsExerciseBoundariesWithoutLargeAllocations() throws Exception {
         Bundle b = new Bundle(); var max = BrowserRuntimeManager.Limits.standard();
-        var exact = new BrowserRuntimeManager.Limits(b.manifest.length, b.archive.length, 17, 7, 3, max.pathBytes(), max.depth(), max.linkHops());
+        var exact = new BrowserRuntimeManager.Limits(b.manifest.length, Math.max(b.archive.length, b.expandedBytes()), 17, 7, 3, max.pathBytes(), max.depth(), max.linkHops());
         try (var manager = manager(b, exact, BrowserAssetsTest::publish)) { assertNotNull(manager.acquire(deadline(), () -> false)); }
         List<BrowserRuntimeManager.Limits> small = List.of(
                 new BrowserRuntimeManager.Limits(b.manifest.length - 1, max.zipBytes(), max.totalBytes(), max.fileBytes(), max.entries(), 4096, 32, 16),
@@ -279,6 +309,48 @@ class BrowserAssetsTest {
             assertEquals(one.get(5, TimeUnit.SECONDS), two.get(5, TimeUnit.SECONDS)); assertEquals(1, b.archives.get());
         }
     }
+    @Test void concurrentJourneysWaitForOwnedSetupWithinTheirOwnBudgets() throws Exception {
+        var bundle = new Bundle(); var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        var manifestReads = new AtomicInteger(); var cancelled = new AtomicBoolean();
+        BrowserRuntimeManager.Resources resources = name -> {
+            if (name.equals(BrowserRuntimeManager.platformResource(BrowserRuntimeManager.MANIFEST_RESOURCE, PLATFORM))) {
+                manifestReads.incrementAndGet(); entered.countDown();
+                try { if (!release.await(25, TimeUnit.SECONDS)) throw new IOException("Fixture owner was not released."); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IOException(interrupted); }
+            }
+            return bundle.open(name);
+        };
+        try (var manager = new BrowserRuntimeManager(resources, temp.resolve("cache"), PLATFORM,
+                BrowserRuntimeManager.Limits.standard(), BrowserAssetsTest::publish);
+             var pool = Executors.newFixedThreadPool(3)) {
+            try {
+                long budget = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+                var owner = pool.submit(() -> manager.acquire(budget, () -> false));
+                assertTrue(entered.await(5, TimeUnit.SECONDS));
+                var cancelWaiting = new CountDownLatch(1);
+                var cancelWaiter = pool.submit(() -> assertThrows(AuthenticationFailure.class,
+                        () -> manager.acquire(budget, cancelled::get, stage -> {
+                            if (stage == AuthenticationStage.WAITING_FOR_CACHE) cancelWaiting.countDown();
+                        })));
+                assertTrue(cancelWaiting.await(5, TimeUnit.SECONDS)); cancelled.set(true);
+                assertEquals(AuthenticationFailure.Cause.CANCELLED, cancelWaiter.get(2, TimeUnit.SECONDS).reason());
+                var shortWaiter = pool.submit(() -> assertThrows(AuthenticationFailure.class,
+                        () -> manager.acquire(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(150), () -> false)));
+                assertEquals(AuthenticationFailure.Cause.CACHE_BUSY, shortWaiter.get(2, TimeUnit.SECONDS).reason());
+                var waiting = new CountDownLatch(1);
+                var patient = pool.submit(() -> manager.acquire(budget, () -> false, stage -> {
+                    if (stage == AuthenticationStage.WAITING_FOR_CACHE) waiting.countDown();
+                }));
+                assertTrue(waiting.await(5, TimeUnit.SECONDS));
+                // An owned setup may legitimately exceed the external-cache-lock's ten-second ceiling.
+                assertThrows(java.util.concurrent.TimeoutException.class, () -> patient.get(10_500, TimeUnit.MILLISECONDS));
+                assertFalse(owner.isDone()); assertEquals(0, bundle.archives.get());
+                release.countDown();
+                assertSame(owner.get(5, TimeUnit.SECONDS), patient.get(5, TimeUnit.SECONDS));
+                assertEquals(1, manifestReads.get()); assertEquals(1, bundle.archives.get());
+            } finally { release.countDown(); }
+        }
+    }
     @Test void failedAtomicPublicationAndCancelledExtractionCleanOnlyTheirOwnPaths() throws Exception {
         Bundle b = new Bundle(); Path parent = temp.resolve("cache").resolve(PLATFORM); Files.createDirectories(parent);
         Path unrelated = parent.resolve("user-profile"); Files.createDirectory(unrelated); Files.writeString(unrelated.resolve("keep"), "keep");
@@ -293,6 +365,38 @@ class BrowserAssetsTest {
         }
         assertEquals("keep", Files.readString(unrelated.resolve("keep")));
         try (var paths = Files.list(parent)) { assertTrue(paths.noneMatch(p -> p.getFileName().toString().contains(".staging-") || p.getFileName().toString().contains(".archive-"))); }
+    }
+
+    @Test void failedDecodingClosesTheResourceAndCleansOnlyOwnedArchiveAndStage() throws Exception {
+        for (int mode = 0; mode < 4; mode++) {
+            Bundle bundle = new Bundle(); long expanded = bundle.expandedBytes();
+            if (mode == 0) bundle.archive[0] ^= 1;
+            if (mode == 1) {
+                bundle.archive = java.util.Arrays.copyOf(bundle.archive, bundle.archive.length + 1);
+                bundle.archive[bundle.archive.length - 1] = 1;
+            }
+            final long declaredExpanded = expanded + (mode == 2 ? -1 : mode == 3 ? 1 : 0);
+            bundle.edit(n -> ((ObjectNode) n.get("archive")).put("bytes", bundle.archive.length)
+                    .put("sha256", sha(bundle.archive)).put("expandedBytes", declaredExpanded));
+            Path cache = temp.resolve("decode-" + mode), parent = cache.resolve(PLATFORM), unrelated = parent.resolve("user-profile");
+            Files.createDirectories(unrelated); Files.writeString(unrelated.resolve("keep"), "keep");
+            var closes = new AtomicInteger();
+            BrowserRuntimeManager.Resources resources = name -> {
+                var source = bundle.open(name);
+                if (!name.endsWith(".xz")) return source;
+                return new java.io.FilterInputStream(source) {
+                    @Override public void close() throws IOException { closes.incrementAndGet(); super.close(); }
+                };
+            };
+            try (var manager = new BrowserRuntimeManager(resources, cache, PLATFORM, BrowserRuntimeManager.Limits.standard(), BrowserAssetsTest::publish)) {
+                assertEquals(AuthenticationFailure.Cause.ASSET_CORRUPT,
+                        assertThrows(AuthenticationFailure.class, () -> manager.acquire(deadline(), () -> false)).reason());
+            }
+            assertEquals(1, closes.get()); assertEquals("keep", Files.readString(unrelated.resolve("keep")));
+            try (var paths = Files.list(parent)) {
+                assertTrue(paths.allMatch(p -> p.equals(unrelated) || p.getFileName().toString().endsWith(".lock")));
+            }
+        }
     }
 
     @Test void setupObservationIsLocalAndCallbackErrorsDoNotChangePreparation() throws Exception {

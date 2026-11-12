@@ -35,6 +35,64 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Exercises save-before-login ordering with local storage and a browser worker that is never run. */
 class AutoSaveLoginTest {
     @TempDir Path root;
+    @Test void invalidCompiledRulesAndFailedStorageKeepTheAppliedPublication() throws Exception {
+        var h=harness();
+        try(var editor=h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT,false,false))) {
+            var previous=editor.controls.snapshot();String disk=editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY);
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                var key=new bpsh.request.RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,JourneyRegistryTest.JOURNEY);
+                rules.setRules(List.of(new bpsh.request.RequestSettings.AutomaticRule(true,key,new bpsh.request.RequestSettings.Regex("unfinished["),8081,
+                        new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null))));
+                java.util.Map<String,JCheckBox> flags=h.member(editor.ui,"checks");flags.get("enabled").setSelected(true);
+                h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);assertSame(previous,editor.controls.snapshot());assertEquals(disk,editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY));
+            editor.failWrites.set(true);
+            h.edt(()->{AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");rules.prefix.setText("/protected");h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);});
+            awaitRuleIo(editor.ui);assertSame(previous,editor.controls.snapshot());assertEquals(disk,editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY));
+            editor.failWrites.set(false);
+            h.edt(()->h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false));
+            awaitRuleIo(editor.ui);assertNotSame(previous,editor.controls.snapshot());
+            assertEquals(editor.controls.snapshot().controls(),editor.controls.snapshot().matcher().controls());
+            try(var saved=JourneyJson.read(editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY),JourneyDocument.DocumentKind.PROJECT)) {
+                assertEquals(saved.controls(),editor.controls.snapshot().controls());
+            }
+        }
+    }
+
+    @Test void listenerExportsAreCoalescedOffEdtWithoutSavingOrStartingAuthentication() throws Exception {
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        var exports=new java.util.concurrent.atomic.AtomicInteger();
+        var api=(burp.api.montoya.MontoyaApi)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{burp.api.montoya.MontoyaApi.class},(p,m,a)-> {
+            if(!m.getName().equals("burpSuite"))throw new AssertionError(m.getName());
+            return java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{m.getReturnType()},(suite,method,args)-> {
+                assertEquals("exportProjectOptionsAsJson",method.getName());assertFalse(SwingUtilities.isEventDispatchThread());
+                assertArrayEquals(new String[]{"proxy.request_listeners"},(String[])args[0]);exports.incrementAndGet();entered.countDown();
+                assertTrue(release.await(5,java.util.concurrent.TimeUnit.SECONDS));
+                return "{\"proxy\":{\"request_listeners\":[{\"listener_port\":8081,\"running\":true}]}}";
+            });
+        });
+        var h=harness();
+        try(var editor=h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT,false,false),null,null,null,new bpsh.burp.http.ProxyListeners(api))) {
+            var before=editor.controls.snapshot();var disk=java.util.Map.copyOf(editor.disk);
+            try {
+                h.edt(()->{for(int i=0;i<5;i++)h.call(editor.ui,"refreshProxyListeners",new Class<?>[]{});});
+                assertTrue(entered.await(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(1,exports.get());
+            } finally {release.countDown();}
+            awaitRuleIo(editor.ui);
+            h.edt(()->{AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");assertEquals(2,rules.proxyPort.getItemCount());});
+            assertSame(before,editor.controls.snapshot());assertEquals(disk,editor.disk);assertTrue(editor.clock.workers.isEmpty());
+        }
+    }
+
+    private static void awaitRuleIo(UiController ui) throws Exception {
+        var field=UiController.class.getDeclaredField("io");field.setAccessible(true);
+        var io=(java.util.concurrent.ThreadPoolExecutor)field.get(ui);
+        io.submit(()->{}).get(5,java.util.concurrent.TimeUnit.SECONDS);
+        SwingUtilities.invokeAndWait(()->{});
+    }
+
     @Test void requestPolicySelectorPersistsAndSurvivesOtherControlEdits() throws Exception {
         var h = harness();
         try (var editor = h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
@@ -52,7 +110,7 @@ class AutoSaveLoginTest {
                 assertTrue(policy.getToolTipText().contains("send the original request unchanged"));
                 h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true);
             });
-            h.await(() -> editor.controls.get().requestPolicy() == bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT);
+            h.await(() -> editor.controls.snapshot().controls().requestPolicy() == bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT);
             h.edt(() -> h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, false));
             java.util.concurrent.ThreadPoolExecutor io = h.member(editor.ui, "io");
             var complete = new java.util.concurrent.CountDownLatch(1); io.execute(complete::countDown);
@@ -180,11 +238,21 @@ class AutoSaveLoginTest {
         })) {
             open(h, editor, editor.registry.snapshot().resolve("employee").identity().key()); var dialogs = loginResults(h, editor);
             h.edt(() -> dialogs.test.doClick(0)); h.await(() -> !editor.clock.workers.isEmpty()); editor.clock.runWorker();
+            if (!unexpected) {
+                h.await(() -> { try { return "Login steps".equals(WizardTestPages.selected(h.member(editor.ui, "wizard"))); } catch (Exception error) { return false; } });
+                h.edt(() -> {
+                    assertTrue(dialogs.results.isEmpty(), "A located step error must not open a popup");
+                    List<?> rows = h.member((StepsPanel) h.member(editor.ui, "steps"), "rows");
+                    var guidance = (JTextArea) ((JComponent) h.member(rows.getFirst(), "selector")).getClientProperty("validationMessage");
+                    assertTrue(guidance.isVisible());
+                    assertEquals("The configured input could not be found. Review this step and test login again.", guidance.getText());
+                });
+                return;
+            }
             h.await(() -> dialogs.results.size() == 1); var result = dialogs.results.getFirst();
             assertEquals("Login failed", result.title()); assertTrue(result.error()); assertTrue(result.text().contains("Employee"));
             assertFalse(result.text().contains("private-exception-token")); assertFalse(result.text().contains("#password"));
-            if (unexpected) assertTrue(result.text().contains("Login failed."));
-            else { assertTrue(result.text().contains("Step 1: Enter secret")); assertTrue(result.text().contains("The configured input could not be found.")); assertTrue(result.text().contains("Review this step and test login again.")); }
+            assertTrue(result.text().contains("Login failed."));
             assertTrue(result.testEnabled()); assertFalse(result.cancelVisible());
         }
     }

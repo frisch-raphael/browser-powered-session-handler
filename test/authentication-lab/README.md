@@ -236,3 +236,80 @@ From the repository root, with Java 21:
 ```powershell
 .\bapp\gradlew.bat -p bapp :auth-lab:test --offline
 ```
+
+## Qualify URL and incoming-listener routing in Burp
+
+Build the active worktree's universal development JAR first, transfer that exact
+artifact into each existing Windows/Linux verification VM and verify SHA-256.
+Use the guest's installed Burp, a fresh project and its existing extension entry;
+refresh with Loaded off/on. A previous build's VM result does not qualify the
+current artifact. Record the Burp/platform version, source identity, artifact
+hash, fixture run/case generations and independent server account/send evidence.
+
+Use the maintained lab's live browser examples and prepared protected requests.
+Configure existing Burp listeners on two distinct ports (for example 8081/8082),
+select a different journey for each port, and initially use All requests. Send
+otherwise identical requests through both ports and confirm the expected account
+at the accepting fixture. Repeat with a URL prefix and an RE2 condition to prove
+URL AND port behavior. Check that a wrong URL/port remains unaffected, that
+configured rule order decides overlapping destinations, and that copied
+Repeater/Intruder requests have no implicit listener assignment. Exercise an
+edited intercepted URL, expired credentials, one authorized replay, a failed
+explicit tag and explicit Basic/NTLM directives. Preserve the original responses
+and confirm no duplicate application send using the fixture's observations.
+
+Load the development-only host probe built with Build-HostProbe.ps1. Its Send once
+tab retains the single Extensions-origin dispatch. Its Observe callbacks tab is
+passive: choose exact literal local fixture origins and a safe case label, enable
+observation, clear between cases and export the bounded capture locally. Capture
+family-local IDs, actual incoming listener, tool and phases; never join numeric
+IDs across families. Overflow marks evidence incomplete. The passive observers perform no
+authentication, journey selection or intercepted-request forwarding. Pair its
+callback trace with fixture-side acceptance and send counts; traces alone do
+not establish successful authentication. No remote-control service is added.
+
+Stop/delete/recreate a selected listener and trigger a refresh failure. Confirm
+that its saved port and unfinished regex remain intact, that unavailable states
+are advisory and that listener refresh neither saves nor logs in. Test invalid
+regex/port storage and failed saves against the last applied source/matcher pair.
+
+Failed tagged Proxy processing requests the normal native DROP action. The tested
+Burp version may still forward that original request; this is accepted and must
+not be reported as guaranteed blocking. No internal stop marker or global retry
+is required. Qualify the returned action, unchanged failure bytes and safe notes,
+while recording actual host delivery separately. Global-owned native drops,
+resource cleanup and ordinary successful credential injection retain their checks.
+
+## Unattended real-Burp runner
+
+Implementation is in progress under [the acceptance plan](../../docs/designs/burp-host-acceptance-plan.md).
+The command/provenance layer and native GUI helper have deterministic unit tests;
+the complete scenario suite and both-platform qualification are not yet delivered.
+Existing HOST catalog rows remain manual. Neither a helper build nor a primitive
+qualification report grants authentication coverage.
+
+The explicit development entry is:
+
+```powershell
+.\bapp\gradlew.bat -p bapp authLabHostQualify '-PhostVmConfig=test/authentication-lab/build/host-runtime/host-vms.json' '-PhostPlatform=both' '-PhostStage=primitives' --offline
+```
+
+The ignored local configuration contains only paths to the existing Windows/Linux
+helpers, guest test roots, installed Java/Burp and privately exported approved
+Community preferences, plus Linux's display. Paths resolve from the repository
+root; no password, encryption key or license value belongs in this configuration.
+Use `java` for Burp's bundled runtime and `labJava` for a full Java runtime with
+`jdk.httpserver`. The lab/exporter run under `labJava`; Burp retains its own
+runtime. A trimmed Burp JRE is insufficient for the fixture server. A portable
+Windows lab JDK can live in the private provisioning directory without changing
+global Java settings; Linux uses its installed full Java.
+The existing private VM helpers retain their credentials. Each desktop must be
+awake and unlocked before execution; the runner does not enter OS passwords.
+
+`authLabHostTest` always selects both platforms and the full scenario set. During
+implementation it returns BLOCKED until complete observations and the acceptance
+collector exist. Commands, GUI receipts and artifact identities are joined within
+one invocation; missing controls, manual intervention, incomplete cleanup or
+uncertain sends cannot become PASS. The standalone probe's explicit Send once
+remains Extensions-origin traffic. The GUI adapter uses real input in native
+Proxy/Repeater tools, without using the host's keyboard, mouse or clipboard.

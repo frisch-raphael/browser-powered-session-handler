@@ -56,8 +56,8 @@ class JourneyEventLogTest {
             var ticket = fixture.acquire(0); fixture.clock.runWorker(); ticket.future().join();
             var entry = fixture.entry(0); var token = fixture.coordinator.peek(entry.identity());
             var rule = new JourneyDefinition.Recovery(false, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null);
-            recovery.record(17, List.of(new CredentialUse(entry.identity(), token.version(), rule)), false);
-            recovery.receivedPlan(17, status, () -> { throw new AssertionError("Status feedback must not inspect a login page's body."); }, false, true);
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 17), List.of(new CredentialUse(entry.identity(), token.version(), rule)), false);
+            recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 17), status, () -> { throw new AssertionError("Status feedback must not inspect a login page's body."); }, false, true);
             var message = fixture.coordinator.events().snapshot(entry.identity().key()).getLast().message();
             assertEquals("Request using this journey's credentials returned HTTP " + status + ".", message);
             assertFalse(message.toLowerCase().contains("accepted"));

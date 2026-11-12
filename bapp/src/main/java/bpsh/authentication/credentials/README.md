@@ -17,7 +17,7 @@ Captures and validates response/cookie observations and computes immutable crede
 
 ## Invariants
 
-TokenExtractor.java requires complete combined capture and bounded token/body data. CapturedCookie.java carries plain observations rather than Playwright types; its diagnostic string excludes values. TokenLifetime.java checks both wall and monotonic expiry.
+RecoveryPattern delegates source and program bounds to [the shared compiler](../../pattern/README.md), preserving recovery messages and DOTALL/find semantics. TokenExtractor.java requires complete combined capture and bounded token/body data. CapturedCookie.java carries plain observations rather than Playwright types; its diagnostic string excludes values. TokenLifetime.java checks both wall and monotonic expiry.
 
 ## Side Effects
 

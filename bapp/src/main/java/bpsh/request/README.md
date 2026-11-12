@@ -10,7 +10,7 @@ Defines ordered automatic-injection rules, URL matching and eligible request ori
 
 ## Invariants
 
-RequestSettings.java:Tool preserves native wire names without Montoya types. Controls implements only the scheduling policy needed by authentication; explicit tags remain independent of the automatic switch.
+RequestSettings.java:Tool preserves native wire names without Montoya types. URL conditions are sealed JDK-only values (all requests, Burp scope, literal prefix or regex source); listener restrictions are nullable ports from 1 through 65535. Concrete boundaries compile regex syntax. Controls implements only the scheduling policy needed by authentication; explicit tags remain independent of the automatic switch.
 
 ## Side Effects
 

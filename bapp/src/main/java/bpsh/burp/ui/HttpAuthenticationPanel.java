@@ -27,12 +27,11 @@ final class HttpAuthenticationPanel extends JPanel {
         });
         protocol.setName("httpProtocol");addRow("Authentication type",protocol);
         for(String key:java.util.List.of("httpUsername","httpDomain","httpWorkstation","httpOrigins")) {
-            JTextField field=new JTextField(36);field.setName(key);fields.put(key,field);
+            JTextField field=UiTooltips.textField(36);field.setName(key);fields.put(key,field);
             String label=switch(key) {case "httpUsername"->"Username";case "httpDomain"->"Domain (NTLM)";case "httpWorkstation"->"Workstation (optional)";default->"Allowed origins";};
             if(key.equals("httpOrigins")) {
                 String guidance="Exact server addresses, separated by commas, for example https://app.example, https://login.example:8443. No paths. Filled from the Login URL when enabled; review before saving. Credentials are sent only to these addresses.";
-                field.setToolTipText("<html>Exact server addresses, separated by commas, for example<br>https://app.example, https://login.example:8443. No paths.<br>Filled from the Login URL when enabled; review before saving.<br>Credentials are sent only to these addresses.</html>");
-                field.getAccessibleContext().setAccessibleDescription(guidance);
+                UiTooltips.set(field,guidance,340);
             }
             addRow(label,field);field.getDocument().addDocumentListener(new DocumentChangeListener(()->{if(!loading) {clearValidation();changed.run();}}));
         }
@@ -44,7 +43,7 @@ final class HttpAuthenticationPanel extends JPanel {
     }
     private void addRow(String label,JComponent input) {
         int row=getComponentCount()/2;GridBagConstraints c=new GridBagConstraints();c.gridy=row;c.anchor=GridBagConstraints.NORTHWEST;c.insets=new Insets(4,0,8,12);
-        JLabel title=new JLabel(label);title.setLabelFor(input);title.setToolTipText(input.getToolTipText());title.getAccessibleContext().setAccessibleDescription(input.getAccessibleContext().getAccessibleDescription());add(title,c);c.gridx=1;c.weightx=1;c.fill=GridBagConstraints.HORIZONTAL;add(input==help?input:InlineValidation.wrap(input),c);
+        JLabel title=UiTooltips.label(label);title.setLabelFor(input);UiTooltips.copy(input,title);add(title,c);c.gridx=1;c.weightx=1;c.fill=GridBagConstraints.HORIZONTAL;add(input==help?input:InlineValidation.wrap(input),c);
     }
     /** Updates the literal header example without touching edited credentials or interpreting the name as HTML. */
     void setJourneyAlias(String alias) {

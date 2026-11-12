@@ -37,10 +37,10 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.X509ExtendedKeyManager;
 
 /**
- * Owns shared PKCS#11 providers/login state and slot-level PIN suppression inside the extension.
+ * Owns shared PKCS#11 identity state and slot-level PIN suppression.
  *
- * Native operations run on two bounded daemon workers and are serialized per canonical module/slot
- * selection. A deadline releases callers but cannot interrupt a hung vendor call. No logout is
+ * Production native calls and signing run in terminable helper processes, reached through two
+ * bounded host workers and serialized per canonical module/slot selection. No logout is
  * performed when an attempt ends. Automatic retries reuse established material instead of PIN
  * resubmission; explicit recovery is required after rejected/indeterminate PIN outcomes.
  */
@@ -66,6 +66,10 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
 
     /** Holds an immutable fingerprint-pinned key manager; private-key material stays in the provider. */
     public record Selected(CertificateInfo certificate, X509ExtendedKeyManager keyManager) {
+        /** Invalidates cached TLS scopes when explicit recovery replaces their isolated key owner. */
+        public boolean usable() {
+            return !(keyManager instanceof PinnedKeyManager pinned) || Pkcs11ProcessAccess.usable(pinned.getPrivateKey(pinned.alias));
+        }
         /**
          * Returns safe selection label without a private-key object's representation.
          *
@@ -79,6 +83,8 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
 
     /** Injects native setup/load boundaries for symbolic PIN-state tests without hardware claims. */
     public interface NativeAccess {
+        /** Closes owned isolation resources; injected in-process test backends own none by default. */
+        default void close() {}
         /** @param module Canonical middleware file. @return Present initialized tokens, without a login. @throws Exception On discovery failure. */
         default List<TokenInfo> tokens(Path module) throws Exception { throw new UnsupportedOperationException("Token discovery unavailable."); }
         /**
@@ -121,7 +127,9 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
     private volatile boolean closed;
 
     /** Creates the Java SunPKCS11 backend without loading a module or submitting a PIN. */
-    public Pkcs11IdentityManager() { this(new SunAccess()); }
+    public Pkcs11IdentityManager() { this(new Pkcs11ProcessAccess()); }
+    /** Returns owned key-helper handles for lifecycle qualification without inspecting process command lines. */
+    public List<ProcessHandle> keyHelpers() { return access instanceof Pkcs11ProcessAccess isolated ? isolated.processes() : List.of(); }
 
     /**
      * Creates bounded daemon native workers using the supplied provider boundary.
@@ -272,7 +280,15 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
             if (recovery && outstanding) throw failure(AuthenticationFailure.Cause.PIN_IN_PROGRESS, "The security device is still processing a request.", "Wait for the device to finish before choosing Retry.");
             if (recovery) { state.latch = null; state.material = null; }
             if (state.latch != null) throw state.latch;
-            if (state.material != null) return state.material;
+            if (state.material != null) {
+                for (String alias : state.material.certificates().keySet())
+                    if (!Pkcs11ProcessAccess.usable(state.material.manager().getPrivateKey(alias))) {
+                        state.latch = failure(AuthenticationFailure.Cause.DEVICE_SESSION_LOST,
+                                "The security-device session has stopped.", "Use Retry to reopen the device session.");
+                        throw state.latch;
+                    }
+                return state.material;
+            }
             if (!outstanding) {
                 char[] ownedPin = pin.clone();
                 state.queuedPin = ownedPin;
@@ -291,6 +307,7 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
             catch (InterruptedException ex) { Thread.currentThread().interrupt(); markIndeterminate(state); throw new AuthenticationFailure(AuthenticationFailure.Phase.PIN, AuthenticationFailure.Cause.CANCELLED, "Waiting for the security device was interrupted.", ""); }
             catch (CancellationException ex) { if (closed) throw closed(); throw failure(AuthenticationFailure.Cause.CANCELLED, "The pending security-device operation was cancelled.", ""); }
             catch (ExecutionException ex) {
+                if (closed) throw closed();
                 synchronized (state) { if (state.latch != null) throw state.latch; }
                 if (ex.getCause() instanceof AuthenticationFailure failure) throw failure;
                 throw failure(AuthenticationFailure.Cause.UNKNOWN, "The security-device operation failed.", "");
@@ -349,7 +366,10 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
             Material material = new Material(Map.copyOf(certificates), Map.copyOf(metadata), manager);
             synchronized (state) { state.material = material; }
             return material;
-        } catch (AuthenticationFailure ex) { throw ex; }
+        } catch (AuthenticationFailure ex) {
+            if (submitted && !completed) synchronized (state) { state.latch = ex; }
+            throw ex;
+        }
         catch (Exception | LinkageError ex) {
             AuthenticationFailure result = Pkcs11Failures.from(operation, ex);
             if (submitted && !completed) {
@@ -411,7 +431,7 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
         return switch (cause) {
             case MISSING_SECRET, PIN_REJECTED -> result.atInput(AuthenticationFailure.Input.MTLS_PIN);
             case CERTIFICATE -> result.atInput(AuthenticationFailure.Input.CERTIFICATE);
-            case PIN_INDETERMINATE, PIN_IN_PROGRESS -> result.atInput(AuthenticationFailure.Input.SECURITY_DEVICE);
+            case PIN_INDETERMINATE, PIN_IN_PROGRESS, DEVICE_SESSION_LOST -> result.atInput(AuthenticationFailure.Input.SECURITY_DEVICE);
             default -> result;
         };
     }
@@ -518,7 +538,7 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
     }
 
     /** Configures SunPKCS11 through its public Provider API, never a JDK-internal wrapper or exported key. */
-    private static final class SunAccess implements NativeAccess {
+    static final class SunAccess implements NativeAccess {
         private final Pkcs11DiscoveryProcess discovery = new Pkcs11DiscoveryProcess();
         /** @param module Canonical middleware file. @return Tokens discovered without submitting a PIN. @throws Exception On native discovery failure. */
         @Override public List<TokenInfo> tokens(Path module) throws Exception { return discovery.tokens(module); }
@@ -556,7 +576,7 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
 
     /**
      * Stops admission and removes only the exact providers this manager appended, without token logout.
-     * Hung native calls may remain daemon work; late configuration cannot register another provider.
+     * Production helpers are terminated; late configuration cannot register another provider.
      */
     @Override public void close() {
         synchronized (lifecycle) {
@@ -570,5 +590,10 @@ public final class Pkcs11IdentityManager implements AutoCloseable {
                 if (provider != null && Security.getProvider(provider.getName()) == provider) Security.removeProvider(provider.getName());
             }
         }
+        access.close();
+        try {
+            if (!nativeWorkers.awaitTermination(2500, TimeUnit.MILLISECONDS) && access instanceof Pkcs11ProcessAccess)
+                throw new IllegalStateException("Security-device workers did not terminate within the cleanup budget.");
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
     }
 }

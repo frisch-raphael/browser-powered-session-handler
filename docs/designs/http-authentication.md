@@ -422,7 +422,7 @@ implementation; the status table below distinguishes implementation from qualifi
 | `bapp/src/main/java/bpsh/browser/proxy/JourneyBrowserProxy.java` and `ProxyCertificateFactory.java` | Netty browser ingress and the existing certificate factory. Forward through the core service; no LittleProxy implementation remains in production. |
 | `bapp/src/main/java/bpsh/browser/BrowserSessionLauncher.java`, `BrowserFlowRunner.java` and `BrowserAuthentication.java` | Browser attempt wiring, fresh context, challenge/capture evidence and completion. Concrete HTTP-client construction stays out of these files. |
 | `bapp/src/main/java/bpsh/burp/http/HttpAuthenticationDirective.java` | New package-private directive consumption and validated selection, reusing `NativeTagParser` and the catalog. No second tag grammar. |
-| `bapp/src/main/java/bpsh/burp/http/HttpSessionHandler.java` | Existing request orchestration and Montoya response attribution. Delegates directive handling and owned delivery; no NTLM calculations or Swing state. |
+| `bapp/src/main/java/bpsh/burp/http/HttpAuthenticationDelivery.java` | Existing request orchestration and Montoya response attribution. Delegates directive handling and owned delivery; no NTLM calculations or Swing state. |
 | `bapp/src/main/java/bpsh/burp/ui/HttpAuthenticationPanel.java` | New package-private HTTP settings form using `JourneyForms`; snapshot/apply fields and emit edit events. No persistence, protocol validation algorithm or network calls. |
 | `bapp/src/main/java/bpsh/burp/ui/JourneyWizardPages.java` | New package-private stable page/component mapping and visibility/focus behavior shared by optional pages. No authentication business logic. |
 | `bapp/src/main/java/bpsh/burp/ui/UiController.java` | Compose the form, route edit/test actions and present outcomes. Keep additions to orchestration; do not append transport or serialization helpers to this controller. |
@@ -1363,7 +1363,7 @@ and remove obsolete owners rather than retain compatibility or historical copies
 | 4 | Modify | `bapp/src/main/java/bpsh/browser/BrowserJourneyRecorder.java` | Share configured launcher and report failures without recording NTLM steps. |
 | 4 | Modify | `bapp/src/main/java/bpsh/browser/BrowserFailureClassifier.java` | Keep authentication causes instead of generic navigation errors. |
 | 4 | Modify | `bapp/src/main/java/bpsh/browser/AuthTrafficGuard.java` | Preserve owned-traffic provenance for the generalized proxy. |
-| 4 | Modify | `bapp/src/main/java/bpsh/burp/http/HttpSessionHandler.java` | Handle directives, bypass automatic recovery and return the owned response through Montoya. |
+| 4 | Modify | `bapp/src/main/java/bpsh/burp/http/HttpAuthenticationDelivery.java` | Handle directives, bypass automatic recovery and return the owned response through Montoya. |
 | 4 | Modify | `bapp/src/main/java/bpsh/burp/http/NativeTagResolver.java` | Resolve remaining explicit references within one deadline, excluding discarded Authorization values. |
 | 4 | Modify | `bapp/src/main/java/bpsh/burp/http/Diagnostics.java` | Safe directive, protocol and delivery-ambiguity diagnostics. |
 | 4 | Modify | `bapp/src/main/java/bpsh/Extension.java` | Construct/inject services and attempt dispatch; check spoof support and retire/close owned resources. |
@@ -1507,3 +1507,14 @@ pinning and TRACE rejection) and editorial Nits were repaired after that re-audi
 and checked by the primary agent; those final edits were not independently
 re-reviewed. Native, packaging, captured HTTP and Linux host checks passed; Windows
 host and external-server interoperability retain their separate qualification scope.
+
+## Current callback ownership
+
+HttpAuthenticationDelivery owns directive orchestration and actual-response
+materialization. GlobalHttpSessionAdapter consumes that result through Montoya
+spoofing. ProxyHttpSessionAdapter defers explicit directives unchanged so direct
+identity selection occurs once; automatic URL/listener rules do not select a
+Basic or NTLM account. SessionRequestProcessor handles ordinary captured
+credentials, with RecoveryReplayDelivery owning application-session replays.
+The direct identity operation stays outside that replay path. Failed direct delivery retains native global DROP; ordinary Proxy drop enforcement
+is best effort and introduces no extra header or direct-identity selection.

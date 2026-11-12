@@ -75,6 +75,7 @@ public final class HttpTransportRuntime implements HttpTransportFactory {
         final boolean pinned;
         final java.util.function.Supplier<AuthenticationFailure> failure;
         private boolean retired,disposed;
+        volatile java.util.function.BooleanSupplier usable = () -> true;
         final ScopeSpec spec;
         final Map<URI,HttpAuthenticationEvidence> observations=new ConcurrentHashMap<>();
         Scope(HttpClientAuthenticationTransport client,Claim claim,boolean pinned,java.util.function.Supplier<AuthenticationFailure> failure,ScopeSpec spec) {
@@ -86,7 +87,7 @@ public final class HttpTransportRuntime implements HttpTransportFactory {
             retired=true;return true;
         }
         @Override public synchronized boolean isIdle() {return client.isIdle();}
-        @Override public synchronized boolean isOpen() {return !retired && !disposed && client.isOpen();}
+        @Override public synchronized boolean isOpen() {return !retired && !disposed && usable.getAsBoolean() && client.isOpen();}
         @Override public synchronized Delivery admit(long deadline) throws java.io.IOException {
             if(!isOpen())throw new java.io.IOException("This HTTP scope has been retired.");
             var admitted=client.admit(deadline);
@@ -208,6 +209,7 @@ public final class HttpTransportRuntime implements HttpTransportFactory {
                 var tls=new JourneyTlsContexts(configuration.mtls(),certificate,bypass);var route=configuration.browser().proxy();
                 var scope=create(claim,configuration.httpAuthenticationEnabled()?configuration.httpAuthentication():null,password,tls::forOrigin,
                         route==null?null:route.url(),browser,bypass,tls::failure,spec,progress);
+                scope.usable = tls::usable;
                 installed=true;
                 if(closed.get() || !result.complete(scope))scope.close();
             } catch(Throwable failure) {
@@ -240,10 +242,28 @@ public final class HttpTransportRuntime implements HttpTransportFactory {
             bodies().usedBytes(),admission.admitted(),admission.connections.used(),admission.connections.peak());}
     @Override public void close() {
         if(!closed.compareAndSet(false,true))return;
-        for(SetupTask task:opens)task.close();
-        for(Runnable abandoned:setup.shutdownNow())if(abandoned instanceof AutoCloseable owned)try {owned.close();}catch(Exception ignored) { }
-        for(Scope scope:snapshot())scope.close();
-        for(Runnable abandoned:workers.shutdownNow())if(abandoned instanceof AutoCloseable owned)try {owned.close();}catch(Exception ignored) { }
-        deadlines.shutdownNow();
+        var cleanup = new ArrayList<Runnable>();
+        for (SetupTask task : opens) cleanup.add(task::close);
+        cleanup.add(() -> discard(setup.shutdownNow()));
+        for (Scope scope : snapshot()) cleanup.add(scope::close);
+        cleanup.add(() -> discard(workers.shutdownNow())); cleanup.add(deadlines::shutdownNow);
+        bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
+    }
+    /** Releases abandoned task ownership while still attempting every remaining cleanup. */
+    private static void discard(List<Runnable> abandoned) {
+        var cleanup = new ArrayList<Runnable>();
+        for (Runnable task : abandoned) if (task instanceof AutoCloseable owned) cleanup.add(() -> {
+            try { owned.close(); } catch (Exception failure) { throw new IllegalStateException("An abandoned HTTP task did not close."); }
+        });
+        bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
+    }
+    /** Observes owned worker termination within one total budget, away from the Swing event thread. */
+    public void awaitClosed(long millis) {
+        long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millis);
+        try {
+            for (var executor : List.of(setup, workers, deadlines))
+                if (!executor.awaitTermination(Math.max(0, end - System.nanoTime()), TimeUnit.NANOSECONDS))
+                    throw new IllegalStateException("HTTP transport workers did not terminate within the cleanup budget.");
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException("HTTP transport cleanup was interrupted."); }
     }
 }

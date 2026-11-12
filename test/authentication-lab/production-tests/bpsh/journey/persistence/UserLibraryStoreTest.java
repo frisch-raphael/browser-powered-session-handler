@@ -101,7 +101,7 @@ class UserLibraryStoreTest {
         long began=System.nanoTime();int checked=0,preserved=0,loadRejected=0,saveRejected=0;
         Files.createDirectories(library().getParent());
         for (byte[] data : List.of("{bad EXAMPLE_SECRET".getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.LIBRARY, false, false).replace("\"schemaVersion\":1", "\"schemaVersion\":2").getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.LIBRARY, false, false).replace("\"schemaVersion\":1", "\"schemaVersion\":3").getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 new byte[]{(byte) 0xC3, (byte) 0x28})) {
             Files.write(library(), data);
             try (var store = new UserLibraryStore(library()); var document = JourneyRegistryTest.document(JourneyDocument.DocumentKind.LIBRARY)) {

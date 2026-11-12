@@ -130,8 +130,8 @@ public class OrderedSessionHandlingTest {
     public @Test void rulesRoundTripOrderActivationScopesAndExpirationWithoutJourneyRecovery() throws Exception {
         try (var f = new Fixture(false)) {
             var a = f.registry.snapshot().resolve("first"); var b = f.registry.snapshot().resolve("second");
-            var rules = List.of(new RequestSettings.AutomaticRule(false, new RequestSettings.JourneySelection(a.identity().scope(), a.identity().journeyId()), RequestSettings.UrlMode.SINGLE_URL, URI.create("https://app.example/api"), RECOVERY),
-                    new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(b.identity().scope(), b.identity().journeyId()), RequestSettings.UrlMode.ALL_REQUESTS, null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.BOTH, 403, "session.*expired")));
+            var rules = List.of(new RequestSettings.AutomaticRule(false, new RequestSettings.JourneySelection(a.identity().scope(), a.identity().journeyId()), new RequestSettings.Prefix(URI.create("https://app.example/api")), null, RECOVERY),
+                    new RequestSettings.AutomaticRule(true, new RequestSettings.JourneySelection(b.identity().scope(), b.identity().journeyId()), new RequestSettings.AllRequests(), null, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.BOTH, 403, "session.*expired")));
             var d = RequestSettings.Controls.defaults(); var controls = new RequestSettings.Controls(true, rules, d.tools(), d.requestWaitTimeoutMs(), d.attemptTimeoutMs(), d.cycleTimeoutMs(), null, null);
             try (var doc = new JourneyDocument(JourneyDocument.DocumentKind.PROJECT, java.util.UUID.randomUUID(), List.of(a.definition(), b.definition()), List.of(), controls, Map.of()); var round = JourneyJson.read(JourneyJson.write(doc), doc.kind())) { assertEquals(controls, round.controls()); }
             var duplicate = new RequestSettings.Controls(true, List.of(rules.getFirst(), rules.getFirst()), d.tools(), 60_000, 60_000, 300_000, null, null);
@@ -143,7 +143,7 @@ public class OrderedSessionHandlingTest {
              var op = f.resolver.resolveAutomatic(RAW.getBytes(StandardCharsets.ISO_8859_1), f.rules("first", "second"))) {
             f.clock.runWorker(); f.clock.runWorker(); var result = op.future().join(); result.commit();
             assertEquals(List.of(f.registry.snapshot().resolve("second").identity()), result.uses().stream().map(CredentialUse::identity).toList());
-            recovery.record(1, result.uses(), false); assertEquals(1, recovery.received(1, new SessionRecovery.Response(401, null, null, 0, () -> { throw new AssertionError("Status-only detection must not read the body."); }), false));
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), result.uses(), false); assertEquals(1, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), new SessionRecovery.Response(401, null, null, 0, () -> { throw new AssertionError("Status-only detection must not read the body."); }), false));
             assertNotNull(f.coordinator.peek(f.registry.snapshot().resolve("first").identity())); assertNull(f.coordinator.peek(f.registry.snapshot().resolve("second").identity()));
         }
     }

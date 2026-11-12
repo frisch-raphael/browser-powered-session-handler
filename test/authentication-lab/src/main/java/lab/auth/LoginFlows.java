@@ -534,6 +534,14 @@ public final class LoginFlows {
         String root = "/cases/" + lease.id() + "/";
         String result = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", content).replace("{{ROOT}}", root).replace("{{GENERATION}}", Long.toString(lease.generation())).replace("{{KIND}}", kind)
                 .replace("{{SCRIPT}}", escape(lease.endpoint("fixture.js").toString()));
+        // This opt-in host observation precedes response delivery, so it does not claim browser DOM readiness.
+        if(lease.id().equals("BROW.basic.json")&&exchange.getRequestMethod().equals("GET")&&exchange.getRequestURI().getPath().equals(root+"start")) {
+            String alias=ControlledApplication.parameters(exchange.getRequestURI().getRawQuery()).get("bpsh_host_journey");
+            if(alias!=null) {
+                if(!Set.of("host_a","host_b","host_failure_a","host_failure_b").contains(alias))throw LabRun.error(400,"BAD_INPUT");
+                synchronized(lease){lease.check();lease.event(LabRun.Phase.LOGIN,"host-login-page-response-start",List.of(Map.of("kind","journey-alias","value",alias)));}
+            }
+        }
         ControlledApplication.reply(exchange, 200, "text/html; charset=utf-8", result);
     }
     private static String readResource(String name) throws IOException {
@@ -613,7 +621,7 @@ public final class LoginFlows {
             }
             if (kind.equals("late")) synchronized (lease) {
                 lease.event(LabRun.Phase.EXTRACTION, "late-token-requested", List.of());
-                if (lease.faults.stream().noneMatch(f -> "late-token".equals(f.checkpoint()))) lease.armFault(new LabRun.FaultSpec(LabRun.Phase.EXTRACTION, lease.occurrences.getOrDefault(LabRun.Phase.EXTRACTION, 0) + 1, "HOLD", null, null, "late-token"));
+                if (!lease.hasFaultCheckpoint("late-token")) lease.armFault(new LabRun.FaultSpec(LabRun.Phase.EXTRACTION, lease.occurrences.getOrDefault(LabRun.Phase.EXTRACTION, 0) + 1, "HOLD", null, null, "late-token"));
             }
             var faults = lease.hit(LabRun.Phase.EXTRACTION); if (!ControlledApplication.faults(exchange, faults)) return true;
             String token;

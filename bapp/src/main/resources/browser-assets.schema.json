@@ -275,7 +275,7 @@
       "type": "object",
       "properties": {
         "formatVersion": {
-          "const": 1
+          "const": 2
         },
         "platform": {
           "enum": [
@@ -364,9 +364,9 @@
           "properties": {
             "resource": {
               "enum": [
-                "META-INF/bpsh/windows-x64/browser-assets.zip",
-                "META-INF/bpsh/linux-x64/browser-assets.zip",
-                "META-INF/bpsh/macos-x64/browser-assets.zip"
+                "META-INF/bpsh/windows-x64/browser-assets.zip.xz",
+                "META-INF/bpsh/linux-x64/browser-assets.zip.xz",
+                "META-INF/bpsh/macos-x64/browser-assets.zip.xz"
               ]
             },
             "sha256": {
@@ -377,12 +377,18 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 2147483648
+            },
+            "expandedBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483648
             }
           },
           "required": [
             "resource",
             "sha256",
-            "bytes"
+            "bytes",
+            "expandedBytes"
           ],
           "additionalProperties": false
         },
@@ -493,7 +499,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/windows-x64/browser-assets.zip"
+                    "const": "META-INF/bpsh/windows-x64/browser-assets.zip.xz"
                   }
                 }
               }
@@ -513,7 +519,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/linux-x64/browser-assets.zip"
+                    "const": "META-INF/bpsh/linux-x64/browser-assets.zip.xz"
                   }
                 }
               }
@@ -533,7 +539,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/macos-x64/browser-assets.zip"
+                    "const": "META-INF/bpsh/macos-x64/browser-assets.zip.xz"
                   }
                 }
               }

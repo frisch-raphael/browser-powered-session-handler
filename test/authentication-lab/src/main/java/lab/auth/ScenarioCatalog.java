@@ -32,12 +32,12 @@ public final class ScenarioCatalog {
         public String readiness() {
             if(disposition==Disposition.EXCLUDED)return "EXCLUDED";
             if (layer == Layer.ASSESSMENT) return "UNASSESSED";
-            if (layer == Layer.HOST) return "MANUAL";
+            if (layer == Layer.HOST && (binding == null || !binding.executor().equals("HOST"))) return "MANUAL";
             return binding == null ? "BLOCKED" : "BOUND_NOT_EXECUTED";
         }
         public String prerequisite() {
             if(disposition==Disposition.EXCLUDED)return "Not executed and earns no product coverage; see the recorded scope/relevance audit.";
-            if (layer == Layer.HOST) return "Actual host/artifact checkpoint not performed; manual binding not established.";
+            if (layer == Layer.HOST && (binding == null || !binding.executor().equals("HOST"))) return "Actual host/artifact checkpoint not performed; manual binding not established.";
             if (layer == Layer.ASSESSMENT) return "Capability has not been assessed; no support is inferred.";
             if (binding != null) return "Binding declared; current execution and evidence still required.";
             if (layer == Layer.FIXTURE) return "Callable fixture execution binding/current result required; :auth-lab:test checks the independent targets.";
@@ -280,7 +280,8 @@ public final class ScenarioCatalog {
         var binding = o.get("binding").isJsonNull() ? null : parseBinding(o.get("binding"), id, layer);
         if(disposition==Disposition.EXCLUDED)require(binding==null&&reviewedExclusion(id,group,factValues),"Excluded scope must be explicit, unbound and covered by the recorded relevance decision.");
         if (disposition == Disposition.REUSE || disposition == Disposition.EXTEND) require(binding != null, "Reuse/extend requires a current binding.");
-        if (layer == Layer.HOST || layer == Layer.ASSESSMENT) require(disposition == Disposition.MANUAL, "Host/assessment work must stay manual.");
+        if (layer == Layer.ASSESSMENT) require(disposition == Disposition.MANUAL, "Assessment work must stay manual.");
+        if (layer == Layer.HOST) require(disposition == Disposition.MANUAL ? binding == null || !binding.executor().equals("HOST") : binding != null && binding.executor().equals("HOST"), "Automated host disposition requires its exact HOST owner.");
         var evidence = members(o.get("evidence"), EVIDENCE);
         require(evidence.contains("completion") && facts.stream().allMatch(f -> evidence.contains(f.fact())), "Required assertion evidence is missing.");
         if (group.equals("FIX.matrix")) validateFixtureFacts(axes, assignments, factValues);
@@ -317,14 +318,18 @@ public final class ScenarioCatalog {
     }
     private static Binding parseBinding(JsonElement element, String requirementId, Layer layer) {
         var o = object(element, words("executionId executor className methodSignature parameterKey witnesses sourceRevision sourceHashes taskPath configurationHash xmlCaseName"));
-        String executor = member(o.get("executor"), words("JUNIT FIXTURE MANUAL"));
+        String executor = member(o.get("executor"), words("JUNIT FIXTURE MANUAL HOST"));
         String className = nullableString(o.get("className")), method = nullableString(o.get("methodSignature"));
         String task = nullableString(o.get("taskPath")), xml = nullableString(o.get("xmlCaseName"));
         if (executor.equals("JUNIT")) require(className != null && method != null && task != null && xml != null, "JUnit binding lacks actual owner/report identity.");
+        else if (executor.equals("HOST")) require(layer == Layer.HOST && LabHostEvidence.requiredScenarios().containsKey(requirementId)
+                && LabHostEvidence.OWNER.equals(className) && LabHostEvidence.METHOD.equals(method) && LabHostEvidence.TASK.equals(task) && xml == null
+                && requirementId.equals(nullableString(o.get("parameterKey"))) && ("HOST:" + requirementId).equals(string(o.get("executionId"))), "Host binding has a foreign execution identity.");
         else require(className == null && method == null && task == null && xml == null, "Non-JUnit binding contains JUnit identity.");
         if (executor.equals("FIXTURE")) require(layer == Layer.FIXTURE, "Fixture execution cannot prove production behavior.");
         if (executor.equals("MANUAL")) require(layer == Layer.HOST || layer == Layer.ASSESSMENT, "Manual binding has an automated layer.");
-        if (layer == Layer.HOST || layer == Layer.ASSESSMENT) require(executor.equals("MANUAL"), "Host/assessment binding must retain its actual operator owner.");
+        if (layer == Layer.ASSESSMENT) require(executor.equals("MANUAL"), "Assessment binding must retain its actual operator owner.");
+        if (layer == Layer.HOST) require(Set.of("MANUAL", "HOST").contains(executor), "Host binding must retain its host/operator owner.");
         var witnesses = new ArrayList<Witness>();
         var ids = new HashSet<String>();
         for (var e : array(o.get("witnesses"))) {
@@ -334,12 +339,22 @@ public final class ScenarioCatalog {
             witnesses.add(new Witness(rid, assertion, sourcePath, string(w.get("sourceSymbol")), nullableString(w.get("inputKey"))));
         }
         require(!witnesses.isEmpty(), "Binding has no assertion witnesses.");
+        if (executor.equals("HOST")) {
+            String protocol = LabHostEvidence.protocol(requirementId);
+            var expected = LabHostEvidence.requiredScenarios(requirementId).stream().map(id -> protocol == null ? id : id + "/" + protocol).collect(Collectors.toSet());
+            require(witnesses.size() == expected.size() && witnesses.stream().map(Witness::inputKey).collect(Collectors.toSet()).equals(expected), "Host binding omits or duplicates a required scenario.");
+            for (var witness : witnesses) {
+                String scenario = witness.inputKey().split("/", 2)[0];
+                require(witness.sourcePath().equals(LabHostEvidence.SOURCE) && witness.sourceSymbol().equals(LabHostEvidence.sourceSymbol(scenario)), "Host witness has a foreign assertion owner.");
+            }
+        }
         require(o.get("sourceHashes").isJsonObject(), "Source hashes must be an object.");
         var hashes = new LinkedHashMap<String, String>();
         for (var entry : o.getAsJsonObject("sourceHashes").entrySet()) {
             relativePath(new JsonPrimitive(entry.getKey())); hashes.put(entry.getKey(), hash(entry.getValue()));
         }
         require(witnesses.stream().allMatch(w -> hashes.containsKey(w.sourcePath())), "Witness source hash is missing.");
+        if (executor.equals("HOST")) require(hashes.keySet().containsAll(LabHostEvidence.criticalOwners()), "Host binding omits its execution/evidence owner closure.");
         return new Binding(string(o.get("executionId")), executor, className, method, nullableString(o.get("parameterKey")),
                 List.copyOf(witnesses), string(o.get("sourceRevision")), Collections.unmodifiableMap(hashes), task, hash(o.get("configurationHash")), xml);
     }
@@ -430,28 +445,7 @@ public final class ScenarioCatalog {
         } catch (IOException | IllegalStateException ex) { throw new CatalogException("Invalid or unavailable catalog JSON: " + name); }
     }
     static JsonElement parseJson(byte[] bytes) {
-        var decoder = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT);
-        try (var reader = new JsonReader(new StringReader(decoder.decode(ByteBuffer.wrap(bytes)).toString()))) {
-            reader.setStrictness(Strictness.STRICT);
-            var value = readValue(reader, 0);
-            require(reader.peek() == JsonToken.END_DOCUMENT, "Trailing JSON content.");
-            return value;
-        } catch (IOException | IllegalStateException | NumberFormatException ex) { throw new CatalogException("Invalid JSON input."); }
-    }
-    private static JsonElement readValue(JsonReader reader, int depth) throws IOException {
-        require(depth <= 64, "Catalog nesting exceeds 64.");
-        return switch (reader.peek()) {
-            case BEGIN_OBJECT -> {
-                var object = new JsonObject(); reader.beginObject();
-                while (reader.hasNext()) { String name = reader.nextName(); require(!object.has(name), "Duplicate JSON member."); object.add(name, readValue(reader, depth + 1)); }
-                reader.endObject(); yield object;
-            }
-            case BEGIN_ARRAY -> { var array = new JsonArray(); reader.beginArray(); while (reader.hasNext()) array.add(readValue(reader, depth + 1)); reader.endArray(); yield array; }
-            case STRING -> new JsonPrimitive(reader.nextString());
-            case NUMBER -> new JsonPrimitive(new BigDecimal(reader.nextString()));
-            case BOOLEAN -> new JsonPrimitive(reader.nextBoolean());
-            case NULL -> { reader.nextNull(); yield JsonNull.INSTANCE; }
-            default -> throw new CatalogException("Unexpected JSON token.");
-        };
+        try { return LabJson.parse(bytes); }
+        catch (IllegalArgumentException ex) { throw new CatalogException("Invalid JSON input."); }
     }
 }

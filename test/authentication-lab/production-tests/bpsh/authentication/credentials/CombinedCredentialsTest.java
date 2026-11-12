@@ -151,9 +151,9 @@ public class CombinedCredentialsTest {
     public @Test void eitherRecoveryConditionInvalidatesAndStatusMatchAvoidsReadingBody() {
         for (boolean status : List.of(true, false)) try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); var token = f.coordinator.peek(f.entry(0).identity());
-            recovery.record(1, List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.BOTH, 401, "session.*expired"))), false);
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), List.of(new CredentialUse(token.identity(), token.version(), new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.BOTH, 401, "session.*expired"))), false);
             byte[] body = "session expired".getBytes(StandardCharsets.UTF_8);
-            assertEquals(1, recovery.received(1, status ? 401 : 200, () -> { assertFalse(status); return new SessionRecovery.Response(200, "text/plain", null, body.length, () -> new java.io.ByteArrayInputStream(body)); }, false));
+            assertEquals(1, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), status ? 401 : 200, () -> { assertFalse(status); return new SessionRecovery.Response(200, "text/plain", null, body.length, () -> new java.io.ByteArrayInputStream(body)); }, false));
         }
     }
     public @Test void severalJsonValuesRequireExplicitDestinationsAndInjectTheChosenValue() throws Exception {

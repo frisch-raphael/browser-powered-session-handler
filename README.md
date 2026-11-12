@@ -113,9 +113,21 @@ Expiration detection can use an HTTP status, a response-text RE2 expression, or
 either condition. With Session handling enabled, an attributed session loss can trigger recovery and replay each original application request at most once. A rejected replacement pauses automatic recovery until an explicit Test login.
 
 Valid Session handling and waiting-limit edits save automatically. **Settings**
-contains request/login timeouts and optional global/per-journey waiting limits.
-Durations are in seconds, including fractional seconds. Waiting limits default
-to Unlimited.
+contains request/login timeouts and finite global/per-journey request limits.
+Durations are in seconds, including fractional seconds. Request limits default
+to 64 globally and 16 per journey, including direct HTTP authentication. Excess
+automatic requests continue unchanged with a diagnostic; explicit tagged requests
+are stopped. Send immediately starts login in the background without waiting.
+
+Automatic token/cookie insertion processes the headers separately and preserves
+upload bodies as host byte arrays. Request preparation has a shared 512 MiB copy
+budget, conservatively reserving four times the message size plus 16 MiB for header
+expansion before processing.
+An individual automatic request above 124 MiB therefore continues unchanged with
+a capacity diagnostic. Tagged/direct HTTP-auth messages retain their 4 MiB limit.
+Recovery retains a template only when detection is enabled and the original fits
+its 4 MiB individual / 32 MiB aggregate budget; otherwise login recovery can run,
+but resending the original request is manual.
 
 ## Journey cache and event log
 
@@ -143,12 +155,21 @@ it keeps credentials that are still usable.
 
 ## Proxy and PKCS#11
 
+Chromium sandboxing is required for login and recording. On Linux, allow the
+user namespaces needed by Chromium and install the documented browser libraries.
+A failed sandboxed launch reports an error.
+
 For a test website or proxy certificate that Chromium does not trust, enable **Allow untrusted HTTPS certificates** in the journey's **Setup**. It applies to that journey's recording and login only and defaults to off. Client-certificate journeys retain their separate server-trust checks and Trusted CA setting.
 
-An optional explicit HTTP proxy URL can point at a Burp listener. Empty means
-direct. Configured proxy authentication is unsupported; use a listener that
+The journey's optional HTTP proxy URL applies to browser login, recording and
+Basic/NTLM delivery, and can point at a Burp listener. Empty means direct.
+These authentication paths do not inherit Burp's global upstream-proxy settings. Configured proxy authentication is unsupported; use a listener that
 does not require credentials. A configured proxy failure does not fall back
 to a direct connection.
+
+PKCS#11 middleware and private-key signing run in an owned helper process using
+Burp's Java runtime. Unloading terminates the helper; private keys stay on the
+device. Rejected or indeterminate PIN outcomes still require an explicit Retry.
 
 For a client-certificate journey, select the middleware file. Connected initialized
 tokens are discovered without a PIN. A sole device is selected automatically;

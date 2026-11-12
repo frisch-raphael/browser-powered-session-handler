@@ -42,14 +42,14 @@ public class SessionRecoveryTest {
         long began=System.nanoTime();Map<String,Object> observed;var bodyReads=new AtomicInteger();
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); var old = f.coordinator.peek(f.entry(0).identity());
-            recovery.record(10, List.of(used(old, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 10), List.of(used(old, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
             var refresh = f.coordinator.test(f.entry(0), false); f.clock.runWorker(); assertTrue(refresh.future().isDone());
             var published=f.coordinator.peek(old.identity());assertNotNull(published);assertNotEquals(old.version(),published.version());
             var neverRead = new SessionRecovery.Response(401, "application/octet-stream", "br", Long.MAX_VALUE, () -> { bodyReads.incrementAndGet();fail("status rule must not open a body"); return null; });
-            int late=recovery.received(10,neverRead,false);assertEquals(0,late);assertNotNull(f.coordinator.peek(old.identity()));
+            int late=recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 10),neverRead,false);assertEquals(0,late);assertNotNull(f.coordinator.peek(old.identity()));
             boolean preserved=f.coordinator.peek(old.identity())==published;assertTrue(preserved);
-            var current = f.coordinator.peek(old.identity()); recovery.record(11, List.of(used(current, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
-            int currentInvalidated=recovery.received(11,neverRead,false);assertEquals(1,currentInvalidated);assertNull(f.coordinator.peek(old.identity()));int repeated=recovery.received(11,neverRead,false);assertEquals(0,repeated);
+            var current = f.coordinator.peek(old.identity()); recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 11), List.of(used(current, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
+            int currentInvalidated=recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 11),neverRead,false);assertEquals(1,currentInvalidated);assertNull(f.coordinator.peek(old.identity()));int repeated=recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 11),neverRead,false);assertEquals(0,repeated);
             observed=Map.of("oldVersion",old.version(),"newVersion",published.version(),"lateInvalidated",late,"latePreservedCurrent",preserved,"currentInvalidated",currentInvalidated,"repeatedInvalidated",repeated,"bodyReads",bodyReads.get());
         }
         TokenLifetimeTest.lifetime("late-old-401",observed,began);
@@ -58,19 +58,19 @@ public class SessionRecoveryTest {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); var token = f.coordinator.peek(f.entry(0).identity()); var provenance = List.of(used(token, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null)));
             var status = new SessionRecovery.Response(401, null, null, 0, () -> { fail("no body"); return null; });
-            recovery.record(1, provenance, true); assertEquals(0, recovery.received(1, status, false)); assertEquals(0, recovery.received(999, status, false));
-            recovery.record(2, provenance, false); assertEquals(0, recovery.received(2, status, true));
-            recovery.record(3, provenance, false); f.clock.advance(300_000); assertEquals(0, recovery.received(3, status, false)); assertNotNull(f.coordinator.peek(token.identity()));
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), provenance, true); assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), status, false)); assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 999), status, false));
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), provenance, false); assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), status, true));
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 3), provenance, false); f.clock.advance(300_000); assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 3), status, false)); assertNotNull(f.coordinator.peek(token.identity()));
         }
     }
     public @Test void multiJourneyResponseAppliesEachCapturedRuleRatherThanGuessingAResponsibleCredential() {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.acquire(1); f.clock.runWorker(); f.clock.runWorker();
             var first = f.coordinator.peek(f.entry(0).identity()); var second = f.coordinator.peek(f.entry(1).identity());
-            recovery.record(1, List.of(used(first, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null)),
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), List.of(used(first, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null)),
                     used(second, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.REGEX, null, "sign.*in"))), false);
             byte[] body = bytes("please sign\n in again");
-            assertEquals(2, recovery.received(1, new SessionRecovery.Response(401, "text/html", null, body.length, () -> new ByteArrayInputStream(body)), false));
+            assertEquals(2, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), new SessionRecovery.Response(401, "text/html", null, body.length, () -> new ByteArrayInputStream(body)), false));
             assertNull(f.coordinator.peek(first.identity())); assertNull(f.coordinator.peek(second.identity()));
         }
     }
@@ -84,11 +84,11 @@ public class SessionRecoveryTest {
         try (var operation = resolver.resolveAutomatic(raw, tagged ? List.of() : List.of(new NativeTagResolver.Automatic(f.entry(0), lossRule())))) {
             var resolved = operation.future().join(); resolved.commit();
             var uses = resolved.uses().stream().map(u -> new CredentialUse(u.identity(), u.version(), lossRule())).toList();
-            recovery.record(id, uses, false, resolved.replayTemplate(raw));
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, id), uses, false, resolved.replayTemplate(raw));
         }
     }
     public static SessionRecovery.Decision lost(SessionRecovery recovery, long id) {
-        return recovery.receivedPlan(id, 401, () -> { fail("status detection must not inspect body metadata"); return null; }, false, true);
+        return recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, id), 401, () -> { fail("status detection must not inspect body metadata"); return null; }, false, true);
     }
 
     public static AuthLabSupport matrixTargets;
@@ -154,7 +154,7 @@ public class SessionRecoveryTest {
                     String raw = matrixWire(target, combined, tagged, post, original, null);
                     try (var operation = resolver.resolveAutomatic(bytes(raw), tagged ? List.of() : List.of(new NativeTagResolver.Automatic(entry, rule)))) {
                         var resolved = operation.future().join(); byte[] wire = resolved.commit();boolean matches=java.util.Arrays.equals(bytes(matrixWire(target, combined, false, post, original, initial)), wire);assertTrue(matches, "Initial request bytes must match the independent template.");initialBytesMatch&=matches;
-                        recovery.record(100 + original, resolved.uses().stream().map(u -> new CredentialUse(u.identity(), u.version(), rule)).toList(), false, resolved.replayTemplate(bytes(raw)));
+                        recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + original), resolved.uses().stream().map(u -> new CredentialUse(u.identity(), u.version(), rule)).toList(), false, resolved.replayTemplate(bytes(raw)));
                         if (trigger.equals("no-match")) target.fault("PROTECTED", original + 2, "HTTP_ERROR", 403, null); // Initial proof consumed occurrence 1.
                         if (trigger.equals("original-timeout")) { target.originalTimesOut(wire, original + 2); continue; }
                         var response = target.exchange(wire); assertEquals(trigger.equals("success") ? 200 : trigger.equals("no-match") ? 403 : 401, response.status());
@@ -170,8 +170,8 @@ public class SessionRecoveryTest {
                         assertEquals("body-match", trigger, "Status-only detection must not materialize a body.");
                         return new SessionRecovery.Response(response.status(), "application/json", null, response.bodyBytes().length, () -> new ByteArrayInputStream(response.bodyBytes()));
                     };
-                    var decision = recovery.receivedPlan(100 + original, response.status(), details, false, !trigger.equals("disabled"));
-                    assertNull(recovery.receivedPlan(100 + original, response.status(), details, false, true).replay(), "The original response is consumed once."); decisions.add(decision);
+                    var decision = recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + original), response.status(), details, false, !trigger.equals("disabled"));
+                    assertNull(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + original), response.status(), details, false, true).replay(), "The original response is consumed once."); decisions.add(decision);
                 }
                 int replayed = 0, proofs = 0; boolean bytesMatch = true;String replayAccount=null,replayIssuance=null;int replayStatus=0;
                 if (noRecovery) {
@@ -194,7 +194,7 @@ public class SessionRecoveryTest {
                             target.revoke(probe.body().path("issuanceId").asText());
                         }
                         for (int original = 0; original < originals; original++) try (var plan = decisions.get(original).replay().join()) {
-                            assertEquals(100 + original, plan.originalId());
+                            assertEquals(new RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + original), plan.originalId());
                             if (rejected && original > 0) { assertThrows(AuthenticationFailure.class, plan::claim); continue; }
                             byte[] actual = plan.claim(), expected = bytes(matrixWire(target, combined, false, post, original, replacement));
                             assertTrue(java.util.Arrays.equals(expected, actual), "Replay bytes must preserve the independent complete template."); bytesMatch &= java.util.Arrays.equals(expected, actual); assertThrows(AuthenticationFailure.class, plan::claim);
@@ -209,8 +209,8 @@ public class SessionRecoveryTest {
                                 replayAccount=response.body().path("accountId").asText();replayIssuance=response.body().path("issuanceId").asText();replayStatus=response.status();
                                 if (post) assertEquals(original + 1, response.body().path("actionId").asInt());
                             }
-                            recovery.record(1000 + original, plan.uses(), false);
-                            assertNull(recovery.receivedPlan(1000 + original, response.status(), () -> new SessionRecovery.Response(response.status(), "application/json", null,
+                            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1000 + original), plan.uses(), false);
+                            assertNull(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1000 + original), response.status(), () -> new SessionRecovery.Response(response.status(), "application/json", null,
                                     response.bodyBytes().length, () -> new ByteArrayInputStream(response.bodyBytes())), false, true).replay(), "A replay can never authorize another replay.");
                         }
                     }
@@ -246,7 +246,7 @@ public class SessionRecoveryTest {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); captured(f, recovery, 10, false); var decision = lost(recovery, 10); f.clock.runWorker();
             try (var plan = decision.replay().join()) {
-                plan.claim(); recovery.record(11, plan.uses(), false); assertNull(lost(recovery, 11).replay());
+                plan.claim(); recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 11), plan.uses(), false); assertNull(lost(recovery, 11).replay());
                 assertEquals(AuthenticationCoordinator.Phase.PAUSED, f.coordinator.status(f.entry(0).identity()).phase());
                 assertNull(lost(recovery, 11).replay()); f.clock.advance(3_600_000); assertTrue(f.clock.workers.isEmpty());
                 assertEquals(AuthenticationFailure.Cause.AUTH_REJECTED, CoordinatorFixtures.error(f.acquire(0)).reason());
@@ -263,7 +263,7 @@ public class SessionRecoveryTest {
             try (var plan = decision.replay().join()) {
                 assertTrue(new String(plan.claim(), StandardCharsets.ISO_8859_1).contains("Bearer " + token.value()));
                 assertEquals(2, f.attempts.get(), "late rejection must not invalidate or reacquire the newer publication");
-                recovery.record(2, plan.uses(), false);
+                recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), plan.uses(), false);
                 if (refreshAgain) {
                     var newer = f.coordinator.test(f.entry(0), false); f.clock.runWorker(); newer.future().join();
                     var current = f.coordinator.peek(token.identity()); assertNotEquals(token.version(), current.version());
@@ -303,8 +303,8 @@ public class SessionRecoveryTest {
     public @Test void timeoutAloneDisabledMaintenanceAndUnattributedResponsesNeverAuthorizeReplay() throws Exception {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); captured(f, recovery, 1, false);
-            assertNull(recovery.receivedPlan(1, 504, () -> null, false, true).replay());
-            captured(f, recovery, 2, true); assertNull(recovery.receivedPlan(2, 401, () -> null, false, false).replay());
+            assertNull(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), 504, () -> null, false, true).replay());
+            captured(f, recovery, 2, true); assertNull(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 2), 401, () -> null, false, false).replay());
             assertNull(lost(recovery, 999).replay()); assertEquals(1, f.attempts.get()); assertTrue(f.clock.workers.isEmpty());
         }
     }
@@ -346,7 +346,7 @@ public class SessionRecoveryTest {
     public @Test void missingReplayTemplateStillSharesRecoveryAndTerminalFailureRemainsPaused() throws Exception {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); var token = f.coordinator.peek(f.entry(0).identity());
-            recovery.record(1, List.of(new CredentialUse(token.identity(), token.version(), lossRule())), false);
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), List.of(new CredentialUse(token.identity(), token.version(), lossRule())), false);
             f.fail.set(new AuthenticationFailure(AuthenticationFailure.Phase.PIN, AuthenticationFailure.Cause.PIN_REJECTED, "The security device rejected the PIN."));
             assertNull(lost(recovery, 1).replay()); assertEquals(1, f.clock.workers.size()); f.clock.runWorker();
             assertEquals(2, f.attempts.get()); assertEquals(AuthenticationCoordinator.Phase.PAUSED, f.coordinator.status(token.identity()).phase());
@@ -385,10 +385,10 @@ public class SessionRecoveryTest {
     public @Test void boundedLedgerEvictsOldestAndConsumesEveryResponseAtMostOnce() {
         try (var f = new AuthenticationCoordinatorTest.Fixture(RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(f.coordinator, f.clock::nanos)) {
             f.acquire(0); f.clock.runWorker(); var token = f.coordinator.peek(f.entry(0).identity());
-            for (int i = 0; i <= 10_000; i++) recovery.record(i, List.of(used(token, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
+            for (int i = 0; i <= 10_000; i++) recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, i), List.of(used(token, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null))), false);
             var response = new SessionRecovery.Response(401, null, null, 0, null);
-            assertEquals(0, recovery.received(0, response, false)); assertNotNull(f.coordinator.peek(token.identity()));
-            assertEquals(1, recovery.received(10_000, response, false)); assertEquals(0, recovery.received(10_000, response, false));
+            assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 0), response, false)); assertNotNull(f.coordinator.peek(token.identity()));
+            assertEquals(1, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 10_000), response, false)); assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 10_000), response, false));
         }
     }
     public @Test void unsupportedTextEncodingHasFixedActionableGuidanceWithoutReadingOrLoggingHeaders() {
@@ -396,9 +396,9 @@ public class SessionRecoveryTest {
             var messages = new java.util.ArrayList<String>();
             try (var recovery = new SessionRecovery(f.coordinator, f.clock::nanos, (identity, message) -> messages.add(message))) {
                 f.acquire(0); f.clock.runWorker(); var token = f.coordinator.peek(f.entry(0).identity());
-                recovery.record(1, List.of(used(token, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.REGEX, null, "sign in"))), false);
+                recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), List.of(used(token, new JourneyDefinition.Recovery(true, JourneyDefinition.RecoveryMode.REGEX, null, "sign in"))), false);
                 var response = new SessionRecovery.Response(200, "text/plain", "unsupported-secret-value", 1, () -> { fail("unsupported encoding must not open a body"); return null; });
-                assertEquals(0, recovery.received(1, response, false)); assertEquals(1, messages.size());
+                assertEquals(0, recovery.received(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 1), response, false)); assertEquals(1, messages.size());
                 assertEquals("Session detection could not read the response's text encoding or compression.", messages.getFirst()); assertFalse(messages.getFirst().contains("unsupported-secret-value")); assertNotNull(f.coordinator.peek(token.identity()));
             }
         }

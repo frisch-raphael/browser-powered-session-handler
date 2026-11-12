@@ -6,7 +6,7 @@ import java.security.MessageDigest
 gradle.projectsEvaluated {
     def project = gradle.rootProject
     def plan = new JsonSlurper().parse(new File(System.getProperty('authlab.plan')))
-    if (plan.version != 1 || !(plan.taskName in ['authLabComponentTest', 'authLabBrowserTest', 'authLabFederationTest', 'authLabTransportTest', 'authLabExamples']))
+    if (plan.version != 1 || !(plan.taskName in ['authLabComponentTest', 'authLabBrowserTest', 'authLabFederationTest', 'authLabTransportTest', 'authLabExamples', 'authLabHostExporter']))
         throw new GradleException('Invalid production invocation plan.')
     def auditFile = new File(plan.auditFile)
     if (MessageDigest.getInstance('SHA-256').digest(auditFile.bytes).encodeHex().toString() != plan.auditSha256)
@@ -39,6 +39,42 @@ gradle.projectsEvaluated {
     }
     project.sourceSets.test.compileClasspath += project.files(plan.labJar)
     project.sourceSets.test.runtimeClasspath += project.files(plan.labJar)
+
+    if(plan.taskName=='authLabHostExporter') {
+        project.tasks.register(plan.taskName) {
+            dependsOn project.tasks.named('testClasses')
+            doLast {
+                def sha={file->
+                    def digest=MessageDigest.getInstance('SHA-256')
+                    file.withInputStream {input->byte[] buffer=new byte[65536];int count;while((count=input.read(buffer))!=-1)digest.update(buffer,0,count)}
+                    digest.digest().encodeHex().toString()
+                }
+                plan.overlayHashes.each {name,hash->if(sha(new File(overlay,name))!=hash)throw new GradleException('Native exporter source changed after capture.')}
+                def directory=new File(report,'exporter-runtime')
+                if(directory.exists())throw new GradleException('Exporter capture already exists.')
+                directory.mkdirs()
+                def entries=[]
+                project.sourceSets.test.runtimeClasspath.files.eachWithIndex {source,index->
+                    def target=new File(directory,String.format('%03d-',index)+(source.isDirectory()?'classes.jar':source.name))
+                    if(source.isDirectory()) {
+                        new java.util.jar.JarOutputStream(new FileOutputStream(target)).withCloseable {jar->
+                            def files=[]
+                            source.eachFileRecurse(groovy.io.FileType.FILES) {file->files.add(file)}
+                            files.sort {source.toPath().relativize(it.toPath()).toString()}.each {file->
+                                def name=source.toPath().relativize(file.toPath()).toString().replace('\\','/')
+                                def entry=new java.util.jar.JarEntry(name);entry.time=0;jar.putNextEntry(entry)
+                                file.withInputStream {input->input.transferTo(jar)};jar.closeEntry()
+                            }
+                        }
+                    }else java.nio.file.Files.copy(source.toPath(),target.toPath())
+                    entries.add([path:target.absolutePath,sha256:sha(target),bytes:target.length(),role:'EXPORTER'])
+                }
+                new File(report,'exporter-runtime.json').text=JsonOutput.toJson([version:1,invocationId:plan.invocationId,
+                    sourceRevision:plan.boundaryHash,runtime:entries])
+            }
+        }
+        return
+    }
 
     if(plan.taskName=='authLabExamples') {
         project.tasks.register(plan.taskName,JavaExec) {
@@ -79,7 +115,7 @@ gradle.projectsEvaluated {
         classpath = project.sourceSets.test.runtimeClasspath
         if (browser) classpath += project.files(new File(project.buildDir, 'generated/browser-assets'))
         useJUnitPlatform()
-        filter.setIncludePatterns(*(methods as String[]))
+        methods.each { filter.includeTestsMatching(it) }
         filter.failOnNoMatchingTests = true
         failOnNoDiscoveredTests = true
         reports.junitXml.outputLocation = new File(report, 'junit-xml')

@@ -43,12 +43,6 @@ final class StepActionHelp {
         };
     }
 
-    /** Wraps long static guidance inside the native Swing tooltip, preserving plain accessible copy. */
-    static String tooltip(String text) {
-        if (text == null || text.length() <= 85) return text;
-        return "<html><div style='width: 320px'>" + text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</div></html>";
-    }
-
     /** Installs once per combo and restores its native renderer after a host theme update. */
     static void install(JComboBox<AuthStep.Type> combo) {
         combo.setRenderer(new DefaultListCellRenderer() {
@@ -89,7 +83,7 @@ final class StepActionHelp {
         list.addMouseMotionListener(mouse); list.addMouseListener(mouse);
         list.addListSelectionListener(event -> {
             describe(combo, list.getSelectedValue());
-            if (!event.getValueIsAdjusting()) list.setToolTipText(list.getSelectedValue() instanceof AuthStep.Type type ? tooltip(text(type)) : null);
+            if (!event.getValueIsAdjusting()) list.setToolTipText(list.getSelectedValue() instanceof AuthStep.Type type ? UiTooltips.lines(text(type), 80) : null);
         });
     }
 
@@ -106,7 +100,7 @@ final class StepActionHelp {
                 if (caption != null && point.y - bounds.y < caption.getPreferredSize().height) value = null;
             }
         }
-        list.setToolTipText(value instanceof AuthStep.Type type ? tooltip(text(type)) : null);
+        list.setToolTipText(value instanceof AuthStep.Type type ? UiTooltips.lines(text(type), 80) : null);
     }
 
     private static String heading(AuthStep.Type type) {
@@ -118,7 +112,7 @@ final class StepActionHelp {
 
     private static void describe(JComboBox<?> combo, Object value) {
         String help = value instanceof AuthStep.Type type ? text(type) : null;
-        combo.getAccessibleContext().setAccessibleDescription(help); combo.setToolTipText(tooltip(help));
+        UiTooltips.set(combo, help, 320);
     }
 
     private static void clear(JComboBox<AuthStep.Type> combo) {

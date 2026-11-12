@@ -7,7 +7,7 @@ Owns Swing editing/presentation, autosave interaction, explicit device actions a
 ## Interface
 
 - [AuthenticationTagMenu](./AuthenticationTagMenu.java): Inserts literal saved references at the request selection without acquiring or exposing credentials.
-- [AutomaticRulesPanel](./AutomaticRulesPanel.java): Ordered session-handling rules with inline scope and expiration settings.
+- [AutomaticRulesPanel](./AutomaticRulesPanel.java): Ordered session-handling rules with typed URL/regex choices, existing listener ports and inline expiration settings.
 - [CertificatePresentation](./CertificatePresentation.java): Human-readable public identity labels; exact certificate selection remains fingerprint-based.
 - [CredentialsPanel](./CredentialsPanel.java): Edits response tokens, captured cookies and their request destinations without runtime values.
 - [DocumentChangeListener](./DocumentChangeListener.java): Adapts all Swing document changes to the same callback.
@@ -28,10 +28,13 @@ Owns Swing editing/presentation, autosave interaction, explicit device actions a
 - [SwingJourneyDialogs](./SwingJourneyDialogs.java): Presents standard parented Swing dialogs; it performs no storage or authentication work.
 - [UiController](./UiController.java): Owns the native Swing editor, serialized revision-checked storage and explicit background actions.
 - [UiIcons](./UiIcons.java): Small native vector actions sharing one stroke, theme color, and accessible button contract.
+- [UiTooltips](./UiTooltips.java): Escaped formatted help and component-owned tooltips that survive the host's HTML-disable setting and theme updates. Follow the [tooltip contract](../../../../../../../docs/designs/swing-tooltips.md).
 
 ## Invariants
 
 UiController.java captures Swing fields on the EDT, rejects obsolete completions and delegates revisions/epochs/final merging to JourneyStorage. StepsPanel.java retains stable secure-step ownership.
+
+Listener refresh exports run on the existing I/O worker and preserve saved missing/stopped ports and unfinished drafts. Failed validation or persistence leaves the last atomically applied source/matcher pair intact; listener-only refresh never autosaves or starts authentication.
 
 ## Side Effects
 

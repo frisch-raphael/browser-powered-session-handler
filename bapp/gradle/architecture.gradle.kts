@@ -5,18 +5,19 @@ val architectureDependencies = mapOf(
     "bpsh.authentication" to setOf("journey"),
     "bpsh.authentication.http" to setOf("journey", "authentication"),
     "bpsh.transport.httpauth" to setOf("journey", "authentication", "authentication.http", "transport.tls"),
-    "bpsh.authentication.credentials" to setOf("journey", "authentication", "authentication.http"),
+    "bpsh.authentication.credentials" to setOf("journey", "authentication", "authentication.http", "pattern"),
     "bpsh.authentication.session" to setOf("journey", "authentication", "authentication.credentials"),
     "bpsh.request" to setOf("journey", "authentication"),
     "bpsh.platform.files" to emptySet(),
-    "bpsh.journey.persistence" to setOf("journey", "authentication", "authentication.credentials", "request", "platform.files"),
+    "bpsh.pattern" to emptySet(),
+    "bpsh.journey.persistence" to setOf("journey", "authentication", "authentication.credentials", "request", "platform.files", "pattern"),
     "bpsh.journey.editing" to setOf("journey", "journey.persistence", "request"),
     "bpsh.browser.runtime" to setOf("journey", "authentication", "platform.files"),
     "bpsh.transport.tls" to setOf("journey", "authentication"),
     "bpsh.browser.proxy" to setOf("journey", "authentication", "authentication.http", "transport.tls"),
     "bpsh.browser" to setOf("journey", "authentication", "authentication.http", "authentication.credentials", "authentication.session", "browser.runtime", "transport.tls", "browser.proxy"),
-    "bpsh.burp.http" to setOf("journey", "authentication", "authentication.http", "authentication.credentials", "authentication.session", "browser", "request"),
-    "bpsh.burp.ui" to setOf("authentication.http", "journey", "journey.editing", "journey.persistence", "authentication", "authentication.credentials", "authentication.session", "transport.tls", "burp.http", "request")
+    "bpsh.burp.http" to setOf("pattern", "journey", "authentication", "authentication.http", "authentication.credentials", "authentication.session", "browser", "request"),
+    "bpsh.burp.ui" to setOf("pattern", "authentication.http", "journey", "journey.editing", "journey.persistence", "authentication", "authentication.credentials", "authentication.session", "transport.tls", "burp.http", "request")
 ).mapValues { (_, dependencies) -> dependencies.map { "bpsh.$it" }.toSet() }
 
 val verifyArchitecture = tasks.register("verifyArchitecture") {

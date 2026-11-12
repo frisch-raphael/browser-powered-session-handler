@@ -55,7 +55,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
     }
 
     static final String MANIFEST_RESOURCE = "META-INF/bpsh/browser-assets.json";
-    static final String ARCHIVE_RESOURCE = "META-INF/bpsh/browser-assets.zip";
+    static final String ARCHIVE_RESOURCE = "META-INF/bpsh/browser-assets.zip.xz";
     private static final ObjectMapper JSON = new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final LinkOption[] NOFOLLOW = { LinkOption.NOFOLLOW_LINKS };
@@ -88,9 +88,9 @@ public final class BrowserRuntimeManager implements AutoCloseable {
     record Limits(long manifestBytes, long zipBytes, long totalBytes, long fileBytes, int entries,
                   int pathBytes, int depth, int linkHops) {
         /**
-         * Returns the approved v1 extraction ceilings.
+         * Returns the approved archive and extraction ceilings.
          *
-         * @return The approved v1 extraction ceilings.
+         * @return The approved archive and extraction ceilings.
          */
         static Limits standard() { return new Limits(32L << 20, 2L << 30, 4L << 30, 1L << 30, 100_000, 4096, 32, 16); }
     }
@@ -100,7 +100,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
 
     /** Validated manifest metadata shared by extraction and full cache-hit validation. */
     record Manifest(String platform, String browserRoot, String browserExecutable, String nodeExecutable,
-                    String driverEntryPoint, String archiveHash, long archiveBytes, long unpackedBytes,
+                    String driverEntryPoint, String archiveHash, long archiveBytes, long expandedBytes, long unpackedBytes,
                     Map<String, Entry> entries, Set<String> directories, List<String> helpers) {}
 
     /**
@@ -245,10 +245,10 @@ public final class BrowserRuntimeManager implements AutoCloseable {
         requireSupportedPlatform(platform);
         check(deadlineNanos, cancelled);
         if (ready != null) return ready;
-        long lockDeadline = Math.min(deadlineNanos, System.nanoTime() + TimeUnit.SECONDS.toNanos(10));
         boolean held = false, waitedForSetup = false;
         try {
-            while (!(held = setup.tryLock())) { if (!waitedForSetup) { observed(observer, AuthenticationStage.WAITING_FOR_CACHE); waitedForSetup = true; } pause(lockDeadline, cancelled); }
+            // Journeys sharing this manager wait for its owned setup within their original attempt budgets.
+            while (!(held = setup.tryLock())) { if (!waitedForSetup) { observed(observer, AuthenticationStage.WAITING_FOR_CACHE); waitedForSetup = true; } pause(deadlineNanos, cancelled); }
             check(deadlineNanos, cancelled);
             if (ready != null) return ready;
             byte[] raw;
@@ -260,6 +260,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
             Path lockPath = parent.resolve(bundle + ".lock"); rejectLink(lockPath);
             createPrivateFile(lockPath, true);
             try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.WRITE)) {
+                long lockDeadline = Math.min(deadlineNanos, System.nanoTime() + TimeUnit.SECONDS.toNanos(10));
                 FileLock fileLock = null; boolean waited = false;
                 while (fileLock == null) {
                     if (waited && lockDeadline - System.nanoTime() <= 0) pause(lockDeadline, cancelled);
@@ -292,7 +293,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
 
 
     /**
-     * Copies/verifies the full ZIP before extraction, then publishes only a complete validated tree.
+     * Streams/verifies XZ to an owned ZIP, extracts it, then publishes only a complete validated tree.
      * @param parent Owned platform cache directory.
      * @param destination New immutable cache path; existing caches are handled by verification instead.
      * @param manifest Validated declarations and selectors.
@@ -306,7 +307,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
                          long deadline, BooleanSupplier cancelled) throws Exception {
         try {
             long usable = Files.getFileStore(parent).getUsableSpace();
-            if (usable > 0 && usable < manifest.archiveBytes() + manifest.unpackedBytes())
+            if (usable > 0 && usable < manifest.expandedBytes() + manifest.unpackedBytes())
                 throw failure(AuthenticationFailure.Cause.CONFIGURATION, "There is not enough free space to prepare the bundled browser.",
                         "Free space for the selected archive and extracted browser, then try again.");
         } catch (IOException | UnsupportedOperationException | SecurityException ignored) { /* no positive space evidence */ }
@@ -315,13 +316,9 @@ public final class BrowserRuntimeManager implements AutoCloseable {
         Files.createDirectory(stage, privateAttributes(parent, true));
         try {
             createPrivateFile(archive, false);
-            try (InputStream input = resource(platformResource(ARCHIVE_RESOURCE, platform)); var out = Files.newOutputStream(archive)) {
-                MessageDigest digest = sha(); byte[] buffer = new byte[65536]; long bytes = 0;
-                for (int count; (count = input.read(buffer)) >= 0;) {
-                    check(deadline, cancelled); bytes += count;
-                    require(bytes <= manifest.archiveBytes(), "Archive exceeds declared size."); digest.update(buffer, 0, count); out.write(buffer, 0, count);
-                }
-                require(bytes == manifest.archiveBytes() && hex(digest.digest()).equals(manifest.archiveHash()), "Archive digest/size mismatch.");
+            try (var out = Files.newOutputStream(archive)) {
+                BrowserArchiveCodec.decode(resource(platformResource(ARCHIVE_RESOURCE, platform)), out,
+                        manifest.archiveBytes(), manifest.archiveHash(), manifest.expandedBytes(), () -> check(deadline, cancelled));
             }
             for (String dir : manifest.directories().stream().sorted(java.util.Comparator.comparingInt(String::length)).toList()) {
                 check(deadline, cancelled); Files.createDirectory(stage.resolve(dir), privateAttributes(stage, true)); mode(stage.resolve(dir), true, true);
@@ -375,10 +372,24 @@ public final class BrowserRuntimeManager implements AutoCloseable {
             mode(complete, false, false); check(deadline, cancelled);
             checkedStage(parent, stage, bundle); require(destination.getParent().equals(parent) && destination.getFileName().toString().equals(bundle), "Invalid publish target.");
             require(!Files.exists(destination, NOFOLLOW), "Another cache appeared during setup.");
-            publisher.publish(stage, destination);
+            publishVerified(stage, destination, deadline, cancelled);
         } finally {
             Files.deleteIfExists(archive);
             if (Files.exists(stage, NOFOLLOW)) { checkedStage(parent, stage, bundle); deleteOwnedTree(stage); }
+        }
+    }
+
+    /** Retries transient Windows directory-handle contention without weakening atomic publication. */
+    private void publishVerified(Path stage, Path destination, long deadline, BooleanSupplier cancelled) throws Exception {
+        long retryUntil = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (true) {
+            check(deadline, cancelled);
+            try { publisher.publish(stage, destination); return; }
+            catch (java.nio.file.AccessDeniedException denied) {
+                if (!platform.equals("windows-x64") || System.nanoTime() >= retryUntil) throw denied;
+                try { Thread.sleep(25); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); check(deadline, () -> true); }
+            }
         }
     }
 
@@ -500,7 +511,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
     }
 
     /**
-     * Waits at most 250 ms between lock attempts, respecting the shorter ten-second/caller deadline.
+     * Waits at most 250 ms between lock attempts, respecting the supplied caller or external-lock deadline.
      * @param deadline Lock acquisition deadline.
      * @param cancelled Attempt cancellation predicate.
      * @throws AuthenticationFailure If busy, cancelled, closed or interrupted.

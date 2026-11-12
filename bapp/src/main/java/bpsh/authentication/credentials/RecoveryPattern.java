@@ -1,9 +1,8 @@
 package bpsh.authentication.credentials;
 
 import bpsh.authentication.AuthenticationFailure;
+import bpsh.pattern.BoundedRegex;
 import com.google.re2j.Pattern;
-import com.google.re2j.PatternSyntaxException;
-import java.nio.charset.StandardCharsets;
 
 /** Bounded RE2 session-detection grammar, independent of HTTP callbacks and recovery state. */
 public final class RecoveryPattern {
@@ -15,15 +14,15 @@ public final class RecoveryPattern {
      * @throws AuthenticationFailure If empty, oversized, unsupported or above 10,000 instructions.
      */
     public static Pattern compile(String source) throws AuthenticationFailure {
-        if (source == null || source.isBlank() || source.getBytes(StandardCharsets.UTF_8).length > 4096)
-            throw invalidPattern("The recovery expression must contain 1-4096 UTF-8 bytes.");
         try {
-            Pattern compiled = Pattern.compile(source, Pattern.DOTALL);
-            if (compiled.programSize() > 10_000) throw invalidPattern("The session-detection expression is too complex.");
-            return compiled;
-        } catch (PatternSyntaxException ex) {
-            throw invalidPattern("The recovery expression uses unsupported or invalid RE2 syntax"
-                    + (ex.getIndex() >= 0 ? " at position " + ex.getIndex() + "." : "."));
+            return BoundedRegex.compile(source, Pattern.DOTALL);
+        } catch (BoundedRegex.Failure ex) {
+            throw invalidPattern(switch (ex.reason()) {
+                case SOURCE -> "The recovery expression must contain 1-4096 UTF-8 bytes.";
+                case COMPLEXITY -> "The session-detection expression is too complex.";
+                case SYNTAX -> "The recovery expression uses unsupported or invalid RE2 syntax"
+                        + (ex.syntaxIndex() >= 0 ? " at position " + ex.syntaxIndex() + "." : ".");
+            });
         }
     }
     /**

@@ -16,7 +16,8 @@ class StepActionHelpTest {
             list.setSize(250, 500); list.setSelectedIndex(0);
             int index = AuthStep.Type.MAIN_FRAME.ordinal();
             StepActionHelp.hover(list, new Point(20, index * 24 + 8));
-            assertEquals(StepActionHelp.tooltip(StepActionHelp.text(AuthStep.Type.MAIN_FRAME)), list.getToolTipText());
+            assertEquals(UiTooltips.lines(StepActionHelp.text(AuthStep.Type.MAIN_FRAME), 80), list.getToolTipText());
+            assertFalse(list.getToolTipText().startsWith("<html>"));
             assertEquals(0, list.getSelectedIndex());
             StepActionHelp.hover(list, new Point(20, 499)); assertNull(list.getToolTipText());
         });

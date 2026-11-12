@@ -20,6 +20,7 @@ import javax.net.ssl.*;
 public final class JourneyTlsContexts {
     private final JourneyDefinition.Mtls configuration;
     private final SSLContext ordinary, selected;
+    private final Pkcs11IdentityManager.Selected identity;
     private final AtomicReference<AuthenticationFailure> failures = new AtomicReference<>();
     public JourneyTlsContexts(JourneyDefinition.Mtls configuration, Pkcs11IdentityManager.Selected identity) throws AuthenticationFailure {
         this(configuration,identity,false);
@@ -27,6 +28,7 @@ public final class JourneyTlsContexts {
     /** Explicit browser-only consent; mTLS always validates destination chain and hostname. */
     public JourneyTlsContexts(JourneyDefinition.Mtls configuration, Pkcs11IdentityManager.Selected identity, boolean browserBypass) throws AuthenticationFailure {
         this.configuration = configuration;
+        this.identity = identity;
         try {
             var roots = browserBypass && configuration == null ? new TrustManager[]{new X509TrustManager() {
                 @Override public void checkClientTrusted(X509Certificate[] chain,String auth) throws CertificateException {throw new CertificateException("No client trust.");}
@@ -43,12 +45,15 @@ public final class JourneyTlsContexts {
         return configuration != null && configuration.origins().contains(JourneyOrigins.authenticationOrigin(uri)) ? selected : ordinary;
     }
     public AuthenticationFailure failure() { return failures.get(); }
+    /** A replaced native helper cannot be reused through an otherwise idle cached TLS context. */
+    public boolean usable() { return identity == null || identity.usable(); }
 
     /** Classifies structured destination TLS failures without displaying peer-controlled exception text. */
     public static AuthenticationFailure destinationFailure(Throwable cause, boolean clientCertificate) {
         boolean handshake=false;
         var seen=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable,Boolean>());
         for(int depth=0;cause!=null && depth<16 && seen.add(cause);depth++,cause=cause.getCause()) {
+            if (cause instanceof AuthenticationFailure safe && (safe.phase() == AuthenticationFailure.Phase.PROVIDER || safe.phase() == AuthenticationFailure.Phase.PIN)) return safe;
             if(cause instanceof SSLPeerUnverifiedException)return problem(AuthenticationFailure.Cause.TRUST,
                     "The login server's certificate does not match its destination.","Review the Login URL and the server certificate.").atInput(AuthenticationFailure.Input.LOGIN_URL);
             if(cause instanceof CertificateException)return problem(AuthenticationFailure.Cause.TRUST,

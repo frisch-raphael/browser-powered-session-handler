@@ -47,7 +47,8 @@ public final class SessionRecovery implements AutoCloseable {
     private final AuthenticationCoordinator coordinator;
     private final LongSupplier nanos;
     private final BiConsumer<JourneyDefinition.Identity, String> guidance;
-    private final LinkedHashMap<Long, Attribution> records = new LinkedHashMap<>();
+    private final LinkedHashMap<RequestExchange, Attribution> records = new LinkedHashMap<>();
+    private int retainedRecords;
     private final LinkedHashMap<String, Pattern> patterns = new LinkedHashMap<>(16, 0.75f, true);
     private long observed;
     private boolean observedOnce;
@@ -62,22 +63,22 @@ public final class SessionRecovery implements AutoCloseable {
     /** Releases the template budget once, including rejection, cancellation and shutdown paths. */
     private final class Reservation {
         final int bytes; final java.util.concurrent.atomic.AtomicBoolean released = new java.util.concurrent.atomic.AtomicBoolean();
-        Reservation(int bytes) { this.bytes = bytes; retainedBytes += bytes; }
-        void release() { if (released.compareAndSet(false, true)) synchronized (SessionRecovery.this) { retainedBytes -= bytes; } }
+        Reservation(int bytes) { this.bytes = bytes; retainedBytes += bytes; retainedRecords++; }
+        void release() { if (released.compareAndSet(false, true)) synchronized (SessionRecovery.this) { retainedBytes -= bytes; retainedRecords--; } }
     }
     /** A single-use production replay plan with final generation/version checks immediately before sending. */
     public final class ReplayPlan implements AutoCloseable {
-        private final long originalId;
+        private final RequestExchange originalId;
         private final NativeTagResolver.Resolved resolved;
         private final List<CredentialUse> used;
         private final Reservation reservation;
         private final java.util.concurrent.atomic.AtomicBoolean claimed = new java.util.concurrent.atomic.AtomicBoolean(), released = new java.util.concurrent.atomic.AtomicBoolean();
-        private ReplayPlan(long originalId, NativeTagResolver.Resolved resolved, List<CredentialUse> rules, Reservation reservation) {
+        private ReplayPlan(RequestExchange originalId, NativeTagResolver.Resolved resolved, List<CredentialUse> rules, Reservation reservation) {
             this.originalId = originalId; this.resolved = resolved; this.reservation = reservation;
             var byIdentity = new java.util.HashMap<JourneyDefinition.Identity, JourneyDefinition.Recovery>(); rules.forEach(u -> byIdentity.put(u.identity(), u.rule()));
             this.used = resolved.uses().stream().map(u -> coordinator.provenance(new CredentialUse(u.identity(), u.version(), byIdentity.getOrDefault(u.identity(), u.rule())), true)).toList();
         }
-        public long originalId() { return originalId; }
+        public RequestExchange originalId() { return originalId; }
         public List<CredentialUse> uses() { return used; }
         public void validateForDelivery() throws AuthenticationFailure {
             if (closed || released.get()) throw new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.STALE, "This recovery replay is no longer available.");
@@ -93,12 +94,12 @@ public final class SessionRecovery implements AutoCloseable {
     }
     /** Owns only this original's waits; cancellation never cancels another original's shared reauthentication. */
     private final class Pending implements AutoCloseable {
-        final long originalId; final Attribution source;
+        final RequestExchange originalId; final Attribution source;
         final java.util.concurrent.CompletableFuture<ReplayPlan> future = new java.util.concurrent.CompletableFuture<>();
         volatile AuthenticationCoordinator.Ticket ticket;
         volatile NativeTagResolver.Operation operation;
         final java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean();
-        Pending(long originalId, Attribution source) {
+        Pending(RequestExchange originalId, Attribution source) {
             this.originalId = originalId; this.source = source;
             future.whenComplete((value, error) -> { if (future.isCancelled()) close(); });
         }
@@ -166,15 +167,30 @@ public final class SessionRecovery implements AutoCloseable {
 
     /**
      * Records the exact used generations and versions only after the whole request is committed.
-     * @param requestId Global HTTP message ID.
+     * @param requestId Callback-family-qualified message ID.
      * @param used Distinct journeys actually inserted; no credential strings.
      * @param internal Whether the guard classifies this as owned authentication traffic.
      */
-    public synchronized void record(long requestId, Collection<CredentialUse> used, boolean internal) { record(requestId, used, internal, null); }
+    public synchronized void record(RequestExchange requestId, Collection<CredentialUse> used, boolean internal) { record(requestId, used, internal, null); }
+    /** Checks retention admission before invoking a supplier that copies the original request. */
+    public synchronized void recordLazy(RequestExchange requestId, Collection<CredentialUse> used, int size, Supplier<NativeTagResolver.ReplayTemplate> template) {
+        prune();
+        boolean recoverable = used.stream().anyMatch(use -> use.rule().enabled());
+        makeRoom();
+        if (!closed && retainedRecords < MAX_RECORDS && recoverable && size >= 0 && size <= NativeTagParser.MAX_OUTPUT_BYTES && size <= MAX_RETAINED_BYTES - retainedBytes)
+            record(requestId, used, false, template.get());
+        else {
+            record(requestId, used, false);
+            if (recoverable && !closed && !used.isEmpty()) try { guidance.accept(used.iterator().next().identity(),
+                    "The recovery replay template could not be retained within the request-memory limit."); } catch (RuntimeException ignored) { /* Keep provenance even if diagnostics fail. */ }
+        }
+    }
     /** Retains a bounded pre-injection template only after successful request commit. */
-    public synchronized void record(long requestId, Collection<CredentialUse> used, boolean internal, NativeTagResolver.ReplayTemplate template) {
+    public synchronized void record(RequestExchange requestId, Collection<CredentialUse> used, boolean internal, NativeTagResolver.ReplayTemplate template) {
         prune(); var previous = records.remove(requestId); if (previous != null) previous.reservation().release();
         if (closed || internal || used.isEmpty()) return;
+        makeRoom();
+        if (retainedRecords >= MAX_RECORDS) return;
         int size = template == null ? 0 : template.size();
         if (size > NativeTagParser.MAX_OUTPUT_BYTES || retainedBytes + size > MAX_RETAINED_BYTES) {
             template = null; size = 0;
@@ -182,11 +198,18 @@ public final class SessionRecovery implements AutoCloseable {
         }
         var captured = used.stream().map(u -> coordinator.provenance(u, u.replay())).toList();
         records.put(requestId, new Attribution(observed, captured, template, new Reservation(size)));
-        while (records.size() > MAX_RECORDS) records.pollFirstEntry().getValue().reservation().release();
+    }
+
+    /** Makes one shared record slot available without revoking a replay already in use. */
+    private void makeRoom() {
+        while (retainedRecords >= MAX_RECORDS) {
+            if (!records.isEmpty()) records.pollFirstEntry().getValue().reservation().release();
+            else return;
+        }
     }
 
     /** Matches a response once, authorizes shared recovery, and never replays a replay. */
-    public Decision receivedPlan(long requestId, int status, Supplier<Response> details, boolean internal, boolean automaticEnabled) {
+    public Decision receivedPlan(RequestExchange requestId, int status, Supplier<Response> details, boolean internal, boolean automaticEnabled) {
         Attribution source;
         synchronized (this) { prune(); source = records.remove(requestId); }
         if (source == null) return new Decision(false, null);
@@ -237,7 +260,7 @@ public final class SessionRecovery implements AutoCloseable {
      * @param internal Validated internal responses never cause recovery.
      * @return Number of current versions invalidated; no replay of the application request occurs.
      */
-    public int received(long requestId, Response response, boolean internal) {
+    public int received(RequestExchange requestId, Response response, boolean internal) {
         return received(requestId, response.status(), () -> response, internal);
     }
 
@@ -249,7 +272,7 @@ public final class SessionRecovery implements AutoCloseable {
      * @param internal Whether the traffic guard established owned authentication provenance.
      * @return Number of exact used versions invalidated, leaving the response unchanged.
      */
-    public int received(long requestId, int status, Supplier<Response> details, boolean internal) {
+    public int received(RequestExchange requestId, int status, Supplier<Response> details, boolean internal) {
         Attribution attribution;
         synchronized (this) { prune(); attribution = records.remove(requestId); if (closed || internal || attribution == null) { if (attribution != null) attribution.reservation().release(); return 0; } }
         int invalidated = 0;
@@ -358,6 +381,7 @@ public final class SessionRecovery implements AutoCloseable {
         List<Pending> active; List<ReplayPlan> issued;
         synchronized (this) {
             closed = true; records.values().forEach(a -> a.reservation().release()); records.clear(); patterns.clear();
+
             active = List.copyOf(pending); issued = List.copyOf(plans);
         }
         active.forEach(Pending::close); issued.forEach(ReplayPlan::close);

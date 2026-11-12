@@ -117,6 +117,6 @@ final class JourneyEventLogPanel extends JPanel {
     /** Prevents Swing's HTML renderer from interpreting message text as markup. */
     private static final class PlainRenderer extends DefaultTableCellRenderer {
         /** @return Native themed cell containing literal text only. */
-        @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) { super.getTableCellRendererComponent(table, value, selected, focus, row, column); putClientProperty("html.disable", true); setText(value instanceof java.time.Instant time ? Model.TIME.format(time) : String.valueOf(value)); return this; }
+        @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) { putClientProperty("html.disable", true); super.getTableCellRendererComponent(table, value, selected, focus, row, column); setText(value instanceof java.time.Instant time ? Model.TIME.format(time) : String.valueOf(value)); return this; }
     }
 }

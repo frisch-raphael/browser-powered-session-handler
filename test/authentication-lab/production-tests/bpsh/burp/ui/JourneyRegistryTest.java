@@ -43,6 +43,36 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class JourneyRegistryTest {
+    @Test void hostExamplesUseTheNativeCodecWithBothAccountsProtocolsAndDeterministicHostCache() throws Exception {
+        var target=new bpsh.support.ProductionLabAdapter.LoginTarget("BROW.basic.json",7,
+                URI.create("http://127.0.0.1:43123"),URI.create("http://127.0.0.1:43124"));
+        var definitions=new ArrayList<JourneyDefinition>();
+        for(String suffix:List.of("a","b")) {
+            String account=suffix.equals("a")?"user":"user2";
+            var built=bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,account,"host_"+suffix);
+            assertEquals("generation=7&bpsh_host_journey=host_"+suffix,built.journey().authenticationUrl().getRawQuery());
+            assertEquals(List.of("bearer","first"),((JourneyDefinition.CombinedExtraction)built.journey().extraction()).tokens().stream().map(JourneyDefinition.NamedExtraction::name).toList());
+            assertTrue(built.journey().steps().stream().anyMatch(step->step.type()==AuthStep.Type.INPUT&&account.equals(step.value())));
+            assertTrue(built.journey().steps().stream().anyMatch(step->step.id().equals(built.secureInput())&&step.type()==AuthStep.Type.SECURE_INPUT&&step.value()==null));
+            definitions.add(built.journey());
+            for(var protocol:bpsh.journey.HttpAuthentication.Protocol.values()) {
+                var definition=bpsh.support.ProductionLabAdapter.hostHttpDefinition(URI.create("http://127.0.0.1:43125/whoami"),protocol,"user-"+suffix,"host_"+protocol.name().toLowerCase(java.util.Locale.ROOT)+"_"+suffix);
+                assertEquals(protocol,definition.httpAuthentication().protocol());assertEquals("user-"+suffix,definition.httpAuthentication().username());
+                assertNull(definition.extraction());definitions.add(definition);
+            }
+        }
+        assertEquals("generation=7",bpsh.support.ProductionLabAdapter.loginDefinition(target,List.of("B","C1"),"user","ordinary").journey().authenticationUrl().getRawQuery());
+        assertEquals("generation=7&bpsh_host_journey=host_failure_a",bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,"user","host_failure_a").journey().authenticationUrl().getRawQuery());
+        assertThrows(IllegalArgumentException.class,()->bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,"user","PRIVATE_SENTINEL"));
+        assertEquals(8,definitions.size());assertEquals(8,definitions.stream().map(JourneyDefinition::alias).distinct().count());
+        for(var definition:definitions) {
+            assertFalse(definition.rememberSecrets());assertEquals(new JourneyDefinition.Cache(3500,10),definition.cache());
+            String json=bpsh.support.ProductionLabAdapter.export(definition);
+            try(var parsed=JourneyJson.read(json,JourneyDocument.DocumentKind.EXPORT)) {
+                assertEquals(definition,parsed.journeys().getFirst());assertTrue(parsed.secrets().isEmpty());
+            }
+        }
+    }
     public static final UUID JOURNEY = UUID.fromString("22222222-2222-4222-8222-222222222222");
     public static final UUID STEP = UUID.fromString("33333333-3333-4333-8333-333333333333");
     public static final ObjectMapper JSON = new ObjectMapper();
@@ -83,7 +113,7 @@ public class JourneyRegistryTest {
                 assertEquals(30_000, j.browser().navigationTimeoutMs()); assertEquals(3000, j.browser().tokenWaitTimeoutMs());
                 assertNull(j.mtls());
                 if (kind == JourneyDocument.DocumentKind.PROJECT) {
-                    assertNull(d.controls().maxWaitingRequestsGlobal()); assertNull(d.controls().maxWaitingRequestsPerJourney());
+                    assertEquals(64,d.controls().maxWaitingRequestsGlobal()); assertEquals(16,d.controls().maxWaitingRequestsPerJourney());
                     assertEquals(RequestSettings.Controls.defaults(), d.controls());
                 } else assertNull(d.controls());
             }
@@ -154,7 +184,7 @@ public class JourneyRegistryTest {
     public @Test void strictParsingRejectsDuplicateUnknownVersionTypeAndWrongKind() throws Exception {
         String json = fixture(JourneyDocument.DocumentKind.PROJECT, false, false);
         List<String> invalid = List.of(json.replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"schemaVersion\":1"),
-                json + " {}", edit(json, "", "DO_NOT_LEAK", "DO_NOT_LEAK"), edit(json, "", "schemaVersion", 2),
+                json + " {}", edit(json, "", "DO_NOT_LEAK", "DO_NOT_LEAK"), edit(json, "", "schemaVersion", 3),
                 edit(json, "", "schemaVersion", "1"), edit(json, "/controls", "enabled", 1),
                 edit(json, "/journeys/0", "rememberSecrets", null), edit(json, "", "revision", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"),
                 edit(json, "/journeys/0/cache", "pattern", "DO_NOT_LEAK"));
@@ -293,9 +323,11 @@ public class JourneyRegistryTest {
         assertThrows(ConfigurationException.class, () -> JourneyJson.read(badTime, JourneyDocument.DocumentKind.PROJECT));
     }
     public @Test void rejectsUnsupportedOrExcessiveRegexWithSafeErrors() throws Exception {
-        String base = fixture(JourneyDocument.DocumentKind.PROJECT, false, false);
-        for (String pattern : List.of("(?=secret)", "(secret)\\1", "x".repeat(4097), "Ã©".repeat(2049), "(abcdefghijk){1000}", "[")) {
-            String bad = edit(base, "/controls", "rules", List.of(Map.of("journey", Map.of("scope", "project", "id", JOURNEY.toString()), "urlMode", "all_requests", "recovery", Map.of("mode", "regex", "pattern", pattern))));
+        String base = edit(fixture(JourneyDocument.DocumentKind.PROJECT, false, false), "/controls", "rulesVersion", 1);
+        for (String pattern : List.of("(?=secret)", "(secret)\\1", "x".repeat(4097), "\u00e9".repeat(2049), "(abcdefghijk){1000}", "[")) {
+            var rule = new java.util.LinkedHashMap<String,Object>(Map.of("enabled",true,"journey", Map.of("scope", "project", "id", JOURNEY.toString()), "url", Map.of("type","all_requests"), "recovery", Map.of("mode", "regex", "pattern", pattern)));
+            rule.put("proxyPort",null);
+            String bad = edit(base, "/controls", "rules", List.of(rule));
             var ex = assertThrows(ConfigurationException.class, () -> JourneyJson.read(bad, JourneyDocument.DocumentKind.PROJECT));
             assertFalse(ex.getMessage().contains("secret")); assertNull(ex.getCause());
         }
@@ -521,7 +553,7 @@ public class JourneyRegistryTest {
             public final UserLibraryStore library = new UserLibraryStore(root.resolve("library.json")); public final Pkcs11IdentityManager identities;
             public final java.util.List<String> diagnosticMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
             public final Diagnostics diagnostics = new Diagnostics(diagnosticMessages::add); public final UiController ui;
-            public final java.util.concurrent.atomic.AtomicReference<RequestSettings.Controls> controls = new java.util.concurrent.atomic.AtomicReference<>(RequestSettings.Controls.defaults());
+            public final bpsh.burp.http.RequestControlState controls = new bpsh.burp.http.RequestControlState(RequestSettings.Controls.defaults());
             public java.awt.Component component;
             /** @param stored Optional native project JSON; old data is also seeded to verify preservation. */
             public Editor(String stored) throws Exception { this(stored, RequestSettings.Controls.defaults(), null, null); }
@@ -533,17 +565,23 @@ public class JourneyRegistryTest {
             public Editor(String stored, RequestSettings.Controls selectedControls, AuthenticationCoordinator.Attempt attempt, Pkcs11IdentityManager.NativeAccess nativeAccess) throws Exception {
                 this(stored, selectedControls, attempt, nativeAccess, null);
             }
+            public Editor(String stored, AuthenticationCoordinator.Attempt attempt, Pkcs11IdentityManager.NativeAccess nativeAccess, bpsh.journey.JourneyRecording recording, bpsh.burp.http.ProxyListeners listenerReader) throws Exception {
+                this(stored,RequestSettings.Controls.defaults(),attempt,nativeAccess,recording,listenerReader);
+            }
             public Editor(String stored, RequestSettings.Controls selectedControls, AuthenticationCoordinator.Attempt attempt, Pkcs11IdentityManager.NativeAccess nativeAccess, bpsh.journey.JourneyRecording recording) throws Exception {
+                this(stored,selectedControls,attempt,nativeAccess,recording,null);
+            }
+            public Editor(String stored, RequestSettings.Controls selectedControls, AuthenticationCoordinator.Attempt attempt, Pkcs11IdentityManager.NativeAccess nativeAccess, bpsh.journey.JourneyRecording recording, bpsh.burp.http.ProxyListeners listenerReader) throws Exception {
                 identities = nativeAccess == null ? new Pkcs11IdentityManager() : new Pkcs11IdentityManager(nativeAccess);
                 coordinator = new AuthenticationCoordinator(registry, selectedControls, clock,
                         attempt == null ? (entry, recovery, deadline, cancel) -> { throw new AssertionError("Opening/saving an editor must not log in"); } : attempt, entry -> null);
-                controls.set(selectedControls);
+                controls.publish(controls.prepare(selectedControls));
                 if (stored != null) disk.put(ProjectStore.NATIVE_PROJECT_KEY, stored); disk.put("bpsh_config", "untouched old data"); disk.put("bpsh_project_v1", "untouched preceding native format");
                 var storage = (PersistedObject) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{PersistedObject.class}, (p, method, args) -> {
                     assertFalse(javax.swing.SwingUtilities.isEventDispatchThread(), "project persistence must stay off the EDT");
                     if (method.getName().equals("getString")) return disk.get(args[0]); if (method.getName().equals("setString")) { if (failWrites.get()) throw new IllegalStateException("Synthetic storage write failure."); disk.put((String) args[0], (String) args[1]); return null; } return null;
                 });
-                ui = new UiController(null, new bpsh.journey.editing.JourneyStorage(new ProjectStore(storage), library), secrets, registry, coordinator, identities, controls, diagnostics, recording);
+                ui = new UiController(null, new bpsh.journey.editing.JourneyStorage(new ProjectStore(storage), library), secrets, registry, coordinator, identities, controls, diagnostics, recording, listenerReader);
                 edt(() -> component = ui.buildUi()); ui.start(); await(() -> { try { return (boolean) member(ui, "initialized"); } catch (Exception e) { return false; } }); edt(() -> {});
             }
             /** @return Our own named text fields, never installed-app automation. */
@@ -754,18 +792,18 @@ public class JourneyRegistryTest {
         public @Test void applyingOneRequestSettingsCategoryDoesNotApplyDraftChangesFromTheOther() throws Exception {
             try (var editor = new Editor(fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
                 edt(() -> { editor.fields().get("control.request").setText("invalid pending budget"); editor.checks().get("enabled").setSelected(true); call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, false); });
-                await(() -> editor.controls.get().enabled()); assertEquals(60_000, editor.controls.get().requestWaitTimeoutMs());
+                await(() -> editor.controls.snapshot().controls().enabled()); assertEquals(60_000, editor.controls.snapshot().controls().requestWaitTimeoutMs());
                 edt(() -> { editor.checks().get("enabled").setSelected(false); editor.fields().get("control.request").setText("120"); call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true); });
-                await(() -> editor.controls.get().requestWaitTimeoutMs() == 120000); assertTrue(editor.controls.get().enabled());
+                await(() -> editor.controls.snapshot().controls().requestWaitTimeoutMs() == 120000); assertTrue(editor.controls.snapshot().controls().enabled());
             }
         }
         public @Test void waitingSettingsSaveValidSecondsAutomaticallyAndKeepLastGoodValuesOnInvalidInput() throws Exception {
             try (var editor = new Editor(null)) {
                 edt(() -> editor.fields().get("control.request").setText("61.5"));
-                await(() -> editor.controls.get().requestWaitTimeoutMs() == 61_500);
+                await(() -> editor.controls.snapshot().controls().requestWaitTimeoutMs() == 61_500);
                 edt(() -> { editor.fields().get("control.request").setText("invalid"); ((javax.swing.Timer) member(editor.ui, "settingsDebounce")).getActionListeners()[0].actionPerformed(null); });
                 await(() -> { try { return !editor.status().contains("Saving settings"); } catch (Exception ex) { return false; } });
-                assertEquals(61_500, editor.controls.get().requestWaitTimeoutMs());
+                assertEquals(61_500, editor.controls.snapshot().controls().requestWaitTimeoutMs());
                 editor.ui.shutdown(); edt(() -> assertFalse(((javax.swing.Timer) member(editor.ui, "settingsDebounce")).isRunning()));
             }
         }
@@ -776,18 +814,18 @@ public class JourneyRegistryTest {
                     editor.checks().get("enabled").doClick();
                     var rules = (AutomaticRulesPanel) member(editor.ui, "automaticRules");
                     ((javax.swing.JButton) member(rules, "add")).doClick();
-                    rules.urlMode.setSelectedItem(RequestSettings.UrlMode.SINGLE_URL);
+                    rules.urlMode.setSelectedItem(AutomaticRulesPanel.Mode.SINGLE_URL);
                     ((AutomaticRulesPanel) member(editor.ui, "automaticRules")).prefix.setText("https://app.example/protected");
                     Map<RequestSettings.Tool, javax.swing.JCheckBox> tools = member(editor.ui, "tools"); tools.values().iterator().next().doClick();
                 });
-                await(() -> !editor.controls.get().rules().isEmpty() && URI.create("https://app.example/protected").equals(editor.controls.get().rules().getFirst().urlPrefix()));
-                var applied = editor.controls.get(); assertTrue(applied.enabled()); assertEquals(key.journeyId(), applied.rules().getFirst().journey().id());
+                await(() -> !editor.controls.snapshot().controls().rules().isEmpty() && new RequestSettings.Prefix(URI.create("https://app.example/protected")).equals(editor.controls.snapshot().controls().rules().getFirst().url()));
+                var applied = editor.controls.snapshot().controls(); assertTrue(applied.enabled()); assertEquals(key.journeyId(), applied.rules().getFirst().journey().id());
                 assertEquals(RequestSettings.Controls.defaults().tools().size() - 1, applied.tools().size()); assertEquals(60_000, applied.requestWaitTimeoutMs());
                 edt(() -> ((AutomaticRulesPanel) member(editor.ui, "automaticRules")).prefix.setText("not a url"));
                 await(() -> { try { return editor.diagnosticMessages.stream().anyMatch(m -> m.contains("URL prefix")); } catch (Exception ex) { return false; } });
-                assertEquals(applied, editor.controls.get());
+                assertEquals(applied, editor.controls.snapshot().controls());
                 edt(() -> editor.checks().get("enabled").doClick());
-                await(() -> !editor.controls.get().enabled()); assertEquals(applied.rules(), editor.controls.get().rules());
+                await(() -> !editor.controls.snapshot().controls().enabled()); assertEquals(applied.rules(), editor.controls.snapshot().controls().rules());
                 try (var saved = JourneyJson.read(editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY), JourneyDocument.DocumentKind.PROJECT)) { assertFalse(saved.controls().enabled()); assertEquals(60_000, saved.controls().requestWaitTimeoutMs()); }
                 edt(() -> {
                     editor.checks().get("enabled").setSelected(true); call(editor.ui, "refreshModes", new Class<?>[]{});
@@ -805,8 +843,8 @@ public class JourneyRegistryTest {
                 edt(() -> {
                     var rules = (AutomaticRulesPanel) member(editor.ui, "automaticRules");
                     ((javax.swing.JButton) member(rules, "add")).doClick();
-                    rules.urlMode.setSelectedItem(RequestSettings.UrlMode.SINGLE_URL); rules.prefix.setText("https://app.example/"); assertTrue(rules.prefix.isVisible());
-                    rules.urlMode.setSelectedItem(RequestSettings.UrlMode.ALL_REQUESTS); assertFalse(rules.prefix.isVisible());
+                    rules.urlMode.setSelectedItem(AutomaticRulesPanel.Mode.SINGLE_URL); rules.prefix.setText("https://app.example/"); assertTrue(rules.prefix.isVisible());
+                    rules.urlMode.setSelectedItem(AutomaticRulesPanel.Mode.ALL_REQUESTS); assertFalse(rules.prefix.isVisible());
                     assertFalse(((javax.swing.JLabel) rules.prefix.getClientProperty("ruleLabel")).isVisible());
                     rules.recoveryMode.setSelectedItem(JourneyDefinition.RecoveryMode.BOTH);
                     assertTrue(rules.pattern.isVisible()); assertTrue(rules.failureStatus.isVisible());

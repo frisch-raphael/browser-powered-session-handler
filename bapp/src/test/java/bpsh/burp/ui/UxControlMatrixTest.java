@@ -184,8 +184,8 @@ class UxControlMatrixTest {
     }
     /** @return Every automatic HTTP-tool selection, including none and all. */
     static Stream<Arguments> toolSelections() { return java.util.stream.IntStream.range(0, 32).mapToObj(Arguments::of); }
-    /** @return All independent Unlimited combinations. */
-    static Stream<Arguments> unlimitedCombinations() { return Stream.of(false, true).flatMap(global -> Stream.of(false, true).map(per -> Arguments.of(global, per))); }
+
+
     /** @return All recovery-mode transitions, including reselection. */
     static Stream<Arguments> recoveryModes() { return Stream.of(JourneyDefinition.RecoveryMode.values()).flatMap(a -> Stream.of(JourneyDefinition.RecoveryMode.values()).map(b -> Arguments.of(a, b))); }
     /** @return Setup input boundaries and URL-only proxy shapes, including redacted embedded credentials. */
@@ -230,27 +230,24 @@ class UxControlMatrixTest {
                 }
                 h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, false);
             });
-            h.await(() -> { try { return editor.disk.containsKey(ProjectStore.NATIVE_PROJECT_KEY) && editor.controls.get().enabled() && editor.controls.get().tools().equals(expected); } catch (Exception ex) { return false; } });
-            assertEquals(expected, editor.controls.get().tools()); assertEquals(60_000, editor.controls.get().requestWaitTimeoutMs());
+            h.await(() -> { try { return editor.disk.containsKey(ProjectStore.NATIVE_PROJECT_KEY) && editor.controls.snapshot().controls().enabled() && editor.controls.snapshot().controls().tools().equals(expected); } catch (Exception ex) { return false; } });
+            assertEquals(expected, editor.controls.snapshot().controls().tools()); assertEquals(60_000, editor.controls.snapshot().controls().requestWaitTimeoutMs());
         }
     }
 
-    @ParameterizedTest @MethodSource("unlimitedCombinations")
-    void independentLimitModesSaveAndRemoveObsoleteCounts(boolean global, boolean per) throws Exception {
+    @Test void finiteLimitsSaveAndRemainVisible() throws Exception {
         var h = harness(); try (var editor = h.new Editor(null)) {
             h.edt(() -> {
-                if (!global) editor.checks().get("globalUnlimited").doClick();
-                if (!per) editor.checks().get("perUnlimited").doClick();
-                if (!global) editor.fields().get("control.global").setText("5");
-                if (!per) editor.fields().get("control.per").setText("2");
+                assertEquals("64", editor.fields().get("control.global").getText());
+                assertEquals("16", editor.fields().get("control.per").getText());
+                editor.fields().get("control.global").setText("5");
+                editor.fields().get("control.per").setText("2");
                 h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true);
-                assertEquals(!global, editor.fields().get("control.global").isVisible()); assertEquals(!per, editor.fields().get("control.per").isVisible());
             });
-            h.await(() -> { try { return editor.disk.containsKey(ProjectStore.NATIVE_PROJECT_KEY) && java.util.Objects.equals(global ? null : 5, editor.controls.get().maxWaitingRequestsGlobal()) && java.util.Objects.equals(per ? null : 2, editor.controls.get().maxWaitingRequestsPerJourney()); } catch (Exception ex) { return false; } });
-            assertEquals(global ? null : Integer.valueOf(5), editor.controls.get().maxWaitingRequestsGlobal()); assertEquals(per ? null : Integer.valueOf(2), editor.controls.get().maxWaitingRequestsPerJourney());
+            h.await(() -> editor.controls.snapshot().controls().maxWaitingRequestsGlobal() == 5 && editor.controls.snapshot().controls().maxWaitingRequestsPerJourney() == 2);
             h.edt(() -> {
-                if (!global) editor.checks().get("globalUnlimited").doClick(); if (!per) editor.checks().get("perUnlimited").doClick();
-                assertEquals("", editor.fields().get("control.global").getText()); assertEquals("", editor.fields().get("control.per").getText());
+                assertTrue(editor.fields().get("control.global").isVisible());
+                assertTrue(editor.fields().get("control.per").isVisible());
             });
         }
     }
@@ -259,7 +256,7 @@ class UxControlMatrixTest {
     void recoveryTransitionsShowOnlyTheirInputsAndKeepUnchangedModeValues(JourneyDefinition.RecoveryMode from, JourneyDefinition.RecoveryMode to) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var panel = new AutomaticRulesPanel(); var key = new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT, UUID.randomUUID());
-            panel.setRules(List.of(new RequestSettings.AutomaticRule(true, key, RequestSettings.UrlMode.BURP_SCOPE, null, new JourneyDefinition.Recovery(true, from, from == JourneyDefinition.RecoveryMode.REGEX ? null : 403, from == JourneyDefinition.RecoveryMode.STATUS_CODE ? null : "expired"))));
+            panel.setRules(List.of(new RequestSettings.AutomaticRule(true, key, new RequestSettings.BurpScope(), null, new JourneyDefinition.Recovery(true, from, from == JourneyDefinition.RecoveryMode.REGEX ? null : 403, from == JourneyDefinition.RecoveryMode.STATUS_CODE ? null : "expired"))));
             panel.recoveryMode.setSelectedItem(to);
             assertEquals(to != JourneyDefinition.RecoveryMode.REGEX, panel.failureStatus.isVisible());
             assertEquals(to != JourneyDefinition.RecoveryMode.STATUS_CODE, panel.pattern.isVisible());
@@ -307,16 +304,16 @@ class UxControlMatrixTest {
                 editor.fields().get("control.request").setText("1"); editor.fields().get("control.attempt").setText("1"); editor.fields().get("control.cycle").setText("1800");
                 h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true);
             });
-            h.await(() -> editor.controls.get().requestWaitTimeoutMs() == 1000 && editor.controls.get().cycleTimeoutMs() == 1800000);
-            var prior = editor.controls.get();
+            h.await(() -> editor.controls.snapshot().controls().requestWaitTimeoutMs() == 1000 && editor.controls.snapshot().controls().cycleTimeoutMs() == 1800000);
+            var prior = editor.controls.snapshot().controls();
             h.edt(() -> { editor.fields().get("control." + key).setText(value); h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true); });
             if (valid) {
                 int expected = new java.math.BigDecimal(value).movePointRight(3).intValueExact();
-                h.await(() -> expected == switch (key) { case "request" -> editor.controls.get().requestWaitTimeoutMs(); case "attempt" -> editor.controls.get().attemptTimeoutMs(); default -> editor.controls.get().cycleTimeoutMs(); });
+                h.await(() -> expected == switch (key) { case "request" -> editor.controls.snapshot().controls().requestWaitTimeoutMs(); case "attempt" -> editor.controls.snapshot().controls().attemptTimeoutMs(); default -> editor.controls.snapshot().controls().cycleTimeoutMs(); });
             } else {
                 var feedbackText = new java.util.concurrent.atomic.AtomicReference<String>("");
                 h.await(() -> { try { h.edt(() -> feedbackText.set(((JTextArea) editor.fields().get("control." + key).getClientProperty("validationMessage")).getText())); return !feedbackText.get().isBlank(); } catch (Exception error) { return false; } });
-                assertEquals(prior, editor.controls.get()); String feedback = feedbackText.get();
+                assertEquals(prior, editor.controls.snapshot().controls()); String feedback = feedbackText.get();
                 assertTrue(feedback.startsWith(switch (key) { case "request" -> "Request wait"; case "attempt" -> "Login attempt timeout"; default -> "Total login timeout"; }), feedback);
                 assertFalse(feedback.contains("TimeoutMs")); assertFalse(feedback.contains("control."));
             }

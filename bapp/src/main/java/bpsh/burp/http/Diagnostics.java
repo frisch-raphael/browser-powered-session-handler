@@ -12,8 +12,8 @@ import java.util.function.LongSupplier;
 public final class Diagnostics implements AutoCloseable {
     private static final long WINDOW = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
     private static final int MAX_KEYS = 1000;
-    /** Safe per-request annotation; tagged-stop annotations remain available even when logs are suppressed. */
-    public record Notice(long requestId, boolean requestStopped, String text) {}
+    /** Safe per-request annotation; drop-request annotations remain available even when logs are suppressed. */
+    public record Notice(RequestExchange requestId, boolean dropRequested, String text) {}
     /** Distinguishes genuinely different failures without storing requests, tokens or browser objects. */
     private record Key(String alias, AuthenticationFailure.Phase phase, AuthenticationFailure.Cause cause, String problem, String recovery, String channel) {}
     /** Counts suppressed repeats until the next eligible warning. */
@@ -53,10 +53,12 @@ public final class Diagnostics implements AutoCloseable {
      * @param tagged Whether the whole request was stopped by explicit-tag policy.
      * @return Per-request annotation regardless of rate limiting.
      */
-    public Notice request(long requestId, String alias, AuthenticationFailure failure, boolean tagged) {
-        String name = safeAlias(alias), outcome = tagged ? "Request was not sent." : "Authentication was not applied; the unchanged request was sent.";
+    public Notice request(RequestExchange requestId, String alias, AuthenticationFailure failure, boolean tagged) {
+        String name = safeAlias(alias), outcome = tagged
+                ? "Burp was asked to drop this request."
+                : "BPSH left the request unchanged.";
         String text = outcome + " " + detail(name, failure);
-        emit(new Key(name, failure.phase(), failure.reason(), failure.problem(), failure.recovery(), tagged ? "stopped" : "ordinary"), "Request " + requestId + ": " + text);
+        emit(new Key(name, failure.phase(), failure.reason(), failure.problem(), failure.recovery(), tagged ? "stopped" : "ordinary"), requestId + ": " + text);
         return new Notice(requestId, tagged, text);
     }
 
@@ -97,18 +99,19 @@ public final class Diagnostics implements AutoCloseable {
      * @param failure Known safe native result.
      * @return Actionable common detail for UI/background and request messages.
      */
-    private static String detail(String alias, AuthenticationFailure failure) {
-        return "Journey " + alias + ": " + failure.getMessage();
+    static String detail(String alias, AuthenticationFailure failure) {
+        String name = safeAlias(alias);
+        return (name == null ? "" : "Journey " + name + ": ") + failure.getMessage();
     }
 
     /**
      * Accepts only readable alias characters before a value can reach a log or annotation.
      * @param alias Caller-provided alias or null.
-     * @return Canonical safe alias or a fixed unresolved label.
+     * @return Canonical safe alias, or null when no valid alias is known.
      */
     private static String safeAlias(String alias) {
         try { return JourneyNames.validateAlias(alias).toLowerCase(Locale.ROOT); }
-        catch (RuntimeException ex) { return "(unresolved)"; }
+        catch (RuntimeException ex) { return null; }
     }
     /** Stops further log emissions and releases bounded repetition state. */
     @Override public synchronized void close() { closed = true; repetitions.clear(); }

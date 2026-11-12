@@ -13,6 +13,17 @@ public final class BrowserFailureClassifier {
     private static final String AMBIGUOUS_SELECTOR = "strict mode violation:";
     private BrowserFailureClassifier() {}
     /**
+     * Reports observed browser startup failure without guessing OS or sandbox configuration.
+     * @param error Vendor exception inspected only for its timeout type, never displayed or retained.
+     * @return Safe startup observation and explicit retry action.
+     */
+    static AuthenticationFailure launchFailure(RuntimeException error) {
+        return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
+                error instanceof TimeoutError ? AuthenticationFailure.Cause.TIMEOUT : AuthenticationFailure.Cause.UNKNOWN,
+                error instanceof TimeoutError ? "Chromium did not start within the browser startup timeout." : "Chromium could not start.",
+                "Open this journey and use Test login to try again.");
+    }
+    /**
      * Maps browser main-frame request-failure symbols only, never selector/exception prose.
      * @param symbol Playwright Request.failure observation.
      * @return Typed positive transport/trust observation, or null for an unmapped outcome.

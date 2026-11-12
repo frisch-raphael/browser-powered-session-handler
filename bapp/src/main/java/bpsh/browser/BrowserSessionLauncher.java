@@ -58,6 +58,8 @@ public final class BrowserSessionLauncher {
         final Browser browser;
         final JourneyDefinition.Identity identity;
         final long id = resourceIds.incrementAndGet();
+        private boolean closeObserved;
+        private final java.util.List<OwnedContext> contexts = new java.util.ArrayList<>();
         OwnedBrowser(Browser browser, JourneyDefinition.Identity identity) {
             this.browser = browser; this.identity = identity;
             observed(new Lifecycle(id, 0, identity, ResourceEvent.BROWSER_OPEN, false));
@@ -66,9 +68,11 @@ public final class BrowserSessionLauncher {
             try { browser.close(); }
             finally {
                 // Cancellation may have already terminated the owned driver before the close reply.
-                if (!browser.isConnected()) observed(new Lifecycle(id, 0, identity, ResourceEvent.BROWSER_CLOSED, false));
+                if (!browser.isConnected()) closed();
             }
         }
+        /** Emits completion once, including when the owned driver confirmed process exit before protocol disconnect. */
+        void closed() { if (!closeObserved) { closeObserved = true; contexts.forEach(OwnedContext::closed); observed(new Lifecycle(id, 0, identity, ResourceEvent.BROWSER_CLOSED, false)); } }
     }
 
     private final class OwnedContext implements AutoCloseable {
@@ -76,13 +80,17 @@ public final class BrowserSessionLauncher {
         final OwnedBrowser browser;
         final boolean bootstrap;
         final long id = resourceIds.incrementAndGet();
+        private boolean closeObserved;
         OwnedContext(BrowserContext context, OwnedBrowser browser, boolean bootstrap) {
             this.context = context; this.browser = browser; this.bootstrap = bootstrap;
+            browser.contexts.add(this);
             observed(new Lifecycle(id, browser.id, browser.identity, ResourceEvent.CONTEXT_OPEN, bootstrap));
         }
         @Override public void close() {
-            context.close(); observed(new Lifecycle(id, browser.id, browser.identity, ResourceEvent.CONTEXT_CLOSED, bootstrap));
+            context.close(); closed();
         }
+        /** A confirmed browser-process exit also closes any context whose protocol reply was lost. */
+        void closed() { if (!closeObserved) { closeObserved = true; observed(new Lifecycle(id, browser.id, browser.identity, ResourceEvent.CONTEXT_CLOSED, bootstrap)); } }
     }
 
     /** Owns every acquired resource until the creating worker closes the session. */
@@ -125,6 +133,8 @@ public final class BrowserSessionLauncher {
         @Override public void close() throws AuthenticationFailure {
             owner(); if (closed) return; closed = true;
             AuthenticationFailure failure = null;
+            AuthenticationFailure protocolFailure = null;
+            if (driver != null) driver.beginCleanup();
             for (AutoCloseable resource : new AutoCloseable[]{context, browser, driver, transport, trafficLease}) {
                 if (resource == null) continue;
                 try { resource.close(); }
@@ -132,9 +142,13 @@ public final class BrowserSessionLauncher {
                     AuthenticationFailure safe = error instanceof AuthenticationFailure classified ? classified
                             : new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
                                     "The browser session could not finish closing.");
-                    if (failure == null) failure = safe; else failure.addSuppressed(safe);
+                    if (resource == context || resource == browser) {
+                        if (protocolFailure == null) protocolFailure = safe; else protocolFailure.addSuppressed(safe);
+                    } else if (failure == null) failure = safe; else failure.addSuppressed(safe);
                 }
             }
+            if (browser != null && driver != null && driver.terminated()) browser.closed();
+            else if (protocolFailure != null) { if (failure == null) failure = protocolFailure; else failure.addSuppressed(protocolFailure); }
             if (failure != null) throw failure;
         }
     }
@@ -192,7 +206,7 @@ public final class BrowserSessionLauncher {
             BrowserRuntimeManager.observed(observer, AuthenticationStage.STARTING_DRIVER);
             session.driver = PlaywrightDriverAdapter.open(ready, deadline, cancelled);
             boolean headless = switch (visibility) { case CONFIGURED -> setup.browser().headless(); case HEADED -> false; case HEADLESS -> true; };
-            var options = new BrowserType.LaunchOptions().setExecutablePath(ready.browserExecutable()).setHeadless(headless)
+            var options = new BrowserType.LaunchOptions().setExecutablePath(ready.browserExecutable()).setHeadless(headless).setChromiumSandbox(true)
                     .setTimeout(AuthenticationFailure.remainingMs(setup.browser().navigationTimeoutMs(), deadline, cancelled));
             if (session.transport != null) options.setProxy(session.transport.browserProxy())
                     .setArgs(List.of("--ignore-certificate-errors-spki-list=" + session.transport.spkiSha256()));
@@ -236,8 +250,7 @@ public final class BrowserSessionLauncher {
         try { return driver.playwright().chromium().launch(options); }
         catch (RuntimeException error) {
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled);
-            throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.UNKNOWN,
-                    "Chromium could not start.", "Check the documented operating-system and browser-library prerequisites.");
+            throw BrowserFailureClassifier.launchFailure(error);
         }
     }
 

@@ -146,27 +146,35 @@ final class NativeDocumentCodec {
      * Validates project-only injection controls, deadlines and independent waiter limits.
      *
      * Request and attempt timeouts must each fit within the cycle budget. Missing/null limits mean
-     * Unlimited independently. Selected journey existence is resolved by the registry, not here.
+     * the finite defaults independently. Selected journey existence is resolved by the registry, not here.
      *
      * @param n Required project controls object; absent members use their defined defaults.
-     * @return Immutable controls with canonical enum choices and nullable unlimited limits.
+     * @return Immutable controls with canonical enum choices and finite limits.
      * @throws bpsh.journey.ConfigurationException If fields, tools, URL mode, deadlines or limits are invalid.
      */
     private static RequestSettings.Controls parseControls(JsonNode n) {
-        object(n, "controls", "requestPolicy", "enabled", "rules", "tools", "requestWaitTimeoutMs",
+        object(n, "controls", "requestPolicy", "enabled", "rules", "rulesVersion", "tools", "requestWaitTimeoutMs",
                 "attemptTimeoutMs", "cycleTimeoutMs", "maxWaitingRequestsGlobal", "maxWaitingRequestsPerJourney");
+        if (n.has("rules") != n.has("rulesVersion") || n.has("rulesVersion")
+                && (!n.get("rulesVersion").isIntegralNumber() || !n.get("rulesVersion").canConvertToInt() || n.get("rulesVersion").intValue() != 1))
+            throw invalid("controls.rulesVersion", "Unsupported Session handling storage format. Use a new Burp project");
         List<RequestSettings.AutomaticRule> rules = new ArrayList<>(); Set<RequestSettings.JourneySelection> identities = new HashSet<>();
         if (n.has("rules")) for (JsonNode rule : array(n.get("rules"), "controls.rules")) {
             String p = "controls.rules[" + rules.size() + "]";
             if (rules.size() == 64) throw invalid("controls.rules", "maximum count is 64");
-            object(rule, p, "enabled", "journey", "urlMode", "urlPrefix", "recovery");
+            object(rule, p, "enabled", "journey", "url", "proxyPort", "recovery");
+            for (String member : List.of("enabled", "journey", "url", "proxyPort", "recovery"))
+                if (!rule.has(member)) throw invalid(p + "." + member, "required member is missing");
+            if (!rule.get("enabled").isBoolean()) throw invalid(p + ".enabled", "requires a Boolean");
             JsonNode j = rule.get("journey"); object(j, p + ".journey", "scope", "id");
             var selection = new RequestSettings.JourneySelection(enumeration(text(j, "scope", p + ".journey"), JourneyDefinition.Scope.class, p + ".journey.scope"), uuid(j.get("id"), p + ".journey.id"));
             if (!identities.add(selection)) throw invalid(p + ".journey", "a journey may appear only once; edit its existing rule");
-            RequestSettings.UrlMode mode = enumeration(text(rule, "urlMode", p), RequestSettings.UrlMode.class, p + ".urlMode");
-            URI prefix = present(rule, "urlPrefix") ? httpUri(text(rule, "urlPrefix", p), p + ".urlPrefix") : null;
-            if ((mode == RequestSettings.UrlMode.SINGLE_URL) != (prefix != null)) throw invalid(p + ".urlPrefix", "required only for single_url mode");
-            rules.add(new RequestSettings.AutomaticRule(bool(rule, "enabled", true), selection, mode, prefix, parseRecovery(rule.get("recovery"), p + ".recovery")));
+            var url = parseRuleUrl(rule.get("url"), p + ".url");
+            JsonNode port = rule.get("proxyPort");
+            if (!port.isNull() && (!port.isIntegralNumber() || !port.canConvertToInt() || port.intValue() < 1 || port.intValue() > 65535))
+                throw invalid(p + ".proxyPort", "requires null or an integer from 1 through 65535");
+            rules.add(new RequestSettings.AutomaticRule(bool(rule, "enabled", true), selection, url,
+                    port.isNull() ? null : port.intValue(), parseRecovery(rule.get("recovery"), p + ".recovery")));
         }
         List<Tool> tools = RequestSettings.Controls.defaults().tools();
         if (n.has("tools")) {
@@ -185,6 +193,32 @@ final class NativeDocumentCodec {
         return new RequestSettings.Controls(bool(n, "enabled", false), rules, tools, request, attempt, cycle,
                 limit(n, "maxWaitingRequestsGlobal"), limit(n, "maxWaitingRequestsPerJourney"),
                 present(n, "requestPolicy") ? enumeration(text(n, "requestPolicy", "controls"), RequestSettings.RequestPolicy.class, "controls.requestPolicy") : RequestSettings.RequestPolicy.WAIT_FOR_LOGIN);
+    }
+
+    /** @param n Typed URL object. @param path Safe schema path. @return Validated URL restriction. */
+    private static RequestSettings.UrlCondition parseRuleUrl(JsonNode n, String path) {
+        object(n, path, "type", "value");
+        String type = text(n, "type", path);
+        if ((type.equals("burp_scope") || type.equals("all_requests")) && n.has("value"))
+            throw invalid(path + ".value", "forbidden for this URL mode");
+        return switch (type) {
+            case "burp_scope" -> new RequestSettings.BurpScope();
+            case "all_requests" -> new RequestSettings.AllRequests();
+            case "prefix" -> new RequestSettings.Prefix(httpUri(text(n, "value", path), path + ".value"));
+            case "regex" -> {
+                String source = text(n, "value", path);
+                try { bpsh.pattern.BoundedRegex.compile(source, 0); }
+                catch (bpsh.pattern.BoundedRegex.Failure failure) {
+                    throw invalid(path + ".value", switch (failure.reason()) {
+                        case SOURCE -> "requires 1-4096 UTF-8 bytes";
+                        case COMPLEXITY -> "URL expression is too complex";
+                        case SYNTAX -> "requires supported RE2 syntax" + (failure.syntaxIndex() < 0 ? "" : " at position " + failure.syntaxIndex());
+                    });
+                }
+                yield new RequestSettings.Regex(source);
+            }
+            default -> throw invalid(path + ".type", "unsupported URL condition");
+        };
     }
 
     /**
@@ -230,9 +264,17 @@ final class NativeDocumentCodec {
         root.putArray("retiredAliases"); // Retained schema field only; old reservations have no effect.
         if (d.kind() == DocumentKind.PROJECT) {
             if (d.controls() == null) throw invalid("controls", "project controls are required");
-            ObjectNode c = NATIVE.valueToTree(d.controls()); c.put("requestPolicy", d.controls().requestPolicy().name().toLowerCase(Locale.ROOT)); ArrayNode rules = c.putArray("rules");
+            ObjectNode c = NATIVE.valueToTree(d.controls()); c.put("requestPolicy", d.controls().requestPolicy().name().toLowerCase(Locale.ROOT)); c.put("rulesVersion", 1); ArrayNode rules = c.putArray("rules");
             for (var rule : d.controls().rules()) {
-                ObjectNode r = NATIVE.valueToTree(rule); r.put("urlMode", rule.urlMode().wire());
+                ObjectNode r = NATIVE.valueToTree(rule);
+                ObjectNode url = r.putObject("url");
+                switch (rule.url()) {
+                    case RequestSettings.AllRequests ignored -> url.put("type", "all_requests");
+                    case RequestSettings.BurpScope ignored -> url.put("type", "burp_scope");
+                    case RequestSettings.Prefix prefix -> { url.put("type", "prefix"); url.put("value", prefix.value().toString()); }
+                    case RequestSettings.Regex regex -> { url.put("type", "regex"); url.put("value", regex.value()); }
+                }
+                if (rule.proxyPort() == null) r.putNull("proxyPort"); else r.put("proxyPort", rule.proxyPort());
                 ((ObjectNode) r.get("journey")).put("scope", rule.journey().scope().wire());
                 ((ObjectNode) r.get("recovery")).put("mode", rule.recovery().mode().wire());
                 if (rule.recovery().mode() == JourneyDefinition.RecoveryMode.REGEX) ((ObjectNode) r.get("recovery")).remove("statusCode");

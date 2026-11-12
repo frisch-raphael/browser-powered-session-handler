@@ -13,6 +13,8 @@ public final class PlaceholderPasswordField extends JPasswordField
         this.placeholder = placeholder;
     }
 
+    @Override public JToolTip createToolTip() { return UiTooltips.create(this); }
+
     @Override
     protected void paintComponent(Graphics g)
     {

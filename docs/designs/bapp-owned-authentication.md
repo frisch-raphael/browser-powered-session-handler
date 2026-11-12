@@ -77,3 +77,30 @@ Use the existing native tests and [Java authentication lab](../../test/authentic
 Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
 
 Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+
+## URL/listener routing ownership
+
+RequestControlState publishes one immutable Controls/RequestRuleMatcher pair after
+validation and persistence. Ordinary matching combines typed URL conditions and
+optional incoming Proxy ports, preserving configured order. Final Proxy
+processing uses the user's edited request and actual listener. Non-Proxy global
+processing has no listener identity; copied requests do not inherit one.
+SessionRequestProcessor owns shared preparation, GlobalHttpSessionAdapter and
+ProxyHttpSessionAdapter translate host actions, HttpAuthenticationDelivery owns
+explicit direct identity delivery, and RecoveryReplayDelivery owns bounded
+application replays. No ordinary Proxy output is expanded twice.
+
+RequestExchange qualifies every ID with its callback family. Proxy and global
+response attribution never join numeric IDs. A Proxy recovery replay is a new
+GLOBAL delivery pinned to the original policies and versions, with no listener
+rematch. Recovery attribution and pending replay plans retain at most 10,000 records for
+five minutes; replay templates retain their existing 4 MiB individual and 32 MiB
+aggregate limits. Replay dispatch uses two workers and queue capacity 256.
+
+Final-Proxy DROP was unreliable on the tested Burp host. The author accepts that
+failed tagged Proxy requests may reach the server. The adapter requests native
+DROP with safe failure notes; no internal stop header, diagnostic-ticket bridge
+or extra global pass is required. Successful preparation continues normally.
+Global-owned failures retain their existing native drop action. Captured output
+still cannot create HTTP-authentication directives or owned-traffic markers that
+a later callback would execute. See the [routing design](session-handling-by-url-and-proxy-port.md#proxy-failure-policy-native-drop-is-best-effort).

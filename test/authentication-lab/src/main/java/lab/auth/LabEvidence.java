@@ -36,16 +36,18 @@ public final class LabEvidence implements AutoCloseable {
     synchronized void completed(boolean cleanupComplete, List<String> remaining) throws IOException {
         for (var requirement : selected) {
             boolean excluded=requirement.disposition()==ScenarioCatalog.Disposition.EXCLUDED;
-            boolean manual = requirement.layer() == ScenarioCatalog.Layer.HOST || requirement.layer() == ScenarioCatalog.Layer.ASSESSMENT;
+            boolean manual = requirement.layer() == ScenarioCatalog.Layer.ASSESSMENT || requirement.layer() == ScenarioCatalog.Layer.HOST
+                    && (requirement.binding() == null || !requirement.binding().executor().equals("HOST"));
             var record = new LinkedHashMap<String, Object>();
             record.put("requirementIds", List.of(requirement.id())); record.put("executionId", "unperformed:" + requirement.id());
             record.put("observedBinding", null); record.put("caseRevision", requirement.revision()); record.put("layer", requirement.layer());
-            record.put("classification", excluded?"EXCLUDED":requirement.layer() == ScenarioCatalog.Layer.HOST ? "MANUAL" : requirement.layer() == ScenarioCatalog.Layer.FIXTURE ? "SUPPORTED" : "UNASSESSED");
+            record.put("classification", excluded?"EXCLUDED":requirement.layer() == ScenarioCatalog.Layer.HOST ? manual ? "MANUAL" : "SUPPORTED" : requirement.layer() == ScenarioCatalog.Layer.FIXTURE ? "SUPPORTED" : "UNASSESSED");
             record.put("outcome", excluded?"EXCLUDED":manual ? "NOT_RUN" : "BLOCKED"); record.put("expected", requirement.expected()); record.put("observed", List.of());
             record.put("missingEvidence", excluded?List.of():requirement.evidence()); record.put("timings", Map.of("startupMs", 0, "caseMs", 0, "cleanupMs", 0));
             record.put("cleanup", cleanupComplete ? "COMPLETE" : "INCOMPLETE"); record.put("host", null); write("CASE_RESULT", record);
         }
-        long manual = selected.stream().filter(r -> r.layer() == ScenarioCatalog.Layer.HOST || r.layer() == ScenarioCatalog.Layer.ASSESSMENT).count();
+        long manual = selected.stream().filter(r -> r.layer() == ScenarioCatalog.Layer.ASSESSMENT || r.layer() == ScenarioCatalog.Layer.HOST
+                && (r.binding() == null || !r.binding().executor().equals("HOST"))).count();
         long excluded=selected.stream().filter(r->r.disposition()==ScenarioCatalog.Disposition.EXCLUDED).count();
         var outcomes = Map.of("PASS", 0, "FAIL", 0, "BLOCKED", selected.size() - manual-excluded, "NOT_RUN", manual, "INTERRUPTED", 0,"EXCLUDED",excluded);
         // These are owned target environments, not an authentication test runner. JUnit owns fixture assertion results.

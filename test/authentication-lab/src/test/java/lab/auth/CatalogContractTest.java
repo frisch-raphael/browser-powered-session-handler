@@ -204,6 +204,73 @@ class CatalogContractTest {
         assertEquals(2, LabMain.run(new String[] {"unknown", "--profiles", "baseline"}, output, output));
     }
 
+
+    private static JsonObject hostBinding(String id) {
+        var binding=new JsonObject();binding.addProperty("executionId","HOST:"+id);binding.addProperty("executor","HOST");
+        binding.addProperty("className",LabHostEvidence.OWNER);binding.addProperty("methodSignature",LabHostEvidence.METHOD);
+        binding.addProperty("parameterKey",id);binding.addProperty("sourceRevision","a".repeat(64));binding.addProperty("taskPath",LabHostEvidence.TASK);
+        binding.addProperty("configurationHash","b".repeat(64));binding.add("xmlCaseName",JsonNull.INSTANCE);
+        var witnesses=new JsonArray();String protocol=LabHostEvidence.protocol(id);
+        for(String scenario:LabHostEvidence.requiredScenarios(id)) {
+            var witness=new JsonObject();witness.addProperty("requirementId",id);witness.addProperty("assertionId",id+":"+scenario);
+            witness.addProperty("sourcePath",LabHostEvidence.SOURCE);witness.addProperty("sourceSymbol",LabHostEvidence.sourceSymbol(scenario));
+            witness.addProperty("inputKey",scenario+(protocol==null?"":"/"+protocol));witnesses.add(witness);
+        }
+        binding.add("witnesses",witnesses);var hashes=new JsonObject();LabHostEvidence.criticalOwners().forEach(path->hashes.addProperty(path,"c".repeat(64)));binding.add("sourceHashes",hashes);return binding;
+    }
+    private static JsonObject hostRow(JsonObject document,String id) {
+        return document.getAsJsonArray("requirements").asList().stream().map(JsonElement::getAsJsonObject)
+                .filter(row->row.get("id").getAsString().equals(id)).findFirst().orElseThrow();
+    }
+    @Test void hostExecutorSupportDoesNotPromoteAnyCurrentRequirement() throws Exception {
+        assertTrue(ScenarioCatalog.load().requirements().stream().filter(row->row.layer()==ScenarioCatalog.Layer.HOST)
+                .allMatch(row->row.disposition()==ScenarioCatalog.Disposition.MANUAL&&row.binding()==null));
+        copyCatalog(temporary);
+        for(String filename:List.of("burp.json","http-authentication.json")) {
+            Path file=temporary.resolve(filename);var document=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            for(var element:document.getAsJsonArray("requirements")) {
+                var row=element.getAsJsonObject();String id=row.get("id").getAsString();
+                if(LabHostEvidence.requiredScenarios().containsKey(id)){row.addProperty("disposition","EXTEND");row.add("binding",hostBinding(id));}
+            }
+            Files.writeString(file,document.toString());
+        }
+        var future=ScenarioCatalog.load(temporary);
+        for(String id:LabHostEvidence.requiredScenarios().keySet()) {
+            var row=future.requirement(id);assertEquals("HOST",row.binding().executor());assertEquals("BOUND_NOT_EXECUTED",row.readiness());
+        }
+        assertTrue(future.requirements().stream().filter(row->row.layer()==ScenarioCatalog.Layer.HOST&&!LabHostEvidence.requiredScenarios().containsKey(row.id())).allMatch(row->row.disposition()==ScenarioCatalog.Disposition.MANUAL));
+    }
+    @TestFactory Stream<DynamicTest> hostExecutorRejectsJUnitIdentityAndIncompleteOrForeignWitnessOwners() {
+        String id="H01.tool=proxy~mode=automatic-combined-injection";
+        var changes=new LinkedHashMap<String,Consumer<JsonObject>>();
+        changes.put("class",b->b.addProperty("className","ExampleTest"));changes.put("method",b->b.addProperty("methodSignature","invented()"));
+        changes.put("execution",b->b.addProperty("executionId","JUNIT:"+id));changes.put("parameter",b->b.addProperty("parameterKey","H02.ordinary-unchanged"));
+        changes.put("task",b->b.addProperty("taskPath",":authLabComponentTest"));changes.put("xml",b->b.addProperty("xmlCaseName","invented()"));
+        changes.put("executor",b->b.addProperty("executor","JUNIT"));changes.put("missing-scenario",b->b.getAsJsonArray("witnesses").remove(0));
+        changes.put("input",b->b.getAsJsonArray("witnesses").get(0).getAsJsonObject().addProperty("inputKey","http-auth"));
+        changes.put("symbol",b->b.getAsJsonArray("witnesses").get(0).getAsJsonObject().addProperty("sourceSymbol","unrelated"));
+        changes.put("path",b->b.getAsJsonArray("witnesses").get(0).getAsJsonObject().addProperty("sourcePath","test/ExampleTest.java"));
+        return changes.entrySet().stream().map(change->DynamicTest.dynamicTest(change.getKey(),()->{
+            Path root=temporary.resolve(change.getKey());copyCatalog(root);Path file=root.resolve("burp.json");
+            var document=JsonParser.parseString(Files.readString(file)).getAsJsonObject();var row=hostRow(document,id);
+            var binding=hostBinding(id);change.getValue().accept(binding);row.addProperty("disposition","EXTEND");row.add("binding",binding);Files.writeString(file,document.toString());
+            assertThrows(ScenarioCatalog.CatalogException.class,()->ScenarioCatalog.load(root));
+        }));
+    }
+    @Test void unperformedAutomatedHostOwnerIsBlockedRatherThanPreclassifiedAsManual() throws Exception {
+        copyCatalog(temporary);Path file=temporary.resolve("burp.json");var document=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+        String id="H01.tool=proxy~mode=automatic-combined-injection";var row=hostRow(document,id);row.addProperty("disposition","EXTEND");row.add("binding",hostBinding(id));Files.writeString(file,document.toString());
+        var catalog=ScenarioCatalog.load(temporary);Path report=temporary.resolve("unperformed.jsonl");
+        try(var evidence=new LabEvidence(report,UUID.randomUUID(),UUID.randomUUID())) {
+            evidence.started(new LabRun.RunSpec(UUID.randomUUID(),List.of("burp"),catalog,temporary.resolve("run"),List.of(),5000));evidence.completed(true,List.of());
+        }
+        var results=Files.readAllLines(report).stream().map(JsonParser::parseString).map(JsonElement::getAsJsonObject)
+                .filter(line->line.get("type").getAsString().equals("CASE_RESULT")).map(line->line.getAsJsonObject("data")).toList();
+        var result=results.stream().filter(data->data.getAsJsonArray("requirementIds").get(0).getAsString().equals(id)).findFirst().orElseThrow();
+        assertEquals("SUPPORTED",result.get("classification").getAsString());assertEquals("BLOCKED",result.get("outcome").getAsString());assertTrue(result.get("observedBinding").isJsonNull());
+        assertTrue(results.stream().filter(data->!data.equals(result)).allMatch(data->data.get("classification").getAsString().equals("MANUAL")&&data.get("outcome").getAsString().equals("NOT_RUN")));
+    }
+
     private static String fact(ScenarioCatalog.Requirement r, String name) {
         return r.expected().stream().filter(f -> f.fact().equals(name)).findFirst().orElseThrow().value();
     }

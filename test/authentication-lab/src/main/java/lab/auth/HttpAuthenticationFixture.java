@@ -34,8 +34,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Local multi-account applications with actual connection-bound NTLM and independent proof verification. */
 public final class HttpAuthenticationFixture implements AutoCloseable {
     public enum Protocol { BASIC, NTLM_V1, NTLM_V2 }
-    public record Observation(String user, Protocol protocol, String connection, String method, String path, int bodyBytes) { }
-    public record WireRequest(String method, String path, String connection, int bodyBytes) { }
+    public record Observation(String user, Protocol protocol, String connection, String method, String path, int bodyBytes,
+                              String nonce, long operationId) { }
+    public record WireRequest(String method, String path, String connection, int bodyBytes,
+                              String nonce, String challengePhase, boolean httpDirective) { }
     private final Protocol protocol;
     private final Map<String,String> users;
     private final NioEventLoopGroup acceptors = new NioEventLoopGroup(1), workers = new NioEventLoopGroup(2);
@@ -48,6 +50,13 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
     public final List<Observation> observations = new CopyOnWriteArrayList<>();
     public final java.util.concurrent.CompletableFuture<Void> releaseResponse=new java.util.concurrent.CompletableFuture<>();
     public final List<WireRequest> requests = new CopyOnWriteArrayList<>();
+    public final java.util.concurrent.atomic.AtomicBoolean observationOverflow=new java.util.concurrent.atomic.AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicLong operationSequence=new java.util.concurrent.atomic.AtomicLong();
+    private static final io.netty.util.AttributeKey<String> RESPONSE_NONCE=io.netty.util.AttributeKey.valueOf("authlab.synthetic-response-nonce");
+
+    private synchronized <T> void retain(List<T> rows,T value) {
+        if(rows.size()<LabHostObservations.LIMIT)rows.add(value);else observationOverflow.set(true);
+    }
 
     public HttpAuthenticationFixture(Protocol protocol, Map<String,String> users, SSLContext tls) throws InterruptedException {
         this.protocol=protocol;this.users=Map.copyOf(users);this.tls=tls;
@@ -70,7 +79,21 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
         @Override protected void channelRead0(ChannelHandlerContext context,FullHttpRequest request) throws Exception {
             if(request.headers().contains("BPSP-HTTP-AUTHENT"))leakedDirectives.incrementAndGet();
             String path=URI.create(request.uri()).getPath();
-            requests.add(new WireRequest(request.method().name(),path,context.channel().id().asLongText(),request.content().readableBytes()));
+            var nonceValues=request.headers().getAll("X-AuthLab-Request");
+            String nonce=nonceValues.size()==1&&nonceValues.getFirst().matches("h[0-9a-f]{16}")?nonceValues.getFirst():null;
+            context.channel().attr(RESPONSE_NONCE).set(nonce);
+            if(!nonceValues.isEmpty()&&nonce==null)observationOverflow.set(true);
+            String authorization=request.headers().get("Authorization");byte[] ntlmMessage=null;
+            String phase=authenticated!=null&&protocol!=Protocol.BASIC?"NTLM_SESSION":"NONE";
+            if(authorization!=null&&authorization.startsWith("Basic "))phase="BASIC";
+            if(authorization!=null&&authorization.startsWith("NTLM ")) {
+                try {
+                    ntlmMessage=Base64.getDecoder().decode(authorization.substring(5));
+                    phase=switch(NtlmChallengeVerifier.type(ntlmMessage)){case 1->"NTLM_NEGOTIATE";case 3->"NTLM_AUTHENTICATE";default->"INVALID";};
+                }catch(RuntimeException invalid){phase="INVALID";}
+            }
+            retain(requests,new WireRequest(request.method().name(),path,context.channel().id().asLongText(),request.content().readableBytes(),
+                    nonce,phase,request.headers().contains("BPSP-HTTP-AUTHENT")));
             if(path.equals("/large-header-challenge")) {largeHeaders(context,401);return;}
             if(path.startsWith("/large-challenge")) {
                 var response=new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,HttpResponseStatus.UNAUTHORIZED,
@@ -84,7 +107,6 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
             // Deliberately broken fixture: application work occurs before authentication.
             if(path.equals("/action-before-auth") && request.method().name().equals("POST"))applicationPosts.incrementAndGet();
             if(path.equals("/anonymous")) {reply(context,200,"anonymous",null,false);return;}
-            String authorization=request.headers().get("Authorization");
             if("Bearer application".equals(authorization))applicationAuthorizations.incrementAndGet();
             if(path.equals("/rechallenge") && protocol!=Protocol.BASIC && authenticated!=null && !rechallenged) {
                 rechallenged=true;authenticated=null;verifier=null;
@@ -101,7 +123,8 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
                     }
                 }
             } else if(authorization!=null && authorization.startsWith("NTLM ")) {
-                byte[] message=Base64.getDecoder().decode(authorization.substring(5));
+                byte[] message=ntlmMessage;
+                if(message==null) {reply(context,401,"invalid authentication","NTLM",false);return;}
                 if(NtlmChallengeVerifier.type(message)==1) {
                     authenticated=null;
                     verifier=new NtlmChallengeVerifier(protocol==Protocol.NTLM_V2,binding(context));
@@ -114,7 +137,8 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
             }
             if(path.equals("/reject"))authenticated=null;
             if(authenticated==null) {reply(context,401,"authentication required",protocol==Protocol.BASIC?"Basic realm=\"lab\", charset=\"UTF-8\"":"NTLM",false);return;}
-            observations.add(new Observation(authenticated,protocol,context.channel().id().asLongText(),request.method().name(),path,request.content().readableBytes()));
+            retain(observations,new Observation(authenticated,protocol,context.channel().id().asLongText(),request.method().name(),path,
+                    request.content().readableBytes(),nonce,operationSequence.incrementAndGet()));
             if(path.equals("/large-header-final")) {largeHeaders(context,200);return;}
             if(request.method().name().equals("POST") && !path.equals("/action-before-auth"))applicationPosts.incrementAndGet();
             if(path.equals("/application-page")) {reply(context,200,"<link rel='icon' href='data:,'><p>Authenticated</p>",null,false,"text/html");return;}
@@ -141,8 +165,8 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
             if(path.equals("/forbidden")) {reply(context,403,"forbidden",null,false);return;}
             if(path.equals("/large")) {reply(context,200,"x".repeat(16*1024*1024+1),null,false);return;}
             String body=new com.google.gson.Gson().toJson(Map.of("user",authenticated,"protocol",protocol.name()));
-            if(path.equals("/held"))releaseResponse.whenComplete((value,error)->context.executor().execute(()->reply(context,200,body,null,false)));
-            else if(path.equals("/slow"))context.executor().schedule(()->reply(context,200,body,null,false),1,TimeUnit.SECONDS);
+            if(path.equals("/held"))releaseResponse.whenComplete((value,error)->context.executor().execute(()->reply(context,200,body,null,false,"application/json",nonce)));
+            else if(path.equals("/slow"))context.executor().schedule(()->reply(context,200,body,null,false,"application/json",nonce),1,TimeUnit.SECONDS);
             else reply(context,200,body,null,path.equals("/close"));
         }
         @Override public void exceptionCaught(ChannelHandlerContext context,Throwable failure) { failureClass.set(failure.getClass().getSimpleName()); context.close(); }
@@ -159,9 +183,13 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
         context.writeAndFlush(response);
     }
     private static void reply(ChannelHandlerContext context,int status,String body,String challenge,boolean close,String contentType) {
+        reply(context,status,body,challenge,close,contentType,context.channel().attr(RESPONSE_NONCE).get());
+    }
+    private static void reply(ChannelHandlerContext context,int status,String body,String challenge,boolean close,String contentType,String nonce) {
         byte[] bytes=body.getBytes(StandardCharsets.UTF_8);
         var response=new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,HttpResponseStatus.valueOf(status),io.netty.buffer.Unpooled.wrappedBuffer(bytes));
         response.headers().set("Content-Length",bytes.length).set("Content-Type",contentType);
+        if(nonce!=null)response.headers().set("X-AuthLab-Request",nonce);
         if(challenge!=null)response.headers().set("WWW-Authenticate",challenge);
         if(close)response.headers().set("Connection","close");
         var sent=context.writeAndFlush(response);if(close)sent.addListener(io.netty.channel.ChannelFutureListener.CLOSE);

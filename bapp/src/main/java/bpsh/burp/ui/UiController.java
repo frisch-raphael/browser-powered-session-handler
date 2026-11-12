@@ -60,7 +60,9 @@ public final class UiController {
     private final JourneyWorkspace registry;
     private final AuthenticationCoordinator coordinator;
     private final Pkcs11IdentityManager identities;
-    private final AtomicReference<RequestSettings.Controls> applied;
+    private final bpsh.burp.http.RequestControlState applied;
+    private final bpsh.burp.http.ProxyListeners proxyListeners;
+    private final java.util.concurrent.atomic.AtomicBoolean listenerRefreshRunning = new java.util.concurrent.atomic.AtomicBoolean();
     private final Diagnostics diagnostics;
     private final ThreadPoolExecutor io = executor("bpsh-config-io", 1, 32), nativeActions = executor("bpsh-cert-action", 1, 4);
     private final EnumMap<JourneyDefinition.Scope, String> storageErrors = new EnumMap<>(JourneyDefinition.Scope.class);
@@ -218,18 +220,16 @@ public final class UiController {
      * @param identities Native certificate listing and PIN suppression.
      * @param applied Current validated project controls used by hooks.
      * @param diagnostics Safe rate-limited output.
+     * @param recording Independently owned recorder, or null in a nonrecording fixture.
+     * @param proxyListeners Read-only listener export boundary, or null in a fixture without host settings.
      */
     public UiController(MontoyaApi api, JourneyStorage storage, SecretStore secrets, JourneyWorkspace registry,
-                        AuthenticationCoordinator coordinator, Pkcs11IdentityManager identities, AtomicReference<RequestSettings.Controls> applied, Diagnostics diagnostics) {
-        this(api, storage, secrets, registry, coordinator, identities, applied, diagnostics, null);
-    }
-    /** Adds the independently owned recorder port without starting a browser during UI construction. */
-    public UiController(MontoyaApi api, JourneyStorage storage, SecretStore secrets, JourneyWorkspace registry,
-                        AuthenticationCoordinator coordinator, Pkcs11IdentityManager identities, AtomicReference<RequestSettings.Controls> applied, Diagnostics diagnostics, JourneyRecording recording) {
+                        AuthenticationCoordinator coordinator, Pkcs11IdentityManager identities, bpsh.burp.http.RequestControlState applied, Diagnostics diagnostics, JourneyRecording recording, bpsh.burp.http.ProxyListeners proxyListeners) {
         this.api = api; this.storage = storage; this.secrets = secrets; this.registry = registry;
         this.recording = recording;
         this.dialogs = new SwingJourneyDialogs(api == null ? null : api.persistence().preferences());
         this.coordinator = coordinator; this.identities = identities; this.applied = applied; this.diagnostics = diagnostics;
+        this.proxyListeners = proxyListeners;
         this.eventLog = new JourneyEventLogPanel(coordinator.events(), () -> { status.setLogOpen(false); showEventDock(); });
         this.eventLog.onStep(this::canRevealStep, target -> revealStep(target, null));
         this.cacheView = new JourneyCachePanel(() -> { status.setCacheOpen(false); showEventDock(); }, message -> {
@@ -299,6 +299,7 @@ public final class UiController {
         var journeyFooter = new JPanel(new BorderLayout()); journeyFooter.add(status, BorderLayout.CENTER); journeyFooter.add(collectionFeedback, BorderLayout.SOUTH);
         var journeys = new JPanel(new BorderLayout()); journeys.add(eventDock, BorderLayout.CENTER); journeys.add(journeyFooter, BorderLayout.SOUTH);
         mainTabs.addTab("Journeys", journeys); mainTabs.addTab("Session handling", controlsForm()); mainTabs.addTab("Settings", settingsForm());
+        mainTabs.addChangeListener(e -> { if (mainTabs.getSelectedIndex() == 1) refreshProxyListeners(); });
         root.add(mainTabs, BorderLayout.CENTER);
         status.onLogToggle(this::showEventDock);
         status.addAction(cancelButton); status.addAction(retryButton); status.addAction(reviewCertificate);
@@ -343,8 +344,7 @@ public final class UiController {
         row(panel, "Login URL", field("url", "https://login.example/login"));
         row(panel, "", check("headless", "Run browser in background"));
         var ignoreHttpsErrors = check("ignoreHttpsErrors", "Allow untrusted HTTPS certificates");
-        ignoreHttpsErrors.setToolTipText("<html>Skips browser certificate checks for this journey's recording and login.<br>Client-certificate server trust still uses its configured CA.</html>");
-        ignoreHttpsErrors.getAccessibleContext().setAccessibleDescription("Skips browser certificate checks for this journey's recording and login. Client-certificate server trust still uses its configured CA.");
+        UiTooltips.set(ignoreHttpsErrors, "Skips browser certificate checks for this journey's recording and login.\nClient-certificate server trust still uses its configured CA.", 320);
         row(panel, "", ignoreHttpsErrors);
         var methods = new JPanel(); methods.setLayout(new BoxLayout(methods, BoxLayout.Y_AXIS));
         var formAuthentication = check("formAuthentication", "Use form-based authentication"); formAuthentication.setSelected(true);
@@ -529,19 +529,19 @@ public final class UiController {
     private void chooseFile(String key) { Path file = key.equals("ca") ? dialogs.trustedCa(parent()) : dialogs.middleware(parent()); if (file != null) fields.get(key).setText(file.toAbsolutePath().toString()); }
 
     /**
-     * Returns ordinary policy and independent numeric-or-Unlimited waiter limits, saved only after validation.
+     * Returns ordinary policy and independent finite request limits, saved only after validation.
      *
-     * @return Ordinary policy and independent numeric-or-Unlimited waiter limits, saved only after validation.
+     * @return Ordinary policy and independent finite request limits, saved only after validation.
      */
     private Component controlsForm() {
         var panel = form(); row(panel, "", check("enabled", "Automatically authenticate matching requests"));
         automaticFields = form(); row(automaticFields, "", automaticRules);
         var toolPanel = new JPanel(new FlowLayout(FlowLayout.LEFT)); for (Tool tool : RequestSettings.SUPPORTED_TOOLS) { var box = new JCheckBox(tool.name()); box.addActionListener(e -> controlsEdited()); tools.put(tool, box); toolPanel.add(box); } row(automaticFields, "Eligible HTTP tools", toolPanel); row(panel, "", automaticFields);
-        automaticRules.onChange(this::controlsEdited); return scroll(panel);
+        automaticRules.onChange(this::controlsEdited); automaticRules.onListenerRefresh(this::refreshProxyListeners); return scroll(panel);
     }
     /** Exposes advanced global waiting limits independently of journey setup. @return Explicit duration and capacity settings. */
     /** Project-wide behavior when request credentials are unavailable. */
-    private final JComboBox<RequestSettings.RequestPolicy> requestPolicy = new JComboBox<>(RequestSettings.RequestPolicy.values());
+    private final JComboBox<RequestSettings.RequestPolicy> requestPolicy = UiTooltips.comboBox(RequestSettings.RequestPolicy.values());
 
     /** Always-visible explanation of the selected request policy. */
     private final JTextArea requestPolicyHelp = note("");
@@ -557,8 +557,8 @@ public final class UiController {
         row(panel, "", requestPolicyHelp);
         row(panel, "Request wait (seconds)", field("control.request", "60"));
         row(panel, "Login attempt timeout (seconds)", field("control.attempt", "60")); row(panel, "Total login timeout (seconds)", field("control.cycle", "300"));
-        row(panel, "Global waiting requests", check("globalUnlimited", "Unlimited")); row(panel, "Global limit", field("control.global", "Positive integer when enabled"));
-        row(panel, "Per-journey waiting requests", check("perUnlimited", "Unlimited")); row(panel, "Per-journey limit", field("control.per", "Positive integer when enabled"));
+        row(panel, "Global request limit", field("control.global", "64"));
+        row(panel, "Per-journey request limit", field("control.per", "16"));
  return scroll(panel);
     }
     /** Explains the selected policy's effect on this request and the user's next action. */
@@ -569,9 +569,7 @@ public final class UiController {
         String help = explanation + "\n\nA valid cached token or cookie is added to the request immediately."
                 + "\n\nThis policy applies only to automatic handling. Explicit BPSH tags always wait for login.";
         requestPolicyHelp.setText(help); requestPolicyHelp.setCaretPosition(0);
-        requestPolicy.getAccessibleContext().setAccessibleDescription(help);
-        requestPolicy.setToolTipText("<html><div style='width: 340px'>" + help.replace("\n\n", "<br><br>") + "</div></html>");
-        if (requestPolicy.getClientProperty("rowLabel") instanceof JLabel label) label.setToolTipText(requestPolicy.getToolTipText());
+        UiTooltips.set(requestPolicy, help, 340, String.valueOf(requestPolicy.getSelectedItem()));
     }
 
     /**
@@ -1070,7 +1068,11 @@ public final class UiController {
     private void persist(JourneyDefinition.Scope scope, JourneyDocument edited) throws Exception {
         if (closed) return;
         if (scope == JourneyDefinition.Scope.PROJECT) {
-            try (var committed = storage.save(scope, edited)) { if (!closed) { registry.replaceLoaded(scope, committed); coordinator.updateControls(committed.controls()); applied.set(committed.controls()); } }
+            var prepared = applied.prepare(edited.controls());
+            try (var committed = storage.save(scope, edited)) { if (!closed) {
+                if (!prepared.controls().equals(committed.controls())) throw new IllegalStateException("Saved Session handling controls differ from the prepared matching plan.");
+                registry.replaceLoaded(scope, committed); coordinator.updateControls(committed.controls()); applied.publish(prepared);
+            } }
         } else try (var committed = storage.save(scope, edited)) { if (!closed) registry.replaceLoaded(scope, committed); }
         if (!closed) coordinator.configurationChanged(); if (httpIdentities != null) httpIdentities.reconcile();
     }
@@ -1079,13 +1081,14 @@ public final class UiController {
     private void reload() {
         try {
             try (var document = storage.loadProject()) {
-                registry.replaceLoaded(JourneyDefinition.Scope.PROJECT, document); applied.set(document.controls()); coordinator.updateControls(document.controls()); storageErrors.remove(JourneyDefinition.Scope.PROJECT); bump(JourneyDefinition.Scope.PROJECT);
+                var prepared = applied.prepare(document.controls());
+                registry.replaceLoaded(JourneyDefinition.Scope.PROJECT, document); coordinator.updateControls(document.controls()); applied.publish(prepared); storageErrors.remove(JourneyDefinition.Scope.PROJECT); bump(JourneyDefinition.Scope.PROJECT);
             }
         } catch (Exception ex) { storageFailed(JourneyDefinition.Scope.PROJECT, ex); }
         try (var loaded = storage.loadLibrary()) { registry.replaceLoaded(JourneyDefinition.Scope.LIBRARY, loaded.document()); storageErrors.remove(JourneyDefinition.Scope.LIBRARY); bump(JourneyDefinition.Scope.LIBRARY); }
         catch (Exception ex) { storageFailed(JourneyDefinition.Scope.LIBRARY, ex); }
         if (closed) return; coordinator.configurationChanged(); if (httpIdentities != null) httpIdentities.reconcile(); refreshChoices(); String summary = storageErrors.isEmpty() ? "Native storage loaded. Select a journey or create one; no authentication starts on load." : String.join("\n", storageErrors.values());
-        ui(() -> { applyControls(applied.get()); initialized = true; refreshJourneyUi(); status.setText(summary); });
+        ui(() -> { applyControls(applied.snapshot().controls()); initialized = true; refreshJourneyUi(); status.setText(summary); });
     }
     /**
      * Publishes a genuinely external library revision and invalidates older editor drafts without applying own-write echoes.
@@ -1283,6 +1286,21 @@ public final class UiController {
         scheduleDeviceDiscovery();
     }
 
+    /** Coalesces read-only listener exports on the existing I/O worker and preserves unfinished edits. */
+    private void refreshProxyListeners() {
+        if (closed || !initialized || proxyListeners == null || !listenerRefreshRunning.compareAndSet(false,true)) return;
+        long epoch = storage.epoch(JourneyDefinition.Scope.PROJECT);
+        var job = new Job(null, () -> {
+            List<bpsh.burp.http.ProxyListeners.Choice> choices = List.of(); String failure = null;
+            try { choices = proxyListeners.read(); }
+            catch (RuntimeException | LinkageError error) { failure = "Could not refresh proxy ports. Check Burp's Proxy listener settings."; }
+            finally { listenerRefreshRunning.set(false); }
+            var captured = choices; var message = failure;
+            ui(() -> { if (!closed && epoch == storage.epoch(JourneyDefinition.Scope.PROJECT)) automaticRules.setListeners(captured,message); });
+        });
+        try { io.execute(job); }
+        catch (RuntimeException error) { listenerRefreshRunning.set(false); job.discard(); automaticRules.setListeners(List.of(),"Could not refresh proxy ports. Check Burp's Proxy listener settings."); }
+    }
     /**
      * Applies only the selected project-settings category while preserving the other applied category.
      * @param waitingOnly True for budgets/capacity, false for automatic-injection selection and scope.
@@ -1292,15 +1310,15 @@ public final class UiController {
         Map<String, String> raw = new LinkedHashMap<>(); fields.forEach((name, field) -> raw.put(name, field.getText()));
         var selectedTools = tools.entrySet().stream().filter(e -> e.getValue().isSelected()).map(Map.Entry::getKey).toList();
         var selectedPolicy = (RequestSettings.RequestPolicy) requestPolicy.getSelectedItem();
-        boolean enabled = checks.get("enabled").isSelected(), global = checks.get("globalUnlimited").isSelected(), per = checks.get("perUnlimited").isSelected();
+        boolean enabled = checks.get("enabled").isSelected();
         List<RequestSettings.AutomaticRule> rules;
-        try { rules = waitingOnly || !enabled ? applied.get().rules() : automaticRules.snapshot(); }
+        try { rules = waitingOnly || !enabled ? applied.snapshot().controls().rules() : automaticRules.snapshot(); }
         catch (IllegalArgumentException ex) { controlSaveFailed(waitingOnly, ex); return; }
         var job = new Job(null, () -> { try {
             checkEpoch(JourneyDefinition.Scope.PROJECT, captured);
-            var current = applied.get();
+            var current = applied.snapshot().controls();
             var cfg = waitingOnly
-                    ? new RequestSettings.Controls(current.enabled(), current.rules(), current.tools(), seconds(raw, "control.request"), seconds(raw, "control.attempt"), seconds(raw, "control.cycle"), global ? null : number(raw, "control.global"), per ? null : number(raw, "control.per"), selectedPolicy)
+                    ? new RequestSettings.Controls(current.enabled(), current.rules(), current.tools(), seconds(raw, "control.request"), seconds(raw, "control.attempt"), seconds(raw, "control.cycle"), number(raw, "control.global"), number(raw, "control.per"), selectedPolicy)
                     : new RequestSettings.Controls(enabled, rules, selectedTools, current.requestWaitTimeoutMs(), current.attemptTimeoutMs(), current.cycleTimeoutMs(), current.maxWaitingRequestsGlobal(), current.maxWaitingRequestsPerJourney(), current.requestPolicy());
             if (cfg.cycleTimeoutMs() < Math.max(cfg.requestWaitTimeoutMs(), cfg.attemptTimeoutMs())) throw new IllegalArgumentException("Total login timeout must cover the request wait and login attempt timeout.");
             var doc = registry.document(JourneyDefinition.Scope.PROJECT);
@@ -1309,7 +1327,7 @@ public final class UiController {
         try { io.execute(job); } catch (RuntimeException error) { job.discard(); controlSaveFailed(waitingOnly, error); }
     }
     /**
-     * Displays validated applied project controls without saving, authenticating or inventing finite waiter caps.
+     * Displays validated applied project controls without saving or authenticating.
      *
      * @param cfg Latest validated applied controls; population never saves or starts a login.
      */
@@ -1318,7 +1336,7 @@ public final class UiController {
         suppress = true;
         try {
             requestPolicy.setSelectedItem(cfg.requestPolicy()); updateRequestPolicyHelp(); flag("enabled", cfg.enabled()); automaticRules.setRules(cfg.rules()); text("control.request", secondsText(cfg.requestWaitTimeoutMs())); text("control.attempt", secondsText(cfg.attemptTimeoutMs())); text("control.cycle", secondsText(cfg.cycleTimeoutMs()));
-            flag("globalUnlimited", cfg.maxWaitingRequestsGlobal() == null); flag("perUnlimited", cfg.maxWaitingRequestsPerJourney() == null); text("control.global", cfg.maxWaitingRequestsGlobal()); text("control.per", cfg.maxWaitingRequestsPerJourney());
+            text("control.global", cfg.maxWaitingRequestsGlobal()); text("control.per", cfg.maxWaitingRequestsPerJourney());
             tools.forEach((tool, box) -> box.setSelected(cfg.tools().contains(tool))); refreshModes();
         } finally { suppress = false; }
     }
@@ -1413,13 +1431,12 @@ public final class UiController {
                 if (currentTest(entry, epoch)) { if (error == null) status.clear(); else status.error(message); }
                 refreshJourneyUi();
                 if (!currentTest(entry, epoch)) return;
-                if (failure != null && failure.input() != null) { revealTestFailure(entry, failure); return; }
+                if (failure != null && revealTestFailure(entry, failure)) return;
                 boolean cancelled = failure != null && failure.reason() == AuthenticationFailure.Cause.CANCELLED;
                 String title = error == null ? "Credentials captured" : cancelled ? "Login cancelled" : "Login failed";
                 String summary = error == null ? capturedSummary(entry.definition()) + httpSummary(result == null ? null : result.get(entry.identity())) : "Journey: " + entry.definition().displayName() + "\n\n"
                         + (failure != null && failure.step() != null ? "Step " + failure.step().number() + ": " + failure.step().type().label() + "\n" : "") + message;
                 dialogs.loginResult(parent(), title, summary, error != null && !cancelled);
-                if (currentTest(entry, epoch) && error != null) revealTestFailure(entry, failure);
             });
         });
     }
@@ -1434,7 +1451,7 @@ public final class UiController {
         if (!httpTests.add(entry.identity())) return;
         httpTestResults.remove(entry.identity());
         ui(this::refreshJourneyUi);
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(applied.get().attemptTimeoutMs());
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(applied.snapshot().controls().attemptTimeoutMs());
         httpIdentities.test(entry, deadline, explicit).whenComplete((response, error) -> {
             httpTests.remove(entry.identity());
             var failure = error instanceof AuthenticationFailure safe ? safe : error != null && error.getCause() instanceof AuthenticationFailure safe ? safe : null;
@@ -1478,15 +1495,15 @@ public final class UiController {
         else text.append("Captured 1 token.");
         return text.toString();
     }
-    /** @param entry Exact tested generation. @param failure Safe observed outcome, with optional input identity. */
-    private void revealTestFailure(JourneyCatalog.Entry entry, AuthenticationFailure failure) {
-        if (failure == null || Set.of(AuthenticationFailure.Cause.CANCELLED, AuthenticationFailure.Cause.STALE, AuthenticationFailure.Cause.CLOSED).contains(failure.reason())) return;
+    /** @param entry Exact tested generation. @param failure Safe observed outcome, with optional input identity. @return Whether a relevant control received inline feedback instead of a generic popup. */
+    private boolean revealTestFailure(JourneyCatalog.Entry entry, AuthenticationFailure failure) {
+        if (failure == null || Set.of(AuthenticationFailure.Cause.CANCELLED, AuthenticationFailure.Cause.STALE, AuthenticationFailure.Cause.CLOSED).contains(failure.reason())) return false;
         if (Set.of(AuthenticationFailure.Cause.CLIENT_CERTIFICATE_REQUIRED, AuthenticationFailure.Cause.CLIENT_CERTIFICATE_FAILED).contains(failure.reason()) && !checks.get("mtls").isSelected()) {
-            mainTabs.setSelectedIndex(0); selectWizard(WizardPage.SETUP); InlineValidation.show(checks.get("mtls"), failure.getMessage()); InlineValidation.focus(checks.get("mtls")); return;
+            mainTabs.setSelectedIndex(0); selectWizard(WizardPage.SETUP); InlineValidation.show(checks.get("mtls"), failure.getMessage()); InlineValidation.focus(checks.get("mtls")); return true;
         }
         if (failure.input() != null) {
             var target = failure.input();
-            if (target.input() == AuthenticationFailure.Input.MTLS_PIN) { revealMissingPin(failure.getMessage()); return; }
+            if (target.input() == AuthenticationFailure.Input.MTLS_PIN) { revealMissingPin(failure.getMessage()); return true; }
             String path = switch (target.input()) {
                 case LOGIN_URL -> "authenticationUrl"; case PROXY_URL -> "browser.proxy";
                 case MIDDLEWARE -> "mtls.modulePath"; case SECURITY_DEVICE -> "mtls.slot";
@@ -1495,10 +1512,15 @@ public final class UiController {
                 case CAPTURE_SOURCE -> "extraction.type"; case HTTP_AUTHENTICATION -> "httpAuthentication"; case HTTP_PASSWORD -> "httpAuthentication.password"; case MTLS_PIN -> throw new IllegalStateException();
             };
             if (path.startsWith("extraction") && target.credential() != null) path = "extraction.tokens[" + target.credential() + "].selector" + path.substring("extraction".length());
-            mainTabs.setSelectedIndex(0); showInvalidField(path + ":", failure.getMessage(), true); return;
+            mainTabs.setSelectedIndex(0); showInvalidField(path + ":", failure.getMessage(), true); return true;
         }
-        if (failure.step() != null) revealStep(new JourneyEventLog.StepTarget(entry.identity(), failure.step().id()), failure.problem(), failure.reason() == AuthenticationFailure.Cause.MISSING_SECRET);
-        else if (failure.reason() == AuthenticationFailure.Cause.MISSING_SECRET && entry.definition().mtls() != null && !pinAvailable) revealMissingPin(failure.getMessage());
+        if (failure.step() != null) {
+            revealStep(new JourneyEventLog.StepTarget(entry.identity(), failure.step().id()), failure.getMessage(), failure.reason() == AuthenticationFailure.Cause.MISSING_SECRET); return true;
+        }
+        if (failure.reason() == AuthenticationFailure.Cause.MISSING_SECRET && entry.definition().mtls() != null && !pinAvailable) {
+            revealMissingPin(failure.getMessage()); return true;
+        }
+        return false;
     }
     /**
      * Enqueues a selected shared Cancel or Invalidate operation without doing native work on the EDT.
@@ -1628,7 +1650,7 @@ public final class UiController {
                 }
             });
             } catch (AuthenticationFailure error) {
-                ui(draft.editorEpoch(), () -> { loadedCertificate = null; certificateRetryAvailable = error.reason() == AuthenticationFailure.Cause.PIN_REJECTED || error.reason() == AuthenticationFailure.Cause.PIN_INDETERMINATE; InlineValidation.show(chooseCertificateButton, error.getMessage()); });
+                ui(draft.editorEpoch(), () -> { loadedCertificate = null; certificateRetryAvailable = error.reason() == AuthenticationFailure.Cause.PIN_REJECTED || error.reason() == AuthenticationFailure.Cause.PIN_INDETERMINATE || error.reason() == AuthenticationFailure.Cause.DEVICE_SESSION_LOST; InlineValidation.show(chooseCertificateButton, error.getMessage()); });
                 throw error;
             } finally { ui(() -> { certificateListing = false; refreshJourneyUi(); }); }
         });
@@ -1793,6 +1815,15 @@ public final class UiController {
                 if (task instanceof ClosingSave save) save.close(); else if (task instanceof UiController.Job job) job.discard();
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+    }
+    /** Observes final storage and cancelled native-action workers after their services have been closed. */
+    public void awaitClosed(long milliseconds) {
+        long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(milliseconds);
+        try {
+            for (var executor : List.of(io, nativeActions))
+                if (!executor.awaitTermination(Math.max(0, end - System.nanoTime()), TimeUnit.NANOSECONDS))
+                    throw new IllegalStateException("Editor workers did not terminate within the cleanup budget.");
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException("Editor cleanup was interrupted."); }
     }
     /**
      * Admits one bounded background UI action and wipes its captured inputs if the queue is closed or full.
@@ -2037,7 +2068,7 @@ public final class UiController {
      * @param title Visible meaning, including persistence/recovery acknowledgements.
      * @return Named checkbox.
      */
-    private JCheckBox check(String key, String title) { var box = new JCheckBox(title); box.setName(key); checks.put(key, box); box.addActionListener(e -> { if(key.equals("httpAuthentication") && box.isSelected()) httpAuthentication.initializeOrigin(fields.get("url").getText()); if (Set.of("enabled", "globalUnlimited", "perUnlimited").contains(key)) { clearUnusedFields(); controlsEdited(!key.equals("enabled")); } else { clearUnusedFields(); edited(); } }); return box; }
+    private JCheckBox check(String key, String title) { var box = UiTooltips.checkBox(title); box.setName(key); checks.put(key, box); box.addActionListener(e -> { if(key.equals("httpAuthentication") && box.isSelected()) httpAuthentication.initializeOrigin(fields.get("url").getText()); if (key.equals("enabled")) { clearUnusedFields(); controlsEdited(!key.equals("enabled")); } else { clearUnusedFields(); edited(); } }); return box; }
     /** Marks project-policy edits without making the selected journey appear dirty or validating unrelated fields. */
     private void controlsEdited() { controlsEdited(false); }
     /** @param waiting Whether this edit belongs to waiting settings rather than automatic-injection rules. */
@@ -2052,8 +2083,6 @@ public final class UiController {
     private void clearUnusedFields() {
         if (suppress) return; suppress = true;
         try {
-            if (checks.containsKey("globalUnlimited") && checks.get("globalUnlimited").isSelected()) clearField("control.global");
-            if (checks.containsKey("perUnlimited") && checks.get("perUnlimited").isSelected()) clearField("control.per");
             boolean mtls = checks.containsKey("mtls") && checks.get("mtls").isSelected();
             if (!mtls) { pinAvailable = false; selectedCertificateSha256 = ""; loadedCertificate = null; }
             if (!mtls) {
@@ -2092,7 +2121,7 @@ public final class UiController {
             case "url" -> "First page opened by the authentication browser.";
             case "module" -> "Absolute path to your vendor's PKCS#11 library: DLL on Windows, SO on Linux, or dylib on macOS.";
             case "ca" -> "Add a PEM CA file if the login server's certificate isn't already trusted.";
-            case "proxy" -> "Optional HTTP proxy, for example http://127.0.0.1:8080. Leave empty for a direct connection. Proxy authentication is not supported.";
+            case "proxy" -> "Optional HTTP proxy for browser login, recording and Basic/NTLM requests, for example http://127.0.0.1:8080. Empty means direct; Burp upstream proxy settings are not inherited. Proxy authentication is not supported.";
             case "navTimeout" -> "Maximum time for one browser action, in seconds. Fractional seconds are supported.";
             case "tokenWait" -> "Final time to wait for credentials after the steps finish, in seconds. Capture also runs throughout the journey. Fractional seconds are supported.";
             case "maxAge" -> "Maximum time to reuse cached credentials. An earlier token or cookie expiry takes precedence.";
@@ -2139,8 +2168,6 @@ public final class UiController {
         boolean deviceChosen = librarySelected && hasChosenDevice();
         if (certificateSettings != null) certificateSettings.setVisible(deviceChosen);
         refreshCertificatePresentation();
-        if (checks.containsKey("globalUnlimited")) visibleField("control.global", !checks.get("globalUnlimited").isSelected());
-        if (checks.containsKey("perUnlimited")) visibleField("control.per", !checks.get("perUnlimited").isSelected());
         if (automaticFields != null) automaticFields.setVisible(checks.containsKey("enabled") && checks.get("enabled").isSelected());
         InlineValidation.visible(pin, deviceChosen); Object pinLabel = pin.getClientProperty("rowLabel"); if (pinLabel instanceof JLabel label) label.setVisible(deviceChosen);
         pin.setEnabled(!editorLoading && deviceChosen);

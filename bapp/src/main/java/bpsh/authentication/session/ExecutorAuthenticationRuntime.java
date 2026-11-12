@@ -41,8 +41,15 @@ final class ExecutorAuthenticationRuntime implements AuthenticationCoordinator.R
     @Override public void work(Runnable task) { workers.execute(task); }
     /** Stops only owned services; running browser cleanup cooperates through the revoked epoch. */
     @Override public void close() { scheduler.shutdownNow(); workers.shutdown(); }
-    /** @param millis Off-EDT bounded wait; hung vendor work remains daemon work rather than blocking unload forever. */
-    @Override public void await(long millis) { try { workers.awaitTermination(millis, TimeUnit.MILLISECONDS); } catch (InterruptedException ex) { Thread.currentThread().interrupt(); } }
+    /** @param millis Off-EDT total budget for observing worker and clock termination. */
+    @Override public void await(long millis) {
+        long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millis);
+        try {
+            for (var executor : java.util.List.of(workers, scheduler))
+                if (!executor.awaitTermination(Math.max(0, end - System.nanoTime()), TimeUnit.NANOSECONDS))
+                    throw new IllegalStateException("Authentication workers did not terminate within the cleanup budget.");
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException("Authentication cleanup was interrupted."); }
+    }
     /**
      * Creates an extension-owned daemon thread without taking ownership of the host JVM lifecycle.
      *

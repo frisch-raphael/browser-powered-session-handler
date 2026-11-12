@@ -118,11 +118,12 @@ filter/search and event details, and follows stable journey identity. Logs are
 session-only and bounded; credential values and raw request/response data are
 excluded. The former phase line, permanent feedback box and separate test-result
 box are removed. Automatic injection is named Session handling in the UI.
-Explicit Test login and Retry finish with a native popup summarizing captured
-credential names and counts or the safe error and failed step. Values remain in
-Journey cache. Configuration errors and HTTP authentication failures appear
-inline on the relevant settings page instead of in an error popup. Explicit
-actions focus the identified field; background validation never steals focus.
+Successful Test login and Retry finish with a native popup summarizing captured
+credential names and counts. Values remain in Journey cache. Errors associated
+with a field, settings group or journey step appear inline at that location,
+without an error popup. Explicit actions reveal and focus that location;
+background validation never steals focus. Generic errors without an associated
+UI location may use a popup.
 Automatic authentication does not open completion popups.
 
 ## Evidence and acceptance
@@ -136,6 +137,60 @@ journeys are acquired sequentially with cache reuse, and later rules overwrite
 earlier destinations. Commit all injections together only after every required
 session succeeds. Explicit tags retain their independent request-wide policy.
 
-Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
 
 Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+
+## Request and native-resource bounds
+
+Request admission defaults to 64 global and 16 per saved journey, with finite
+operator-adjustable values. The callback budget includes direct HTTP authentication
+through response delivery; Send immediately never waits for a pending login.
+Automatic capacity failures forward the original request with diagnostics;
+explicit requests fail closed. Request-copy reservations total at most 512 MiB
+and charge four times message length plus 16 MiB for bounded header expansion, imposing
+a 124 MiB automatic-message ceiling.
+Automatic edits process headers separately and preserve body bytes. Recovery
+copies are admitted before construction, only for enabled detection, within
+4 MiB per template and 32 MiB retained in aggregate.
+
+Login and recording explicitly require Chromium sandboxing. PKCS#11 configuration,
+login and private-key signing use owned helper processes. The host retains public
+certificate chains and opaque signing references, not native key handles. Unload
+revokes admission, attempts every resource close despite individual failures and
+observes bounded worker/helper termination away from the EDT. A helper failure or
+uncertain PIN outcome does not authorize an automatic PIN retry.
+
+## Session handling by URL and incoming proxy port
+
+Each automatic rule combines a typed URL condition (all requests, Burp scope,
+literal prefix or RE2 regex) with an optional incoming Burp listener port. Both
+must match. Regex searches anywhere in the unmodified URL and is case-sensitive
+by default. Users select existing Burp listeners; this extension does not create
+listeners or infer browser profiles. Every client using a selected port shares
+its assignment. Listener-restricted rules apply only to live Proxy traffic;
+Repeater, Intruder and other tools never inherit that assignment from copied
+requests. Explicit tags retain their independent resolution policy.
+
+Rule ordering, tool selection, cache reuse, waiting policy and version-specific
+recovery remain shared. Final Proxy processing sees the user's interception
+edits; global handling delivers explicit HTTP identities. Failed tagged Proxy requests
+use the normal native Proxy DROP action on a best-effort basis. Successful Proxy requests receive no processing marker. Failed explicit Proxy processing adds no internal stop header, diagnostic ticket
+or global retry. Captured data cannot create HTTP identity or ownership commands.
+
+Project controls use rulesVersion 1 with explicit typed url and nullable proxyPort
+members. Unsupported or unversioned saved rule arrays require a fresh Burp project;
+there is no silent migration or deletion of stored journeys. Invalid drafts and
+failed saves retain the last atomically applied controls and matching plan.
+
+### Accepted Proxy DROP limitation
+
+On the tested Burp version, a native final-Proxy DROP action may be ignored. A
+failed tagged request can therefore reach the target with unresolved tags or
+existing credential bytes. Guaranteed blocking is not a requirement; this
+limitation is accepted during ordinary operation and unload/reload. Failure notes
+say that Burp was asked to drop the request rather than claiming it was not sent.
+The [routing design](designs/session-handling-by-url-and-proxy-port.md) records the
+tested host/version and the current qualification scope. Global-owned requests
+retain their existing native drop behavior. Successful requests continue once;
+a drop failure does not initiate another authentication attempt or resend.

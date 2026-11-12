@@ -34,11 +34,16 @@ public final class FixtureIdentityStore {
     private final Map<String, Issuance> issuances = new LinkedHashMap<>();
     private final Map<String, Registered> registry = new HashMap<>();
     private final byte[] signingKey = new byte[32];
+    private final long lifetimeSeconds, lifetimeMillis;
     private final long epoch = System.currentTimeMillis();
     private final long epochNanos = System.nanoTime();
     private long offset;
 
-    public FixtureIdentityStore() {
+    public FixtureIdentityStore() { this(60); }
+    /** Explicit owner-local lifetime; normal fixture construction retains the one-minute contract. */
+    FixtureIdentityStore(long lifetimeSeconds) {
+        if(lifetimeSeconds<1||lifetimeSeconds>3600)throw new IllegalArgumentException("Fixture lifetime must be 1-3600 seconds.");
+        this.lifetimeSeconds=lifetimeSeconds;this.lifetimeMillis=Math.multiplyExact(lifetimeSeconds,1000);
         RANDOM.nextBytes(signingKey);
         for (String account : List.of("user", "user2", "admin")) { issue(account, false); issue(account, false); }
     }
@@ -49,7 +54,7 @@ public final class FixtureIdentityStore {
     public synchronized void advance(Duration delta) {
         if (delta.isNegative()) throw new IllegalArgumentException("Clock cannot go backward.");
         long next = Math.addExact(offset, delta.toMillis());
-        Math.addExact(Math.addExact(Math.addExact(epoch, next), elapsedMillis()), 60_000);
+        Math.addExact(Math.addExact(Math.addExact(epoch, next), elapsedMillis()), lifetimeMillis);
         offset = next;
     }
     public synchronized Issuance login(String account, String password, boolean signed) {
@@ -57,6 +62,11 @@ public final class FixtureIdentityStore {
         return issue(account, signed);
     }
     static boolean valid(String account, String password) { return account != null && ACCOUNTS.containsKey(account) && Objects.equals(ACCOUNTS.get(account), password); }
+    /** Developer GUI fixtures reuse the same synthetic account data as the receiving application. */
+    public static Secret fixturePassword(String account) {
+        String value=ACCOUNTS.get(account);if(value==null)throw new IllegalArgumentException("Unknown fixture account.");
+        return new Secret(value);
+    }
     synchronized Issuance issueVerified(String account) { if (!ACCOUNTS.containsKey(account)) throw new IllegalArgumentException("Unknown account."); return issue(account, false); }
     public synchronized Issuance seeded(String id) {
         var value = issuances.get(id);
@@ -64,7 +74,7 @@ public final class FixtureIdentityStore {
         return value;
     }
     private Issuance issue(String account, boolean signed) {
-        long expiry = signed ? Math.multiplyExact(Math.addExact(timeMillis() / 1000, 60), 1000) : Math.addExact(timeMillis(), 60_000);
+        long expiry = signed ? Math.multiplyExact(Math.addExact(timeMillis() / 1000, lifetimeSeconds), 1000) : Math.addExact(timeMillis(), lifetimeMillis);
         var result = new Issuance("s" + issuances.size(), account, expiry);
         for (Role role : Role.values()) {
             var secret = signed && role == Role.B ? new Secret(jwt(result)) : randomSecret();

@@ -14,6 +14,39 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HttpTransportRuntimeTest {
+    @Test void journeyProxyIsUsedByNtlmForDirectBrowserAndRecordingWithoutDirectFallback() throws Exception {
+        for (var protocol : List.of(HttpAuthentication.Protocol.NTLM_V1, HttpAuthentication.Protocol.NTLM_V2))
+            for (var purpose : List.of(bpsh.authentication.http.HttpTransportFactory.Purpose.DIRECT,
+                    bpsh.authentication.http.HttpTransportFactory.Purpose.BROWSER, bpsh.authentication.http.HttpTransportFactory.Purpose.RECORDING))
+                for (boolean available : List.of(true, false)) {
+                    try (var server = IntegrationFixtures.httpAuthentication(protocol.name(), null);
+                         var upstream = new lab.auth.TransportFixtures.UnauthenticatedProxy(null, uri -> uri.getPort() == server.url("/").getPort());
+                         var runtime = new HttpTransportRuntime()) {
+                        URI route = upstream.url();
+                        if (!available) {
+                            try (var unused = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+                                route = URI.create("http://127.0.0.1:" + unused.getLocalPort());
+                            }
+                        }
+                        var auth = new HttpAuthentication(protocol, "user-a", "LAB", "", Set.of(server.url("/")));
+                        var setup = new bpsh.journey.BrowserSetup(server.url("/whoami"),
+                                new bpsh.journey.JourneyDefinition.Browser(true, new bpsh.journey.JourneyDefinition.Proxy(route), 10000, 1000), null, auth);
+                        var identity = new bpsh.journey.JourneyDefinition.Identity(bpsh.journey.JourneyDefinition.Scope.PROJECT, java.util.UUID.randomUUID(), 1);
+                        var spec = new bpsh.authentication.http.HttpTransportFactory.ScopeSpec(java.util.UUID.randomUUID(), purpose, identity, 0, setup, false);
+                        try (var secrets = new bpsh.journey.SecretStore.Values(null, java.util.Map.of(), "alpha-password".toCharArray());
+                             var scope = runtime.open(spec, secrets, System.nanoTime() + TimeUnit.SECONDS.toNanos(10)).get(5, TimeUnit.SECONDS)) {
+                            if (available) {
+                                try (var response = exchange(scope, server.url("/whoami"))) { assertEquals(200, response.status()); assertEquals(protocol, response.authentication().protocol()); }
+                                assertTrue(upstream.requestCounter().get() > 0); assertEquals(1, server.handshakes.get());
+                            } else {
+                                assertThrows(java.util.concurrent.ExecutionException.class, () -> exchange(scope, server.url("/whoami")));
+                                assertTrue(server.requests.isEmpty(), "An unavailable configured proxy must never send directly to the origin");
+                            }
+                        }
+                    }
+                }
+    }
+
     @Test void missingPasswordPublishesActionableSetupFailureAndBrokenObserversCannotFailDelivery() throws Exception {
         var failureEvent=new java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationProgress>();
         try(var lab=IntegrationFixtures.httpAuthentication("NTLM_V2",null);

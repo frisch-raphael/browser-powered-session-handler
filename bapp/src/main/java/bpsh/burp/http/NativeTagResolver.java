@@ -6,7 +6,6 @@ import bpsh.authentication.credentials.TokenSnapshot;
 import bpsh.authentication.AuthenticationFailure;
 import bpsh.journey.JourneyDefinition;
 import bpsh.authentication.session.AuthenticationCoordinator;
-import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -84,7 +83,8 @@ public final class NativeTagResolver {
          * @param tokens Used publications.
          * @param changed Whether the original needs replacement.
          */
-        private Resolved(byte[] bytes, Map<String, JourneyCatalog.Entry> bindings, Map<JourneyDefinition.Identity, TokenSnapshot> tokens, boolean changed, List<Automatic> automatic) {
+        private Resolved(byte[] bytes, Map<String, JourneyCatalog.Entry> bindings, Map<JourneyDefinition.Identity, TokenSnapshot> tokens, boolean changed, List<Automatic> automatic) throws AuthenticationFailure {
+            if (changed) validateControlOutput(bytes);
             this.bytes = bytes; this.bindings = Map.copyOf(bindings); this.tokens = Map.copyOf(tokens); this.changed = changed; this.automatic = List.copyOf(automatic);
         }
         /**
@@ -136,6 +136,16 @@ public final class NativeTagResolver {
          * @return Safe result label excluding message bytes, credentials and source fields.
          */
         @Override public String toString() { return "ResolvedRequest[changed=" + changed + ", journeys=" + tokens.size() + "]"; }
+    }
+
+    /** @param bytes Complete prepared output. @throws AuthenticationFailure If credential data would become a later callback command. */
+    private static void validateControlOutput(byte[] bytes) throws AuthenticationFailure {
+        if (HttpAuthenticationDirective.present(bytes))
+            throw NativeTagParser.syntax("Credential output cannot create an HTTP authentication directive.");
+        for (var header : layout(bytes).headers()) {
+            if (header.name().equals("user-agent") && bpsh.browser.AuthTrafficGuard.containsReservedMarker(latin(bytes, header.valueStart(), header.end())))
+                throw NativeTagParser.syntax("Credential output cannot create a reserved BPSH control marker.");
+        }
     }
 
     /** Private request-local replay input, pinned to the original saved generations and destinations. */
@@ -229,11 +239,10 @@ public final class NativeTagResolver {
                 Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
                 AuthenticationFailure safe = cause instanceof AuthenticationFailure failure ? failure : new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
                         "Login failed.", "");
-                List<String> failed = immutable.entrySet().stream().filter(e -> e.getValue().identity().equals(safe.journey())).map(Map.Entry::getKey).toList();
-                String aliases = String.join(", ", failed.isEmpty() ? immutable.keySet() : failed);
-                AuthenticationFailure attributed = new AuthenticationFailure(safe.phase(), safe.reason(), "Journey " + aliases + ": " + safe.problem(), safe.recovery(), safe.httpStatus(), safe.retryAfter());
-                if (safe.journey() != null) attributed = attributed.forJourney(safe.journey());
-                throw new CompletionException(attributed);
+                // Keep typed attribution and input/step metadata; display owners format the alias once.
+                if (safe.journey() == null && immutable.size() == 1)
+                    safe = safe.forJourney(immutable.values().iterator().next().identity());
+                throw new CompletionException(safe);
             }
             try {
                 Map<String, String> values = new LinkedHashMap<>();
@@ -331,7 +340,7 @@ public final class NativeTagResolver {
                 if (!length) edits.add(new Edit(layout.headerEnd(), layout.headerEnd(), ("Content-Length: " + bodyLength + "\r\n").getBytes(StandardCharsets.US_ASCII)));
             }
         } else ordinary(raw, layout, automatic, values, edits);
-        return apply(raw, edits, tagged ? NativeTagParser.MAX_OUTPUT_BYTES : Integer.MAX_VALUE);
+        return apply(raw, edits, NativeTagParser.MAX_OUTPUT_BYTES);
     }
 
     /**
@@ -436,9 +445,14 @@ public final class NativeTagResolver {
         edits.sort(Comparator.comparingInt(Edit::start).thenComparingInt(Edit::end)); long length = raw.length; int previous = 0;
         for (Edit edit : edits) { if (edit.start() < previous || edit.end() < edit.start()) throw NativeTagParser.syntax("Authentication tags overlap in the request. Check the tag boundaries."); previous = edit.end(); length += (long) edit.value().length - (edit.end() - edit.start()); }
         if (length < 0 || length > maximum) throw NativeTagParser.syntax("The expanded request exceeds its message-size ceiling.");
-        var out = new ByteArrayOutputStream((int) length); previous = 0;
-        for (Edit edit : edits) { out.write(raw, previous, edit.start() - previous); out.writeBytes(edit.value()); previous = edit.end(); }
-        out.write(raw, previous, raw.length - previous); return out.toByteArray();
+        byte[] out = new byte[(int) length]; previous = 0; int at = 0;
+        for (Edit edit : edits) {
+            int unchanged = edit.start() - previous;
+            System.arraycopy(raw, previous, out, at, unchanged); at += unchanged;
+            System.arraycopy(edit.value(), 0, out, at, edit.value().length); at += edit.value().length;
+            previous = edit.end();
+        }
+        System.arraycopy(raw, previous, out, at, raw.length - previous); return out;
     }
 
     /**

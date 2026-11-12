@@ -20,6 +20,9 @@ is structurally verified during packaging.
 ## Build
 
 Use JDK 21 and the checked-in wrapper, dependency locks and verification metadata.
+The checked-in Gradle settings allow a 2 GiB build heap. Universal payload
+encoding runs sequentially: XZ preset 9 with a 64 MiB dictionary needs about
+673 MiB per encoder. Unchanged prepared assets skip encoding on cached builds.
 From this directory, after dependencies and source archives are prepared:
 
 ```powershell
@@ -27,9 +30,11 @@ From this directory, after dependencies and source archives are prepared:
 ```
 
 The development artifact is
-`build/libs/browser-powered-session-handler-dev.jar` (about 740 MB).
-The JAR task verifies its bundled payload and rejects host/test APIs, retired
-runtime classes, duplicate entries and stale signatures.
+`build/libs/browser-powered-session-handler-dev.jar`.
+The JAR task requires the complete artifact to remain below 512 MiB, with an
+engineering target of at most 500 MiB. It verifies all three bounded XZ decodes
+and rejects host/test APIs, retired runtime classes, duplicate entries and stale
+signatures. Build directly to this path; do not create a candidate JAR.
 
 For a fresh build environment, resolve Gradle dependencies and explicitly
 prepare the locked browser sources:
@@ -38,8 +43,12 @@ prepare the locked browser sources:
 .\gradlew.bat prepareBrowserAssets --console=plain
 ```
 
+These downloads happen only on the developer's build machine. Installing or
+using the finished extension JAR does not download browser components; runtime
+setup verifies and extracts the files already bundled in the JAR.
+
 The source lock is `browser-assets.lock.json`; source archives are cached under
-`build/browser-sources`. Browser source downloads can use
+`build/browser-sources`. Build-time browser source downloads can use
 `-PassetDownloadProxy=http://127.0.0.1:8080`. This build setting is independent
 of journey proxy URLs and Gradle's Maven/wrapper download settings.
 Runtime uses the verified payload embedded in the JAR.
@@ -68,11 +77,14 @@ also require a working desktop/display session. Headless login still needs the
 shared libraries. Native Windows and macOS prerequisites follow the pinned
 Chromium build; no claim is made for untested OS versions.
 
-Each target has its own embedded manifest and ZIP under
+Each target has its own format-2 manifest and `browser-assets.zip.xz` under
 `META-INF/bpsh/<target>/`. Only that target is read at runtime. Extraction uses
-`user.home/.bpsh/cache/<target>/<manifest digest>`; matching previous manifests
-keep their existing cache identity. Archive verification and extraction use
-temporary disk space in addition to the published cache and JAR. Published old
+`user.home/.bpsh/cache/<target>/<bundle digest>`. The runtime streams XZ through
+a 128 MiB decoder ceiling into a private temporary STORED ZIP and checks exact
+compressed size/SHA-256 and expanded size before ZIP extraction. Plan temporary
+space for that expanded ZIP plus the selected extracted tree. Cancellation and
+the original attempt deadline apply during both stages. The completion marker
+remains version 1; exact manifest/archive bytes determine cache identity. Published old
 caches are retained for rollback. To reclaim one, close all extension sessions
 using it and manually remove only the obsolete digest directory. There is no
 automatic published-cache eviction.
@@ -130,7 +142,7 @@ Production code lives in feature packages under `src/main/java/bpsh`; tests mirr
 | `Pkcs11IdentityManager`, `JourneyTlsProxy` | Exact certificate selection, shared PIN state and attempt-owned TLS routing |
 | `AuthenticationCoordinator`, `TokenLifetime`, `TokenSnapshot` | Coalesced acquisition, waiting limits, cancellation, expiry and refresh |
 | `NativeTagParser`, `NativeTagResolver` | Bounded grammar, encoding and atomic request-local credential replacement |
-| `AuthTrafficGuard`, `HttpSessionHandler`, `SessionRecovery` | Browser self-traffic exclusion, Burp hooks and version-specific invalidation |
+| `AuthTrafficGuard`, `SessionHandling`, `SessionRequestProcessor`, `SessionRecovery` | Browser self-traffic exclusion, Burp hooks and version-specific invalidation |
 | `JourneyEventLog`, `JourneyCachePanel`, `Diagnostics` | Safe history, explicit cache inspection and corrective diagnostics |
 
 Project storage uses `bpsh_project_v3`; the User library is

@@ -96,8 +96,8 @@ class JourneyEventLogTest {
             var ticket = fixture.acquire(0); fixture.clock.runWorker(); ticket.future().join();
             var entry = fixture.entry(0); var token = fixture.coordinator.peek(entry.identity());
             var rule = new JourneyDefinition.Recovery(false, JourneyDefinition.RecoveryMode.STATUS_CODE, 401, null);
-            recovery.record(17, List.of(new CredentialUse(entry.identity(), token.version(), rule)), false);
-            recovery.receivedPlan(17, status, () -> { throw new AssertionError("Status feedback must not inspect a login page's body."); }, false, true);
+            recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 17), List.of(new CredentialUse(entry.identity(), token.version(), rule)), false);
+            recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 17), status, () -> { throw new AssertionError("Status feedback must not inspect a login page's body."); }, false, true);
             var message = fixture.coordinator.events().snapshot(entry.identity().key()).getLast().message();
             assertEquals("Request using this journey's credentials returned HTTP " + status + ".", message);
             assertFalse(message.toLowerCase().contains("accepted"));
@@ -161,8 +161,8 @@ class JourneyEventLogTest {
                 facts.put("currentRevision",current.identity().equals(h.member(editor.ui,"editingIdentity"))&&editor.registry.snapshot().isCurrent(current.identity())&&(!variant.equals("stale-result")||current.identity().generation()>original.identity().generation()&&editor.coordinator.peek(original.identity())==null));
                 if(success)facts.put("protectedUseVerified",state.acceptedUse());
                 else {
-                    var tagged=editor.diagnostics.request(990,current.definition().alias(),state.failure(),true);var ordinary=editor.diagnostics.request(991,current.definition().alias(),state.failure(),false);messages.add(tagged.text());messages.add(ordinary.text());
-                    facts.put("requestFeedbackMatches",tagged.requestStopped()&&!ordinary.requestStopped()&&tagged.text().contains("Request was not sent.")&&ordinary.text().contains("unchanged request was sent"));
+                    var tagged=editor.diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 990),current.definition().alias(),state.failure(),true);var ordinary=editor.diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 991),current.definition().alias(),state.failure(),false);messages.add(tagged.text());messages.add(ordinary.text());
+                    facts.put("requestFeedbackMatches",tagged.dropRequested()&&!ordinary.dropRequested()&&tagged.text().contains("Burp was asked to drop this request.")&&ordinary.text().contains("BPSH left the request unchanged"));
                     facts.put("noPartialPublication",editor.coordinator.peek(current.identity())==null);
                 }
                 List<String> required=variant.equals("attempts-exhausted")?List.of("connection","refused","paused after 3 attempts"):variant.equals("protected-use-rejected")?List.of("application","rejected","replacement"):List.of("credentials","captured");

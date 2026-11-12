@@ -20,7 +20,7 @@ import javax.swing.*;
 public final class StepsPanel extends JPanel {
     private final JPanel rowsPanel = new JPanel();
     private final List<Row> rows = new ArrayList<>();
-    private final JComboBox<AuthStep.Type> typePicker = new JComboBox<>(AuthStep.Type.values());
+    private final JComboBox<AuthStep.Type> typePicker = UiTooltips.comboBox(AuthStep.Type.values());
     private final JButton addStep;
     private final JButton recordSteps = UiIcons.button(UiIcons.Action.RECORD, "Record in browser", () -> {});
     private final JButton undoStep = UiIcons.button(UiIcons.Action.UNDO, "Undo", this::undo);
@@ -284,21 +284,21 @@ public final class StepsPanel extends JPanel {
     /** Owns one step's Swing fields; reordering never reallocates its stable UUID. */
     private final class Row extends JPanel {
         final UUID id;
-        final JComboBox<AuthStep.Type> type = new JComboBox<>(AuthStep.Type.values());
+        final JComboBox<AuthStep.Type> type = UiTooltips.comboBox(AuthStep.Type.values());
         final JTextField selector = new PlaceholderTextField("CSS selector", 18), value = new PlaceholderTextField("Value / URL pattern / wait", 20);
         final PlaceholderPasswordField secret = new PlaceholderPasswordField("Secret value", 18);
         boolean secretProvided;
-        final JComboBox<String> state = new JComboBox<>(AuthStep.LOAD_STATES.toArray(String[]::new));
+        final JComboBox<String> state = UiTooltips.comboBox(AuthStep.LOAD_STATES.toArray(String[]::new));
         final JLabel number = new JLabel(), valueCaption = new JLabel("Value"), stateCaption = new JLabel("Load state"), selectorCaption = new JLabel("Selector");
         final JToggleButton expanded = new JToggleButton();
         final JPanel inputs = new JPanel();
         final JPanel selectorLine, valueLine, stateLine, secretLine;
-        final JComboBox<String> checked = new JComboBox<>(new String[]{"", "true", "false"});
-        final JComboBox<String> key = new JComboBox<>(AuthStep.KEYS.toArray(String[]::new));
+        final JComboBox<String> checked = UiTooltips.comboBox(new String[]{"", "true", "false"});
+        final JComboBox<String> key = UiTooltips.comboBox(AuthStep.KEYS.toArray(String[]::new));
         final javax.swing.table.DefaultTableModel optionValues = new javax.swing.table.DefaultTableModel(new Object[]{"Option value"}, 0);
-        final JTable options = new JTable(optionValues);
-        final JTextField popupName = new JTextField(18);
-        final JComboBox<Reference> trigger = new JComboBox<>(), pageChoice = new JComboBox<>();
+        final JTable options = UiTooltips.table(optionValues);
+        final JTextField popupName = UiTooltips.textField(18);
+        final JComboBox<Reference> trigger = UiTooltips.comboBox(), pageChoice = UiTooltips.comboBox();
         final JPanel checkedLine, optionsLine, keyLine, popupLine, triggerLine, pageLine;
         boolean updatingReferences;
         final JButton up, down, remove;
@@ -336,7 +336,7 @@ public final class StepsPanel extends JPanel {
             var optionPanel = new JPanel(new BorderLayout(4, 4)); options.putClientProperty("terminateEditOnFocusLost", true);
             options.setPreferredScrollableViewportSize(new Dimension(240, 70)); options.getTableHeader().setReorderingAllowed(false);
             options.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() { @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
-                var c = super.getTableCellRendererComponent(table, value, selected, focus, row, column); putClientProperty("html.disable", true); return c;
+                putClientProperty("html.disable", true); return super.getTableCellRendererComponent(table, value, selected, focus, row, column);
             } });
             optionPanel.add(new JScrollPane(options)); var optionButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
             var addOption = new JButton("Add value"); var removeOption = new JButton("Remove value");
@@ -430,7 +430,7 @@ public final class StepsPanel extends JPanel {
             };
         }
 
-        private void help(JComponent field, String text) { field.setToolTipText(StepActionHelp.tooltip(text)); field.getAccessibleContext().setAccessibleDescription(text); }
+        private void help(JComponent field, String text) { UiTooltips.set(field, text, 320); }
 
         private void operationChanged() { if (!updatingReferences) { InlineValidation.clear(options); InlineValidation.clear(key); summary(); notifyChanged(); } }
 

@@ -12,6 +12,11 @@ repositories { mavenCentral() }
 java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
 dependencyLocking { lockAllConfigurations() }
 val hostProbe = sourceSets.create("hostProbe")
+val hostGui = sourceSets.create("hostGui")
+hostGui.compileClasspath += sourceSets.main.get().output + configurations.getByName("runtimeClasspath")
+hostProbe.compileClasspath += hostGui.output + sourceSets.main.get().output + configurations.getByName("runtimeClasspath")
+sourceSets.test.get().compileClasspath += hostGui.output
+sourceSets.test.get().runtimeClasspath += hostGui.output
 val montoyaApi = rootProject.configurations.getByName("compileOnly").dependencies.single { it.group == "net.portswigger.burp.extensions" && it.name == "montoya-api" }
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(21)
@@ -30,6 +35,21 @@ dependencies {
 }
 
 application { mainClass.set("lab.auth.LabMain") }
+tasks.register<Jar>("hostProbeJar") {
+    group = "authentication lab"
+    description = "Build the normal Montoya probe and test-only public JDK GUI driver."
+    archiveFileName.set("authentication-lab-host-probe.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("host-probe"))
+    from(hostProbe.output)
+    from(hostGui.output)
+    from(sourceSets.main.get().output) { include("lab/auth/LabJson*.class", "lab/auth/LabHostGuiProtocol*.class") }
+    from(provider { zipTree(configurations.runtimeClasspath.get().files.single { it.name == "gson-2.13.2.jar" }) }) {
+        exclude("META-INF/MANIFEST.MF", "META-INF/versions/**", "module-info.class")
+    }
+    manifest {
+        attributes("Premain-Class" to "lab.auth.gui.HostGuiBootstrap", "Can-Redefine-Classes" to "false", "Can-Retransform-Classes" to "false")
+    }
+}
 tasks.test {
     useJUnitPlatform()
     failOnNoDiscoveredTests.set(true)

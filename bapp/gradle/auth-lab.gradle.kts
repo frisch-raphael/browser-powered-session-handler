@@ -99,6 +99,10 @@ tasks.register("authLab") {
             logger.lifecycle("Federation profile: 17 requirements proven by 7 shared native owners; 14 provider-validation entries excluded. Evidence: $report")
         }
     }
+    else if(profiles==setOf("burp-host")) {
+        check(!providers.gradleProperty("labTests").isPresent) { "The Burp host profile requires both complete platform suites; use authLabHostQualify for scoped diagnostics." }
+        dependsOn("authLabHostTest")
+    }
     else if(profiles==setOf("transport")) {
         check(!providers.gradleProperty("labTests").isPresent) { "The transport profile requires its complete owner set; use an explicit scoped task for -PlabTests." }
         dependsOn("authLabBrowserTest","authLabTransportTest")
@@ -140,3 +144,4 @@ tasks.register("authLab") {
 }
 
 apply(from = "gradle/auth-lab-production.gradle.kts")
+apply(from = "gradle/auth-lab-host.gradle.kts")

@@ -657,13 +657,13 @@ public class BrowserJourneyIntegrationTest {
                     try (var operation = resolver.resolveAutomatic(raw.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), List.of(new NativeTagResolver.Automatic(entry, rule)))) {
                         var resolved = operation.future().join(); String wire = new String(resolved.commit(), java.nio.charset.StandardCharsets.ISO_8859_1);
                         assertTrue(wire.contains("Bearer " + initial.value()));
-                        recovery.record(100 + i, resolved.uses(), false, resolved.replayTemplate(raw.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)));
+                        recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + i), resolved.uses(), false, resolved.replayTemplate(raw.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)));
                         var response = client.send(java.net.http.HttpRequest.newBuilder(origin.url("/protected")).header("Authorization", "Bearer " + initial.value()).POST(java.net.http.HttpRequest.BodyPublishers.ofString("body=data")).build(), java.net.http.HttpResponse.BodyHandlers.ofString());
                         observations.add(response.statusCode()); assertEquals(401, response.statusCode());
                     }
                 }
                 var decisions = new java.util.ArrayList<SessionRecovery.Decision>();
-                for (int i = 0; i < 8; i++) decisions.add(recovery.receivedPlan(100 + i, observations.get(i), () -> null, false, true));
+                for (int i = 0; i < 8; i++) decisions.add(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 100 + i), observations.get(i), () -> null, false, true));
                 for (int i = 0; i < 8; i++) try (var plan = decisions.get(i).replay().get(60, TimeUnit.SECONDS)) {
                     String wire = new String(plan.claim(), java.nio.charset.StandardCharsets.ISO_8859_1);
                     assertTrue(wire.contains("X-Trace: original-" + i)); assertTrue(wire.endsWith("body=data"));
@@ -671,7 +671,7 @@ public class BrowserJourneyIntegrationTest {
                     var response = client.send(java.net.http.HttpRequest.newBuilder(origin.url("/protected")).header("Authorization", authorization).header("X-Trace", "original-" + i)
                             .POST(java.net.http.HttpRequest.BodyPublishers.ofString("body=data")).build(), java.net.http.HttpResponse.BodyHandlers.ofString());
                     assertEquals(200, response.statusCode()); assertEquals("fixture-account", response.body());
-                    recovery.record(200 + i, plan.uses(), false); assertNull(recovery.receivedPlan(200 + i, response.statusCode(), () -> null, false, true).replay());
+                    recovery.record(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 200 + i), plan.uses(), false); assertNull(recovery.receivedPlan(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 200 + i), response.statusCode(), () -> null, false, true).replay());
                     assertThrows(AuthenticationFailure.class, plan::claim);
                 }
                 assertEquals(4, loginAttempts.get()); assertEquals(2, issuances.get()); assertEquals(17, protectedIngress.get()); assertEquals(9, acceptedActions.get());
@@ -871,6 +871,49 @@ public class BrowserJourneyIntegrationTest {
         }
     }
 
+    /** Waits for a real Windows delete-sharing lock without abandoning the attempt-owned profile. */
+    public @Test void driverCleanupWaitsForAReleasedWindowsProfileFileLock() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+        Path temporaryParent = Files.createDirectory(httpPolicyTemporary.resolve("driver-temporary"));
+        String previousTemporary = System.setProperty("java.io.tmpdir", temporaryParent.toString());
+        var unlocker = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        try {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            try (var driver = PlaywrightDriverAdapter.open(runtime.acquire(deadline, () -> false), deadline, () -> false)) {
+                Path attempt;
+                try (var paths = Files.list(temporaryParent)) {
+                    attempt = paths.filter(path -> path.getFileName().toString().startsWith("bpsh-attempt-")).findFirst().orElseThrow();
+                }
+                Path profileFile = Files.writeString(attempt.resolve("held-profile-file"), "owned fixture");
+                try (var held = java.nio.channels.FileChannel.open(profileFile, java.nio.file.StandardOpenOption.READ,
+                        com.sun.nio.file.ExtendedOpenOption.NOSHARE_DELETE)) {
+                    var released = unlocker.schedule(() -> { held.close(); return true; }, 1500, TimeUnit.MILLISECONDS);
+                    driver.close();
+                    assertTrue(released.get(5, TimeUnit.SECONDS));
+                    assertFalse(Files.exists(attempt), "Cleanup must remove the owned profile after its file lock is released");
+                }
+            }
+        } finally {
+            System.setProperty("java.io.tmpdir", previousTemporary);
+            unlocker.shutdownNow();
+            assertTrue(unlocker.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    public @Test void cleanupDeadlineEndsAnUnresponsiveProtocolWaitBeforeTheAttemptDeadline() throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        var ready = runtime.acquire(deadline, () -> false);
+        try (var driver = PlaywrightDriverAdapter.open(ready, deadline, () -> false)) {
+            var browser = driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true)
+                    .setChromiumSandbox(true).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
+            var page = browser.newPage();
+            long started = System.nanoTime(); driver.beginCleanup();
+            assertThrows(com.microsoft.playwright.PlaywrightException.class, () -> page.waitForTimeout(15000));
+            driver.close(); assertTrue(driver.terminated());
+            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(8), "Cleanup must not wait for the original 30-second attempt budget");
+        }
+    }
+
 
     public @Test void coldAndUpgradeProbesUseNormalBudgets() throws Exception {
         IntegrationFixtures.verifyColdAndUpgrade();
@@ -891,7 +934,7 @@ public class BrowserJourneyIntegrationTest {
         public static void exercise(String loginUrl) throws Exception {
             ClassLoader loader = PlaywrightDriverAdapter.class.getClassLoader();
             String scope = "META-INF/bpsh/" + BrowserRuntimeManager.hostPlatform() + "/";
-            if (loader.getResource(scope + "browser-assets.json") == null || loader.getResource(scope + "browser-assets.zip") == null)
+            if (loader.getResource(scope + "browser-assets.json") == null || loader.getResource(scope + "browser-assets.zip.xz") == null)
                 throw new AssertionError("Host payload resources missing.");
             for (String name : List.of("driver/package/cli.js", "driver/win32_x64/node.exe", "driver/linux/node", "driver/mac/node"))
                 if (loader.getResource(name) != null) throw new AssertionError("Duplicate driver execution resources remain.");
