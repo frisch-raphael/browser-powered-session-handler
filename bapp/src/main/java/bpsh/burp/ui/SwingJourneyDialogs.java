@@ -9,12 +9,13 @@ import static bpsh.burp.ui.JourneyForms.note;
 
 /** Presents standard parented Swing dialogs; it performs no storage or authentication work. */
 final class SwingJourneyDialogs implements JourneyDialogs {
-    private final RememberingFileChooser journeys, middleware, trustedCa;
+    private final RememberingFileChooser journeys, middleware, trustedCa, browser;
     private JDialog loginDialog;
     SwingJourneyDialogs(burp.api.montoya.persistence.Preferences preferences) {
         journeys = new RememberingFileChooser(preferences, RememberingFileChooser.Purpose.JOURNEYS);
         middleware = new RememberingFileChooser(preferences, RememberingFileChooser.Purpose.MIDDLEWARE);
         trustedCa = new RememberingFileChooser(preferences, RememberingFileChooser.Purpose.TRUSTED_CA);
+        browser = new RememberingFileChooser(preferences, RememberingFileChooser.Purpose.BROWSER);
     }
     /** @return Selected path, preserving the native chooser's cancellation behavior. */
     @Override public Path file(Component parent, boolean save) {
@@ -37,6 +38,8 @@ final class SwingJourneyDialogs implements JourneyDialogs {
         return approved ? chooser.getSelectedFile().toPath() : null;
     }
     @Override public Path trustedCa(Component parent) { var chooser = trustedCa.create(false); chooser.setDialogTitle("Choose trusted CA PEM bundle"); boolean approved = chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION; trustedCa.remember(chooser, approved); return approved ? chooser.getSelectedFile().toPath() : null; }
+    /** Uses a separate native picker; a cancelled dialog never changes the executable override. */
+    @Override public Path browserExecutable(Component parent) { var chooser = browser.create(false); chooser.setDialogTitle("Choose Burp Browser executable"); boolean approved = chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION; browser.remember(chooser, approved); return approved ? chooser.getSelectedFile().toPath() : null; }
     /** @return Whether the operator accepted this task-specific confirmation. */
     @Override public boolean confirm(Component parent, Object content, String title) { return JOptionPane.showConfirmDialog(parent, dialogContent(parent, content), title, JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION; }
     @Override public boolean confirmAction(Component parent, Object content, String title, String action) { return JOptionPane.showOptionDialog(parent, dialogContent(parent, content), title, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, new String[]{action, "Cancel"}, "Cancel") == 0; }

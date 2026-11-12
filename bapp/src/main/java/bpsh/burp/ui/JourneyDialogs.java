@@ -15,6 +15,8 @@ public interface JourneyDialogs {
     default Path middleware(Component parent) { return file(parent, false); }
     /** Selects an optional PEM CA bundle independently of middleware navigation. */
     default Path trustedCa(Component parent) { return file(parent, false); }
+    /** Chooses the installed Burp Browser executable without altering journey file navigation. */
+    default Path browserExecutable(Component parent) { return file(parent, false); }
     /** @param parent Burp suite frame. @param content Plain text or owned preview component. @param title Task title. @return True only after explicit OK. */
     boolean confirm(Component parent, Object content, String title);
     /** Gives production dialogs a concrete action label while preserving injectable modal decisions. */

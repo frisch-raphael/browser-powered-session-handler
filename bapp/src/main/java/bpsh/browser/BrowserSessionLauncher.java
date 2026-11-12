@@ -47,7 +47,7 @@ public final class BrowserSessionLauncher {
     /** Adds a safe observation seam while keeping resource ownership inside the browser boundary. */
     public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic,
             Clock clock, Consumer<Lifecycle> lifecycle) {
-        this(runtime, new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> ""), httpTransport, traffic, clock, lifecycle);
+        this(runtime, bpsh.browser.runtime.BurpBrowserResolver.current( () -> ""), httpTransport, traffic, clock, lifecycle);
     }
 
     /** Captures driver and installed-browser selection boundaries without starting either. */

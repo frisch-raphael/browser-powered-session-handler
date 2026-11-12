@@ -7,7 +7,7 @@ import javax.swing.JFileChooser;
 /** Remembers each file picker's navigation separately through Burp's user preferences. */
 final class RememberingFileChooser {
     enum Purpose {
-        JOURNEYS("bpsh_journey_file_directory"), MIDDLEWARE("bpsh_middleware_file_directory"), TRUSTED_CA("bpsh_trusted_ca_file_directory");
+        JOURNEYS("bpsh_journey_file_directory"), MIDDLEWARE("bpsh_middleware_file_directory"), TRUSTED_CA("bpsh_trusted_ca_file_directory"), BROWSER("bpsh_browser_file_directory");
 
         private final String directoryKey;
 

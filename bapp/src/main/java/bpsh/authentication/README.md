@@ -6,6 +6,7 @@ Defines safe failures, setup progress and the scheduling policy port.
 
 ## Interface
 
+- [BrowserInstallation](./BrowserInstallation.java): Framework-free user-local browser selection and advisory discovery port; only the composition root binds its runtime implementation.
 - [AuthenticationFailure](./AuthenticationFailure.java): Carries an observed authentication outcome without retaining secret-bearing vendor exceptions.
 - [AuthenticationPolicy](./AuthenticationPolicy.java): Scheduling/admission input port.
 - [AuthenticationStage](./AuthenticationStage.java): Fixed local preparation states; none contains browser or credential output.

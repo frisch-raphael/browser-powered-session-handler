@@ -99,7 +99,7 @@ public final class Extension implements BurpExtension {
         final UserLibraryStore library = new UserLibraryStore();
         final BrowserRuntimeManager runtime = new BrowserRuntimeManager();
         final bpsh.browser.runtime.BrowserExecutableSettings browserSettings = new bpsh.browser.runtime.BrowserExecutableSettings();
-        final bpsh.browser.runtime.BurpBrowserResolver browserResolver = new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), browserSettings::executableOverride);
+        final bpsh.browser.runtime.BurpBrowserResolver browserResolver = bpsh.browser.runtime.BurpBrowserResolver.current( browserSettings::executableOverride);
         final Pkcs11IdentityManager identities = new Pkcs11IdentityManager();
         final AuthTrafficGuard guard = new AuthTrafficGuard();
         final bpsh.authentication.http.HttpAuthenticationActivity httpActivity = new bpsh.authentication.http.HttpAuthenticationActivity(registry);
@@ -184,6 +184,15 @@ public final class Extension implements BurpExtension {
             handler = new SessionHandling(registry, resolver, guard, recovery, diagnostics, controls,
                     (request, timeout) -> api.http().sendRequest(request, burp.api.montoya.http.RequestOptions.requestOptions().withResponseTimeout(timeout)), httpIdentities);
             ui = new UiController(api, new bpsh.journey.editing.JourneyStorage(new ProjectStore(api.persistence().extensionData()), library), secrets, registry, coordinator, identities, controls, diagnostics, recorder, new bpsh.burp.http.ProxyListeners(api));
+            var browserInstallation = new bpsh.authentication.BrowserInstallation() {
+                @Override public String executableOverride() { return browserSettings.executableOverride(); }
+                @Override public void setExecutableOverride(String value) { browserSettings.setExecutableOverride(value); }
+                @Override public Selection discover(long deadline, java.util.function.BooleanSupplier cancelled) throws AuthenticationFailure {
+                    var selected = browserResolver.resolve(deadline, cancelled);
+                    return new Selection(selected.executable(), selected.source() == bpsh.browser.runtime.BurpBrowserResolver.Source.EXPLICIT);
+                }
+            };
+            ui.browserRuntime(browserInstallation, new bpsh.burp.ui.BrowserRuntimePreferences(api.persistence().preferences(), browserInstallation));
             ui.httpIdentities(httpIdentities);
             ui.httpActivity(httpActivity);
         }

@@ -91,7 +91,7 @@ public final class IntegrationFixtures {
     private IntegrationFixtures() {}
     /** Selects only the explicit integration executable or current Burp installation hints. */
     public static bpsh.browser.runtime.BurpBrowserResolver browserResolver() {
-        return new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> System.getProperty("bpsh.test.burpBrowserExecutable", ""));
+        return bpsh.browser.runtime.BurpBrowserResolver.current( () -> System.getProperty("bpsh.test.burpBrowserExecutable", ""));
     }
     /** Returns a fresh test selection; never reads a real browser profile. */
     public static Path browserExecutable() throws bpsh.authentication.AuthenticationFailure {

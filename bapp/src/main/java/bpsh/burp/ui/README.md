@@ -6,6 +6,8 @@ Owns Swing editing/presentation, autosave interaction, explicit device actions a
 
 ## Interface
 
+- [BrowserRuntimePreferences](./BrowserRuntimePreferences.java): Persists the browser executable override only in Burp's user preferences.
+- [BurpBrowserSettingsPanel](./BurpBrowserSettingsPanel.java): Native browser location, selection and inline prerequisite guidance; performs no filesystem discovery.
 - [AuthenticationTagMenu](./AuthenticationTagMenu.java): Inserts literal saved references at the request selection without acquiring or exposing credentials.
 - [AutomaticRulesPanel](./AutomaticRulesPanel.java): Ordered session-handling rules with typed URL/regex choices, existing listener ports and inline expiration settings.
 - [CertificatePresentation](./CertificatePresentation.java): Human-readable public identity labels; exact certificate selection remains fingerprint-based.

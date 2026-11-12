@@ -75,6 +75,11 @@ public final class UiController {
     private final JTextArea collectionFeedback = feedback("Journey collection status");
     private final CredentialsPanel credentials = new CredentialsPanel();
     private Timer settingsDebounce, automaticDebounce, journeyDebounce, journeyRetry, deviceDebounce;
+    private bpsh.authentication.BrowserInstallation browserInstallation;
+    private BrowserRuntimePreferences browserPreferences;
+    private BurpBrowserSettingsPanel browserSettingsPanel;
+    private volatile long browserDiscoveryEpoch;
+    private AuthenticationFailure displayedBrowserFailure;
     private boolean journeySaveInFlight, saveRequested, savePaused;
     private int saveRetries;
     private long editVersion;
@@ -238,6 +243,14 @@ public final class UiController {
         });
     }
 
+    /** Connects user-local browser selection independently of project/journey persistence.
+     * @param installation Application-owned browser settings/discovery. @param preferences User-local persistence.
+     */
+    public void browserRuntime(bpsh.authentication.BrowserInstallation installation, BrowserRuntimePreferences preferences) {
+        browserInstallation = java.util.Objects.requireNonNull(installation); browserPreferences = java.util.Objects.requireNonNull(preferences);
+        if (browserSettingsPanel != null) { browserSettingsPanel.setOverride(installation.executableOverride()); refreshBrowserSelection(); }
+    }
+
     /**
      * Builds the saved-journey editor on the EDT; timers only snapshot local fields or read safe metadata.
      * @return Complete native suite-tab component.
@@ -329,7 +342,7 @@ public final class UiController {
 
     public void start() {
         // Burp's theme pass can replace combo renderers after buildUi; restore labels without changing values.
-        ui(() -> { friendly(destination); literalJourneyLabels(); automaticRules.refreshPresentation(); steps.refreshPresentation(); status.refreshPresentation(); eventLog.refreshPresentation(); });
+        ui(() -> { friendly(destination); literalJourneyLabels(); automaticRules.refreshPresentation(); steps.refreshPresentation(); status.refreshPresentation(); eventLog.refreshPresentation(); refreshBrowserSelection(); });
         enqueue(io, null, () -> { reload(); storage.watch(loaded -> enqueue(io, loaded, () -> libraryChanged(loaded)), error -> enqueue(io, null, () -> storageFailed(JourneyDefinition.Scope.LIBRARY, error))); });
     }
 
@@ -549,6 +562,11 @@ public final class UiController {
     /** Builds project waiting policy and timeout settings. */
     private Component settingsForm() {
         var panel = form();
+        browserSettingsPanel = new BurpBrowserSettingsPanel(this::browserSelectionEdited, this::chooseBrowserExecutable, () -> {
+            browserSettingsPanel.setOverride(""); browserSelectionEdited("");
+        });
+        browserSettingsPanel.setOverride(browserInstallation == null ? "" : browserInstallation.executableOverride());
+        row(panel, "", browserSettingsPanel);
         requestPolicy.getAccessibleContext().setAccessibleName("Automatic handling policy");
         requestPolicyHelp.setRows(7);
         updateRequestPolicyHelp();
@@ -560,6 +578,37 @@ public final class UiController {
         row(panel, "Global request limit", field("control.global", "64"));
         row(panel, "Per-journey request limit", field("control.per", "16"));
  return scroll(panel);
+    }
+    /** @param value Latest user-local raw executable; invalid text is retained until correction. */
+    private void browserSelectionEdited(String value) {
+        browserDiscoveryEpoch++;
+        if (browserPreferences == null) { browserSettingsPanel.showFailure("Browser selection is unavailable. Reload the extension and try again."); return; }
+        try { browserPreferences.select(value); refreshBrowserSelection(); }
+        catch (IllegalStateException error) { browserSettingsPanel.showFailure(error.getMessage()); }
+    }
+    /** Browses only after an explicit action; cancellation retains the current selection. */
+    private void chooseBrowserExecutable() {
+        Path path = dialogs.browserExecutable(parent());
+        if (path != null) { browserSettingsPanel.setOverride(path.toString()); browserSelectionEdited(path.toString()); }
+    }
+    /** Runs filesystem discovery on the existing worker; stale edits and shutdown fence results. */
+    private void refreshBrowserSelection() {
+        if (closed || browserInstallation == null || browserSettingsPanel == null) return;
+        long ticket = ++browserDiscoveryEpoch; var installation = browserInstallation; browserSettingsPanel.detecting();
+        boolean queued = enqueue(io, null, () -> {
+            try {
+                var selection = installation.discover(System.nanoTime() + TimeUnit.SECONDS.toNanos(5), () -> closed || ticket != browserDiscoveryEpoch);
+                ui(() -> { if (ticket == browserDiscoveryEpoch) browserSettingsPanel.showSelection(selection); });
+            } catch (AuthenticationFailure error) {
+                ui(() -> { if (ticket == browserDiscoveryEpoch) browserSettingsPanel.showFailure(error.getMessage()); });
+            }
+        });
+        if (!queued) browserSettingsPanel.showFailure("Browser detection could not start. Select the browser again when pending work finishes.");
+    }
+    /** @param message Safe observed failure. @param reveal Whether this came from an explicit user action. */
+    private void showBrowserFailure(String message, boolean reveal) {
+        browserDiscoveryEpoch++; browserSettingsPanel.showFailure(message);
+        if (reveal) { mainTabs.setSelectedIndex(2); InlineValidation.focus(browserSettingsPanel.focusTarget()); }
     }
     /** Explains the selected policy's effect on this request and the user's next action. */
     private void updateRequestPolicyHelp() {
@@ -679,6 +728,10 @@ public final class UiController {
         boolean active = false, recovery = false, tokenAvailable = false;
         if (entry != null) {
             var current = coordinator.status(entry.identity());
+            if (current.failure() != null && current.failure() != displayedBrowserFailure && current.failure().input() != null
+                    && current.failure().input().input() == AuthenticationFailure.Input.BROWSER_EXECUTABLE) {
+                displayedBrowserFailure = current.failure(); showBrowserFailure(current.failure().getMessage(), false);
+            }
             active = httpTests.contains(entry.identity()) || Set.of(AuthenticationCoordinator.Phase.QUEUED, AuthenticationCoordinator.Phase.RUNNING, AuthenticationCoordinator.Phase.BACKOFF).contains(current.phase());
             recovery = current.failure() != null || current.phase() == AuthenticationCoordinator.Phase.COOLDOWN;
             tokenAvailable = current.usableToken();
@@ -891,6 +944,7 @@ public final class UiController {
     }
 
     private void revealRecordingProblem(JourneyRecording.Problem problem) {
+        if (problem.field() == JourneyRecording.Field.BROWSER_EXECUTABLE) { showBrowserFailure(problem.message(), true); return; }
         if (problem.field() == JourneyRecording.Field.PIN) { revealMissingPin(problem.message()); return; }
         if (problem.field() == JourneyRecording.Field.CLIENT_CERTIFICATE && !checks.get("mtls").isSelected()) {
             selectWizard(WizardPage.SETUP); InlineValidation.show(checks.get("mtls"), problem.message()); InlineValidation.focus(checks.get("mtls")); return;
@@ -1503,13 +1557,14 @@ public final class UiController {
         }
         if (failure.input() != null) {
             var target = failure.input();
+            if (target.input() == AuthenticationFailure.Input.BROWSER_EXECUTABLE) { displayedBrowserFailure = failure; showBrowserFailure(failure.getMessage(), true); return true; }
             if (target.input() == AuthenticationFailure.Input.MTLS_PIN) { revealMissingPin(failure.getMessage()); return true; }
             String path = switch (target.input()) {
                 case LOGIN_URL -> "authenticationUrl"; case PROXY_URL -> "browser.proxy";
                 case MIDDLEWARE -> "mtls.modulePath"; case SECURITY_DEVICE -> "mtls.slot";
                 case CERTIFICATE -> "mtls.certificateSha256"; case TRUSTED_CA -> "mtls.trustedCaBundlePath";
                 case JSON_PATH -> "extraction.jsonPath"; case COOKIE_FILTERS -> "extraction.domain";
-                case CAPTURE_SOURCE -> "extraction.type"; case HTTP_AUTHENTICATION -> "httpAuthentication"; case HTTP_PASSWORD -> "httpAuthentication.password"; case MTLS_PIN -> throw new IllegalStateException();
+                case CAPTURE_SOURCE -> "extraction.type"; case HTTP_AUTHENTICATION -> "httpAuthentication"; case HTTP_PASSWORD -> "httpAuthentication.password"; case MTLS_PIN, BROWSER_EXECUTABLE -> throw new IllegalStateException();
             };
             if (path.startsWith("extraction") && target.credential() != null) path = "extraction.tokens[" + target.credential() + "].selector" + path.substring("extraction".length());
             mainTabs.setSelectedIndex(0); showInvalidField(path + ":", failure.getMessage(), true); return true;
@@ -1773,7 +1828,7 @@ public final class UiController {
             if (closed) return;
             discardRecording(null);
             if (initialized && editing != null && !editorLoading && (dirty || journeySaveInFlight)) finalDraft.set(capture());
-            closed = true; editorEpoch++; selectionEpoch++; afterJourneySave = null; afterSaveOwner = null;
+            closed = true; editorEpoch++; selectionEpoch++; browserDiscoveryEpoch++; afterJourneySave = null; afterSaveOwner = null;
             dialogs.closeLoginResult();
             if (journeyDebounce != null) journeyDebounce.stop(); if (journeyRetry != null) journeyRetry.stop();
             if (settingsDebounce != null) settingsDebounce.stop(); if (automaticDebounce != null) automaticDebounce.stop();

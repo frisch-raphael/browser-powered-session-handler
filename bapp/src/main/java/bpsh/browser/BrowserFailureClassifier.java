@@ -11,17 +11,26 @@ import java.util.Set;
 /** Safe browser failure attribution and retry metadata, independent of browser lifecycle. */
 public final class BrowserFailureClassifier {
     private static final String AMBIGUOUS_SELECTOR = "strict mode violation:";
+    /** Matches Chromium's bounded Linux sandbox fatal record, never a loose mention in user arguments. */
+    private static final java.util.regex.Pattern NO_LINUX_SANDBOX = java.util.regex.Pattern.compile(
+            "(?m)^[\\t ]*(?:\\[pid=[0-9]+\\]\\[err\\][\\t ]*)?\\[[^\\r\\n\\]]{1,160}:FATAL:[^\\r\\n\\]]{0,200}zygote_host_impl_linux\\.cc:[0-9]+\\][\\t ]+No usable sandbox!");
     private BrowserFailureClassifier() {}
     /**
-     * Reports observed browser startup failure without guessing OS or sandbox configuration.
-     * @param error Vendor exception inspected only for its timeout type, never displayed or retained.
+     * Reports a typed timeout or a positively identified native sandbox fatal; other startup failures stay unknown.
+     * @param error Vendor exception inspected for its type and one fixed fatal signature, never displayed or retained.
      * @return Safe startup observation and explicit retry action.
      */
     static AuthenticationFailure launchFailure(RuntimeException error) {
+        if (!(error instanceof TimeoutError) && error instanceof PlaywrightException && error.getMessage() != null
+                && error.getMessage().length() <= 65536 && NO_LINUX_SANDBOX.matcher(error.getMessage()).find())
+            return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,
+                    "Chromium's sandbox is unavailable in this Linux environment.",
+                    "Ask an administrator to check user namespace permissions and the AppArmor profile for the installed Burp Browser.")
+                    .atInput(AuthenticationFailure.Input.BROWSER_EXECUTABLE);
         return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
                 error instanceof TimeoutError ? AuthenticationFailure.Cause.TIMEOUT : AuthenticationFailure.Cause.UNKNOWN,
-                error instanceof TimeoutError ? "Chromium did not start within the browser startup timeout." : "Chromium could not start.",
-                "Open this journey and use Test login to try again.");
+                error instanceof TimeoutError ? "Burp Browser did not start within the browser startup timeout." : "Burp Browser could not start.",
+                "Check Burp Browser in Settings, then use Test login to try again.").atInput(AuthenticationFailure.Input.BROWSER_EXECUTABLE);
     }
     /**
      * Maps browser main-frame request-failure symbols only, never selector/exception prose.

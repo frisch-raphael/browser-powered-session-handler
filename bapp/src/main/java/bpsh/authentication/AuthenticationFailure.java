@@ -43,7 +43,7 @@ public final class AuthenticationFailure extends Exception {
     private final Step step;
     /** Configuration inputs identified by the failing operation, never inferred from display text. */
     public enum Input { LOGIN_URL, PROXY_URL, MIDDLEWARE, SECURITY_DEVICE, MTLS_PIN, CERTIFICATE, TRUSTED_CA,
-        JSON_PATH, COOKIE_FILTERS, CAPTURE_SOURCE, HTTP_AUTHENTICATION, HTTP_PASSWORD }
+        JSON_PATH, COOKIE_FILTERS, CAPTURE_SOURCE, HTTP_AUTHENTICATION, HTTP_PASSWORD, BROWSER_EXECUTABLE }
     /** Safe input identity, with an optional zero-based credential row. */
     public record InputTarget(Input input, Integer credential) {}
     private final InputTarget input;

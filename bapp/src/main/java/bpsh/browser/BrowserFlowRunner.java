@@ -56,7 +56,7 @@ public final class BrowserFlowRunner {
     /** Supplies a nonsecret production lifecycle observation seam without exposing browser/context handles. */
     public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock,
                              java.util.function.Consumer<Lifecycle> lifecycle) {
-        this(runtime, new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> ""), httpTransport, traffic, clock, lifecycle);
+        this(runtime, bpsh.browser.runtime.BurpBrowserResolver.current( () -> ""), httpTransport, traffic, clock, lifecycle);
     }
     /** Uses a supplied installed-browser resolver without global driver configuration. */
     public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.browser.runtime.BurpBrowserResolver resolver, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock) {

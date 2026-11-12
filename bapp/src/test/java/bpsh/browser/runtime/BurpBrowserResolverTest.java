@@ -19,6 +19,19 @@ class BurpBrowserResolverTest {
     private BurpBrowserResolver resolver(String platform, List<Path> active, List<Path> known, String override) {
         return new BurpBrowserResolver(new BurpBrowserResolver.Environment(platform, active, known), () -> override, p -> true);
     }
+    @Test void environmentDiscoveryIsDeferredAndReadOncePerAttempt() throws Exception {
+        Path install = temporary.resolve("deferred"); Path expected = browser(install, "156.0.0.0/chrome.exe");
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        var resolver = new BurpBrowserResolver("windows-x64", () -> { reads.incrementAndGet(); return new BurpBrowserResolver.Environment("windows-x64", List.of(install), List.of()); }, () -> "", path -> true);
+        assertEquals(0, reads.get(), "Construction must not perform installation discovery on a UI thread");
+        assertEquals(expected, resolver.resolve(deadline(), () -> false).executable()); assertEquals(1, reads.get());
+        assertEquals(expected, resolver.resolve(deadline(), () -> false).executable()); assertEquals(2, reads.get());
+    }
+    @Test void explicitSelectionDoesNotInspectAutomaticInstallationHints() throws Exception {
+        Path executable = browser(temporary.resolve("explicit"), "156.0.0.0/chrome.exe");
+        var resolver = new BurpBrowserResolver("windows-x64", () -> { throw new AssertionError("Automatic metadata must not run for an explicit selection"); }, executable::toString, path -> true);
+        assertEquals(executable, resolver.resolve(deadline(), () -> false).executable());
+    }
     @Test void explicitMissingBrowserDoesNotFallBack() throws Exception {
         Path install = temporary.resolve("BurpSuiteDesktop"); browser(install, "156.0.1.0/chrome.exe");
         String missing = install.resolve("burpbrowser/999.0.0.0/chrome.exe").toString();

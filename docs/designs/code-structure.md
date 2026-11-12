@@ -47,6 +47,7 @@ bpsh/
 - Editing depends on journey values, request settings and the explicit persistence boundary. Concrete storage owns document validation and I/O; the catalog never exposes those operations.
 - Browser execution adapts core attempt contracts. Browser asset resources live in browser.runtime. HTTP delivery workers and identity pools live in transport.httpauth, and destination TLS/device ownership lives in transport.tls. The composition root injects the same HTTP runtime into browser and direct-request execution. The TLS owner exposes opaque JCA signing references to terminable PKCS#11 child processes; native providers and signing stay out of the host JVM. This keeps isolation inside transport.tls without a reverse dependency on transport.httpauth.
 - Burp UI/HTTP adapters depend on core contracts. Only the composition root wires the complete graph.
+- `BrowserInstallation` in authentication exposes user-local selection and advisory discovery without a driver or UI dependency. The composition root adapts the installed-browser resolver; the Settings UI does not import browser or browser.runtime.
 - Package paths, permitted edges, framework exclusions and absence of cycles are enforced by `verifyArchitecture`, included in `check`.
 
 Public types represent boundaries consumed by another package. Internal JSON helpers, UI forms and process details stay package-private. A new interface must support a real substitution or ownership boundary; do not introduce one per class.

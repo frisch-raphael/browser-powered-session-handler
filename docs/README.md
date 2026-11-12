@@ -20,7 +20,7 @@ The extension and authentication lab are maintained in Java. This index contains
 
 ## Proposed features
 
-- [Burp Browser design](superpowers/specs/2026-11-12-burp-browser-design.md) and [implementation plan](superpowers/plans/2026-11-12-burp-browser.md) - approved design for isolated sessions and universal driver-only packaging; plan review and execution method pending.
+- [Burp Browser design](superpowers/specs/2026-11-12-burp-browser-design.md) and [implementation plan](superpowers/plans/2026-11-12-burp-browser.md) - approved design for isolated sessions and universal driver-only packaging; implementation and qualification in progress.
 
 - [Session handling by URL and proxy port](designs/session-handling-by-url-and-proxy-port.md) - routing is implemented, with best-effort native Proxy DROP. Final acceptance and platform qualification remain in progress.
 - [Browser journey recording](designs/browser-journey-recording.md) - recording and native review are implemented; popup edge cases and final acceptance remain under qualification.

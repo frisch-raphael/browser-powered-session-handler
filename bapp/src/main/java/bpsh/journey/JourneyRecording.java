@@ -33,7 +33,7 @@ public interface JourneyRecording extends AutoCloseable {
         STARTING_DRIVER, STARTING_BROWSER, OPENING_LOGIN, RECORDING, STOPPING, REVIEW, CLOSED
     }
     /** Identifies a known setup input without a UI component or vendor exception. */
-    enum Field { GENERAL, LOGIN_URL, PROXY_URL, CLIENT_CERTIFICATE, PIN, MIDDLEWARE, SECURITY_DEVICE, TRUSTED_CA, HTTP_AUTHENTICATION, HTTP_PASSWORD }
+    enum Field { GENERAL, LOGIN_URL, PROXY_URL, CLIENT_CERTIFICATE, PIN, MIDDLEWARE, SECURITY_DEVICE, TRUSTED_CA, HTTP_AUTHENTICATION, HTTP_PASSWORD, BROWSER_EXECUTABLE }
     /** Safe, application-owned failure guidance only. */
     record Problem(Field field, String message) {
         public Problem { Objects.requireNonNull(field); Objects.requireNonNull(message); }

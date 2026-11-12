@@ -27,7 +27,8 @@ public final class BurpBrowserResolver {
     public record Selection(Path executable, Path installation, String version, Source source) {}
     /** Identifies the precedence tier without retaining process command lines. */
     public enum Source { EXPLICIT, ACTIVE_INSTALLATION, KNOWN_INSTALLATION }
-    private final Environment environment;
+    private final String platform;
+    private final Supplier<Environment> environmentHints;
     private final Supplier<String> override;
     private final Predicate<Path> executable;
     private static final int MAX_ROOTS = 64, MAX_VERSIONS = 256;
@@ -35,16 +36,24 @@ public final class BurpBrowserResolver {
     public BurpBrowserResolver(Environment environment, Supplier<String> override) { this(environment, override, Files::isExecutable); }
     /** @param environment Host hints. @param override User selection. @param executable Executable-permission boundary. */
     BurpBrowserResolver(Environment environment, Supplier<String> override, Predicate<Path> executable) {
-        this.environment = Objects.requireNonNull(environment); this.override = Objects.requireNonNull(override); this.executable = Objects.requireNonNull(executable);
+        this(environment.platform(), () -> environment, override, executable);
+    }
+    /** @param platform Target. @param environment Worker-resolved host hints. @param override User selection. @param executable Executability boundary. */
+    BurpBrowserResolver(String platform, Supplier<Environment> environment, Supplier<String> override, Predicate<Path> executable) {
+        this.platform = Objects.requireNonNull(platform); this.environmentHints = Objects.requireNonNull(environment);
+        this.override = Objects.requireNonNull(override); this.executable = Objects.requireNonNull(executable);
+    }
+    /** Creates inert current-host discovery; filesystem inspection waits for the calling worker.
+     * @param override Current user-local raw executable. @return Deferred installed-browser resolver.
+     */
+    public static BurpBrowserResolver current(Supplier<String> override) {
+        return new BurpBrowserResolver(BrowserRuntimeManager.hostPlatform(), BurpBrowserResolver::currentEnvironment, override, Files::isExecutable);
     }
     /** Reads only current-process installation metadata and fixed platform-known roots.
      * @return Inert hints; no browser process or user profile is touched.
      */
     public static Environment currentEnvironment() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        String platform = (os.contains("win") ? "windows" : os.contains("mac") ? "macos" : os.contains("linux") ? "linux" : "unknown")
-                + (Set.of("amd64", "x86_64").contains(arch) ? "-x64" : "-unsupported");
+        String platform = BrowserRuntimeManager.hostPlatform();
         Path home = Path.of(System.getProperty("user.home")); var paths = new ArrayList<Path>(); var known = new ArrayList<Path>();
         ProcessHandle.current().info().command().ifPresent(value -> addPath(paths, value));
         String[] arguments = ProcessHandle.current().info().arguments().orElse(new String[0]);
@@ -91,7 +100,7 @@ public final class BurpBrowserResolver {
      */
     public Selection resolve(long deadlineNanos, BooleanSupplier cancelled) throws AuthenticationFailure {
         AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
-        if (!Set.of("windows-x64", "linux-x64", "macos-x64").contains(environment.platform()))
+        if (!Set.of("windows-x64", "linux-x64", "macos-x64").contains(platform))
             throw failure(AuthenticationFailure.Cause.UNSUPPORTED_PLATFORM, "Burp Browser automation is unavailable on this platform.");
         try {
             String value = Objects.requireNonNull(override.get());
@@ -104,6 +113,7 @@ public final class BurpBrowserResolver {
                 if (selected == null || !executable.test(path)) throw failure(AuthenticationFailure.Cause.CONFIGURATION, "Select an executable in a supported Burp Browser installation.");
                 AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled); return selected;
             }
+            Environment environment = environmentHints.get();
             List<Path> roots = environment.activeInstallations().isEmpty() ? environment.knownInstallations() : environment.activeInstallations();
             Source source = environment.activeInstallations().isEmpty() ? Source.KNOWN_INSTALLATION : Source.ACTIVE_INSTALLATION;
             var choices = new LinkedHashMap<Path, Selection>();
@@ -162,7 +172,7 @@ public final class BurpBrowserResolver {
     }
     /** @return Exact executable suffixes for this platform, in stable preferred order. */
     private List<String> suffixes() {
-        return switch (environment.platform()) {
+        return switch (platform) {
             case "windows-x64" -> List.of("chrome.exe"); case "linux-x64" -> List.of("chrome");
             case "macos-x64" -> List.of("Burp Browser.app/Contents/MacOS/Burp Browser", "Chromium.app/Contents/MacOS/Chromium");
             default -> List.of();
@@ -190,6 +200,9 @@ public final class BurpBrowserResolver {
     }
     /** @param cause Safe typed cause. @param message Fixed non-user-data problem. @return Sanitized prerequisite failure. */
     private static AuthenticationFailure failure(AuthenticationFailure.Cause cause, String message) {
-        return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, cause, message, "Open Settings and select the Burp Browser executable, or install it through Burp and use automatic detection.");
+        return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, cause, message,
+                cause == AuthenticationFailure.Cause.UNSUPPORTED_PLATFORM ? "Use Windows x64, Linux x64 or Intel macOS with a matching JVM."
+                        : "Open Settings and select the Burp Browser executable, or install it through Burp and use automatic detection.")
+                .atInput(AuthenticationFailure.Input.BROWSER_EXECUTABLE);
     }
 }

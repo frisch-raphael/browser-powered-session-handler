@@ -344,7 +344,7 @@ public final class BrowserJourneyRecorder implements JourneyRecording {
         Field field = failure.input() == null ? Field.GENERAL : switch (failure.input().input()) {
             case LOGIN_URL -> Field.LOGIN_URL; case PROXY_URL -> Field.PROXY_URL; case MIDDLEWARE -> Field.MIDDLEWARE;
             case SECURITY_DEVICE -> Field.SECURITY_DEVICE; case MTLS_PIN -> Field.PIN; case CERTIFICATE -> Field.CLIENT_CERTIFICATE;
-            case TRUSTED_CA -> Field.TRUSTED_CA; case HTTP_AUTHENTICATION -> Field.HTTP_AUTHENTICATION; case HTTP_PASSWORD -> Field.HTTP_PASSWORD; default -> Field.GENERAL;
+            case TRUSTED_CA -> Field.TRUSTED_CA; case HTTP_AUTHENTICATION -> Field.HTTP_AUTHENTICATION; case HTTP_PASSWORD -> Field.HTTP_PASSWORD; case BROWSER_EXECUTABLE -> Field.BROWSER_EXECUTABLE; default -> Field.GENERAL;
         };
         return new Problem(field, failure.getMessage());
     }

@@ -16,6 +16,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Startup failures must release the recording worker and report a terminal result to its dialog. */
 class BrowserJourneyRecorderTest {
+    @Test void browserSelectionFailureRetainsTheSettingsLocation() throws Exception {
+        try (var recorder = new BrowserJourneyRecorder((request, values, visibility, deadline, cancelled, stage) -> {
+            throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.ASSET_MISSING,
+                    "Burp Browser is missing.").atInput(AuthenticationFailure.Input.BROWSER_EXECUTABLE);
+        }, BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {}, 1000)) {
+            var finished = new CompletableFuture<JourneyRecording.Event>();
+            recorder.start(request(), SecretStore.Values.empty(), event -> { if (event.state() == JourneyRecording.State.CLOSED) finished.complete(event); });
+            assertEquals(JourneyRecording.Field.BROWSER_EXECUTABLE, finished.get(3, TimeUnit.SECONDS).problem().field());
+        }
+    }
     private static JourneyRecording.Request request() {
         var journey = CoordinatorFixtures.journey("recording");
         var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
