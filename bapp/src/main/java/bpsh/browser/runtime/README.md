@@ -6,6 +6,8 @@ Verifies bundled platform assets and owns extraction, immutable cache publicatio
 
 ## Interface
 
+- [BurpBrowserResolver](./BurpBrowserResolver.java): Resolves installed Burp Browser from bounded current-process/installation hints or an authoritative per-user selection; never reads live browser profiles.
+- [BrowserExecutableSettings](./BrowserExecutableSettings.java): Publishes the raw user-local executable selection atomically; an empty selection uses automatic discovery.
 - [BrowserManifestCodec](./BrowserManifestCodec.java): Bounded manifest parsing, archive metadata and path validation; performs no cache publication.
 - [BrowserArchiveCodec](./BrowserArchiveCodec.java): Streams the selected format-2 XZ resource to an exact-size ZIP with compressed SHA-256, a 128 MiB decoder ceiling and the original attempt checkpoints; owns the source stream only.
 - [BrowserRuntimeManager](./BrowserRuntimeManager.java): Verifies and extracts only the JAR's bundled browser assets, with no network/install fallback.
