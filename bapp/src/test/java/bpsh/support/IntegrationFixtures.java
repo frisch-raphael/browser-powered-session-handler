@@ -89,6 +89,43 @@ public final class IntegrationFixtures {
     }
     /** Prevents instantiation of test-boundary factories. */
     private IntegrationFixtures() {}
+    /** Selects only the explicit integration executable or current Burp installation hints. */
+    public static bpsh.browser.runtime.BurpBrowserResolver browserResolver() {
+        return new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> System.getProperty("bpsh.test.burpBrowserExecutable", ""));
+    }
+    /** Returns a fresh test selection; never reads a real browser profile. */
+    public static Path browserExecutable() throws bpsh.authentication.AuthenticationFailure {
+        return browserResolver().resolve(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30), () -> false).executable();
+    }
+    /** Reads arguments only for native-job members or descendants of this test-owned driver. */
+    public static List<String> ownedBrowserCommandLines(bpsh.browser.runtime.PlaywrightDriverAdapter.Session driver) throws Exception {
+        if (!System.getProperty("os.name").startsWith("Windows")) {
+            var field = driver.getClass().getDeclaredField("process"); field.setAccessible(true);
+            return ((Process) field.get(driver)).descendants().map(child -> child.info().commandLine().orElse("")).toList();
+        }
+        var field = driver.getClass().getDeclaredField("windowsJob"); field.setAccessible(true); Object job = field.get(driver);
+        var capture = job.getClass().getDeclaredMethod("captureMembers"); capture.setAccessible(true); capture.invoke(job);
+        var members = job.getClass().getDeclaredField("members"); members.setAccessible(true);
+        var identifiers = ((Map<?, ?>) members.get(job)).keySet().stream().map(value -> "ProcessId=" + ((Long) value).longValue()).toList();
+        if (identifiers.isEmpty()) throw new AssertionError("The owned Windows job has no process witnesses.");
+        String script = "$commands=@(Get-CimInstance Win32_Process -Filter '" + String.join(" OR ", identifiers)
+                + "' | Select-Object -ExpandProperty CommandLine);[Console]::Write((ConvertTo-Json -InputObject $commands -Compress))";
+        Path shell = Path.of(System.getenv("SystemRoot"), "System32/WindowsPowerShell/v1.0/powershell.exe");
+        Process observer = new ProcessBuilder(shell.toString(), "-NoProfile", "-NonInteractive", "-Command", script).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        var reading = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try { return observer.getInputStream().readNBytes(65537); }
+            catch (java.io.IOException error) { throw new java.util.concurrent.CompletionException(error); }
+        });
+        try {
+            byte[] output = reading.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            if (!observer.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || observer.exitValue() != 0) throw new AssertionError("Owned process metadata inspection did not complete.");
+            if (output.length > 65536) throw new AssertionError("Owned process metadata exceeded its bound.");
+            var result = new ObjectMapper().readTree(output); var commands = new java.util.ArrayList<String>();
+            for (var command : result) if (command.isTextual()) commands.add(command.asText());
+            return commands;
+        } finally { if (observer.isAlive()) { observer.destroyForcibly(); observer.waitFor(5, java.util.concurrent.TimeUnit.SECONDS); } reading.cancel(true); }
+    }
+
 
     /** Borrows the canonical origin interface and delegates its complete lifecycle to the lab. */
     public static final class Origin implements AutoCloseable {
@@ -226,7 +263,7 @@ public final class IntegrationFixtures {
 
     /** Lists published identities only, never temporary or another platform's paths. */
     public static java.util.Map<String, Long> cacheInventory(Path home) throws Exception {
-        Path cache = home.resolve(".bpsh/cache"), selected = cache.resolve(BrowserRuntimeManager.hostPlatform());
+        Path cache = home.resolve(".bpsh/cache/drivers-v3"), selected = cache.resolve(BrowserRuntimeManager.hostPlatform());
         var inventory = new java.util.TreeMap<String, Long>();
         if (!Files.exists(cache)) return inventory;
         try (var dirs = Files.list(cache)) {
@@ -244,7 +281,7 @@ public final class IntegrationFixtures {
     public static java.util.Map<String, String> publishedSnapshot(Path home) throws Exception {
         var result = new java.util.TreeMap<String, String>();
         for (String identity : cacheInventory(home).keySet()) {
-            Path root = home.resolve(".bpsh/cache").resolve(BrowserRuntimeManager.hostPlatform()).resolve(identity);
+            Path root = home.resolve(".bpsh/cache/drivers-v3").resolve(BrowserRuntimeManager.hostPlatform()).resolve(identity);
             try (var paths = Files.walk(root)) {
                 for (Path path : paths.toList()) {
                     String key = identity + "/" + root.relativize(path);
@@ -285,7 +322,7 @@ public final class IntegrationFixtures {
         Path jvmExecutable = Path.of(System.getProperty("java.home"), "bin", javaName);
         try (var origin = lab.auth.LoginFlows.probeForm(lab.auth.ControlledApplication.Origin.http("localhost"), "probe-ready", null).start()) {
         Process process = new ProcessBuilder(jvmExecutable.toString(), "-Duser.home=" + home,
-                "-Dbpsh.packagedJar=" + artifact, "-cp", String.join(java.io.File.pathSeparator, entries),
+                "-Dbpsh.packagedJar=" + artifact, "-Dbpsh.test.burpBrowserExecutable=" + System.getProperty("bpsh.test.burpBrowserExecutable", ""), "-cp", String.join(java.io.File.pathSeparator, entries),
                 "bpsh.support.IntegrationFixtures$RuntimeProbe", mode, result.toString(), origin.url("/login").toString())
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         try {
@@ -356,7 +393,7 @@ public final class IntegrationFixtures {
                 Thread thread = new Thread(task, "bpsh-probe-space"); thread.setDaemon(true); return thread;
             });
             Runnable sample = () -> {
-                try { peak.accumulateAndGet(logicalBytes(home.resolve(".bpsh/cache")), Math::max); }
+                try { peak.accumulateAndGet(logicalBytes(home.resolve(".bpsh/cache/drivers-v3")), Math::max); }
                 catch (Exception ignored) { /* extraction can remove a file between walk and stat */ }
             };
             sampler.scheduleWithFixedDelay(sample, 0, 100, java.util.concurrent.TimeUnit.MILLISECONDS);
@@ -374,7 +411,7 @@ public final class IntegrationFixtures {
                     long started = System.nanoTime(), deadline = started + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
                     var ready = runtime.acquire(deadline, () -> false); long prepared = System.nanoTime();
                     if (args[0].equals("cache-probe") && !before.containsKey(ready.bundleDigest())) throw new AssertionError("Cache probe created a new identity.");
-                    var runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
+                    var runner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
                     var outcome = runner.run(identity, journey, values, false, deadline, () -> false);
                     long finished = System.nanoTime();
                     if (!"probe-ready".equals(outcome.token()) || finished > deadline) throw new AssertionError("Normal-budget fixture authentication failed.");
@@ -382,8 +419,8 @@ public final class IntegrationFixtures {
                             .put("preparationMillis", (prepared - started) / 1_000_000).put("loginMillis", (finished - prepared) / 1_000_000)
                             .put("totalAttemptMillis", (finished - started) / 1_000_000).put("logicalRegularBytes", logicalBytes(ready.root()));
                     try (var jar = new java.util.jar.JarFile(artifact.toFile())) {
-                        var entry = jar.getJarEntry("META-INF/bpsh/" + target + "/browser-assets.json");
-                        if (entry == null) entry = jar.getJarEntry("META-INF/bpsh/browser-assets.json");
+                        var entry = jar.getJarEntry("META-INF/bpsh/" + target + "/driver-assets.json");
+                        if (entry == null) entry = jar.getJarEntry("META-INF/bpsh/driver-assets.json");
                         if (entry == null) throw new AssertionError("Runtime metadata missing.");
                         JsonNode metadata;
                         try (var input = jar.getInputStream(entry)) { metadata = json.readTree(input); }

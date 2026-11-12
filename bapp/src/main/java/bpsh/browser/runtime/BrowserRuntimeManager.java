@@ -54,8 +54,8 @@ public final class BrowserRuntimeManager implements AutoCloseable {
         return BrowserManifestCodec.parseManifest(raw, expectedPlatform, limits);
     }
 
-    static final String MANIFEST_RESOURCE = "META-INF/bpsh/browser-assets.json";
-    static final String ARCHIVE_RESOURCE = "META-INF/bpsh/browser-assets.zip.xz";
+    static final String MANIFEST_RESOURCE = "META-INF/bpsh/driver-assets.json";
+    static final String ARCHIVE_RESOURCE = "META-INF/bpsh/driver-assets.zip.xz";
     private static final ObjectMapper JSON = new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final LinkOption[] NOFOLLOW = { LinkOption.NOFOLLOW_LINKS };
@@ -99,13 +99,14 @@ public final class BrowserRuntimeManager implements AutoCloseable {
     record Entry(String path, boolean link, long bytes, String sha256, boolean executable, String target) {}
 
     /** Validated manifest metadata shared by extraction and full cache-hit validation. */
-    record Manifest(String platform, String browserRoot, String browserExecutable, String nodeExecutable,
+    record Manifest(String platform, String helperRoot, String nodeExecutable,
                     String driverEntryPoint, String archiveHash, long archiveBytes, long expandedBytes, long unpackedBytes,
                     Map<String, Entry> entries, Set<String> directories, List<String> helpers) {}
 
     /**
-     * Holds exact verified selectors; callers must use this handle rather than PATH or host browsers.
-     * Constructed only after marker, tree, hashes and permissions have been checked.
+     * Holds verified bundled driver selectors only.
+     * Bundled marker, tree, hashes and permissions are checked before construction.
+     * Installed browser selection belongs to the per-attempt resolver, outside this manifest.
      */
     public static final class Ready {
         private final Path root;
@@ -118,7 +119,9 @@ public final class BrowserRuntimeManager implements AutoCloseable {
          * @param manifest Validated metadata.
          * @param digest Cache identity.
          */
-        private Ready(Path root, Manifest manifest, String digest) { this.root = root; this.manifest = manifest; this.digest = digest; }
+        private Ready(Path root, Manifest manifest, String digest) {
+            this.root = root; this.manifest = manifest; this.digest = digest;
+        }
         /**
          * Returns immutable published bundle directory.
          *
@@ -126,17 +129,11 @@ public final class BrowserRuntimeManager implements AutoCloseable {
          */
         public Path root() { return root; }
         /**
-         * Returns exact verified browser-root directory used by the owned driver environment.
+         * Returns exact verified driver-helper directory used by the owned driver environment.
          *
-         * @return Exact verified browser-root directory used by the owned driver environment.
+         * @return Exact verified driver-helper directory used by the owned driver environment.
          */
-        public Path browserRoot() { return root.resolve(manifest.browserRoot()); }
-        /**
-         * Returns exact bundled Chromium executable, never a host installation.
-         *
-         * @return Exact bundled Chromium executable, never a host installation.
-         */
-        public Path browserExecutable() { return root.resolve(manifest.browserExecutable()); }
+        public Path helperRoot() { return root.resolve(manifest.helperRoot()); }
         /**
          * Returns exact bundled Node executable.
          *
@@ -184,9 +181,10 @@ public final class BrowserRuntimeManager implements AutoCloseable {
             InputStream input = BrowserRuntimeManager.class.getClassLoader().getResourceAsStream(name);
             if (input == null) throw new IOException("Missing browser resource.");
             return input;
-        }, Path.of(System.getProperty("user.home"), ".bpsh", "cache"), hostPlatform(), Limits.standard(),
+        }, Path.of(System.getProperty("user.home"), ".bpsh", "cache", "drivers-v3"), hostPlatform(), Limits.standard(),
                 (from, to) -> Files.move(from, to, StandardCopyOption.ATOMIC_MOVE));
     }
+
 
     /**
      * Maps a logical asset name to the exact host's resources in the universal JAR.

@@ -1,0 +1,135 @@
+{
+  "formatVersion": 1,
+  "playwrightJavaVersion": "1.64.0",
+  "platforms": [
+    {
+      "platform": "windows-x64",
+      "driverPackageVersion": "1.64.1",
+      "nodeVersion": "24.22.1",
+      "nodeExecutable": "driver/node.exe",
+      "driverEntryPoint": "driver/package/cli.js",
+      "helpers": [],
+      "sources": [
+        {
+          "id": "node",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver-bundle:1.64.0"
+          },
+          "sha256": "c04dce9bd95e758c2c5784dfb9b508ba8f4b7601aa1a4f738ae269e5c0bd49a9",
+          "bytes": 204614104,
+          "copies": [
+            {
+              "from": "driver/win32_x64",
+              "to": "driver"
+            }
+          ]
+        },
+        {
+          "id": "driver",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver:1.64.0"
+          },
+          "sha256": "116badd0cfc74d85bc58fef74fe492e63da72035d4ec8569ad88188332b839c5",
+          "bytes": 3247347,
+          "copies": [
+            {
+              "from": "driver/package",
+              "to": "driver/package"
+            }
+          ]
+        }
+      ],
+      "helperRoot": "driver"
+    },
+    {
+      "platform": "linux-x64",
+      "driverPackageVersion": "1.64.1",
+      "nodeVersion": "24.22.1",
+      "nodeExecutable": "driver/node",
+      "driverEntryPoint": "driver/package/cli.js",
+      "helpers": [],
+      "sources": [
+        {
+          "id": "node",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver-bundle:1.64.0"
+          },
+          "sha256": "c04dce9bd95e758c2c5784dfb9b508ba8f4b7601aa1a4f738ae269e5c0bd49a9",
+          "bytes": 204614104,
+          "copies": [
+            {
+              "from": "driver/linux",
+              "to": "driver"
+            }
+          ]
+        },
+        {
+          "id": "driver",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver:1.64.0"
+          },
+          "sha256": "116badd0cfc74d85bc58fef74fe492e63da72035d4ec8569ad88188332b839c5",
+          "bytes": 3247347,
+          "copies": [
+            {
+              "from": "driver/package",
+              "to": "driver/package"
+            }
+          ]
+        }
+      ],
+      "helperRoot": "driver"
+    },
+    {
+      "platform": "macos-x64",
+      "driverPackageVersion": "1.64.1",
+      "nodeVersion": "24.22.1",
+      "nodeExecutable": "driver/node",
+      "driverEntryPoint": "driver/package/cli.js",
+      "helpers": [],
+      "sources": [
+        {
+          "id": "node",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver-bundle:1.64.0"
+          },
+          "sha256": "c04dce9bd95e758c2c5784dfb9b508ba8f4b7601aa1a4f738ae269e5c0bd49a9",
+          "bytes": 204614104,
+          "copies": [
+            {
+              "from": "driver/mac",
+              "to": "driver"
+            }
+          ]
+        },
+        {
+          "id": "driver",
+          "revision": "1.64.0",
+          "source": {
+            "type": "maven",
+            "coordinates": "com.microsoft.playwright:driver:1.64.0"
+          },
+          "sha256": "116badd0cfc74d85bc58fef74fe492e63da72035d4ec8569ad88188332b839c5",
+          "bytes": 3247347,
+          "copies": [
+            {
+              "from": "driver/package",
+              "to": "driver/package"
+            }
+          ]
+        }
+      ],
+      "helperRoot": "driver"
+    }
+  ]
+}

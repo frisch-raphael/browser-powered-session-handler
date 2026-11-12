@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:bpsh:browser-assets:v1",
-  "title": "BPSH source lock and bundled manifest v1",
+  "$id": "urn:bpsh:driver-assets:v1",
+  "title": "BPSH driver source lock and driver-only manifest",
   "$comment": "Producer/runtime additionally enforce source and output uniqueness, path collisions, selectors, overflow-safe sums, link safety and digest verification. Schemas never substitute guessed release hashes.",
   "oneOf": [
     {
@@ -26,17 +26,6 @@
                   "macos-x64"
                 ]
               },
-              "browserName": {
-                "const": "chromium"
-              },
-              "browserVersion": {
-                "type": "string",
-                "pattern": "\\S"
-              },
-              "browserRevision": {
-                "type": "string",
-                "pattern": "^[0-9]+$"
-              },
               "driverPackageVersion": {
                 "type": "string",
                 "pattern": "\\S"
@@ -44,18 +33,6 @@
               "nodeVersion": {
                 "type": "string",
                 "pattern": "\\S"
-              },
-              "browserRoot": {
-                "type": "string",
-                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
-                "maxLength": 4096,
-                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
-              },
-              "browserExecutable": {
-                "type": "string",
-                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
-                "maxLength": 4096,
-                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
               },
               "nodeExecutable": {
                 "type": "string",
@@ -112,25 +89,6 @@
                     },
                     "source": {
                       "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "type": {
-                              "const": "https"
-                            },
-                            "url": {
-                              "type": "string",
-                              "format": "uri",
-                              "pattern": "^https://",
-                              "$comment": "No userinfo."
-                            }
-                          },
-                          "required": [
-                            "type",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
                         {
                           "type": "object",
                           "properties": {
@@ -202,18 +160,21 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 1
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "helperRoot": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+                "maxLength": 4096,
+                "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
               }
             },
             "required": [
               "platform",
-              "browserName",
-              "browserVersion",
-              "browserRevision",
               "driverPackageVersion",
               "nodeVersion",
-              "browserRoot",
-              "browserExecutable",
+              "helperRoot",
               "nodeExecutable",
               "driverEntryPoint",
               "helpers",
@@ -275,7 +236,7 @@
       "type": "object",
       "properties": {
         "formatVersion": {
-          "const": 2
+          "const": 3
         },
         "platform": {
           "enum": [
@@ -288,17 +249,6 @@
           "type": "string",
           "pattern": "\\S"
         },
-        "browserName": {
-          "const": "chromium"
-        },
-        "browserVersion": {
-          "type": "string",
-          "pattern": "\\S"
-        },
-        "browserRevision": {
-          "type": "string",
-          "pattern": "^[0-9]+$"
-        },
         "driverPackageVersion": {
           "type": "string",
           "pattern": "\\S"
@@ -306,18 +256,6 @@
         "nodeVersion": {
           "type": "string",
           "pattern": "\\S"
-        },
-        "browserRoot": {
-          "type": "string",
-          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
-          "maxLength": 4096,
-          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
-        },
-        "browserExecutable": {
-          "type": "string",
-          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
-          "maxLength": 4096,
-          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
         },
         "nodeExecutable": {
           "type": "string",
@@ -364,9 +302,9 @@
           "properties": {
             "resource": {
               "enum": [
-                "META-INF/bpsh/windows-x64/browser-assets.zip.xz",
-                "META-INF/bpsh/linux-x64/browser-assets.zip.xz",
-                "META-INF/bpsh/macos-x64/browser-assets.zip.xz"
+                "META-INF/bpsh/windows-x64/driver-assets.zip.xz",
+                "META-INF/bpsh/linux-x64/driver-assets.zip.xz",
+                "META-INF/bpsh/macos-x64/driver-assets.zip.xz"
               ]
             },
             "sha256": {
@@ -464,19 +402,21 @@
             ]
           },
           "maxItems": 100000
+        },
+        "helperRoot": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*:)(?!.*\\u0000)[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096,
+          "$comment": "Runtime additionally enforces <=4096 UTF-8 bytes and <=32 components."
         }
       },
       "required": [
         "formatVersion",
         "platform",
         "playwrightJavaVersion",
-        "browserName",
-        "browserVersion",
-        "browserRevision",
         "driverPackageVersion",
         "nodeVersion",
-        "browserRoot",
-        "browserExecutable",
+        "helperRoot",
         "nodeExecutable",
         "driverEntryPoint",
         "helpers",
@@ -499,7 +439,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/windows-x64/browser-assets.zip.xz"
+                    "const": "META-INF/bpsh/windows-x64/driver-assets.zip.xz"
                   }
                 }
               }
@@ -519,7 +459,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/linux-x64/browser-assets.zip.xz"
+                    "const": "META-INF/bpsh/linux-x64/driver-assets.zip.xz"
                   }
                 }
               }
@@ -539,7 +479,7 @@
               "archive": {
                 "properties": {
                   "resource": {
-                    "const": "META-INF/bpsh/macos-x64/browser-assets.zip.xz"
+                    "const": "META-INF/bpsh/macos-x64/driver-assets.zip.xz"
                   }
                 }
               }

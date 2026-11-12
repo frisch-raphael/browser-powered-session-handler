@@ -23,7 +23,7 @@ val auditedTrees = listOf("bapp/src", "bapp/gradle", "bapp/third-party", "test/a
     "test/authentication-lab/src/test/java", "test/authentication-lab/src/hostGui", "test/authentication-lab/src/hostProbe",
     "test/authentication-lab/production-tests")
 val auditedConfiguration = (JsonSlurper().parse(labWorkspace.resolve("test/authentication-lab/src/main/resources/configuration-inputs.json")) as Map<*, *>)["configurationFiles"] as List<*>
-val productionFiles = (listOf("bapp/build.gradle.kts", "bapp/gradle.properties", "bapp/settings.gradle.kts", "bapp/gradle.lockfile", "bapp/browser-assets.lock.json", "bapp/gradlew", "bapp/gradlew.bat", "bapp/settings-gradle.lockfile", "docs/designs/bapp-owned-authentication.md", "docs/designs/interface.md", "docs/designs/universal-packaging.md", "docs/designs/burp-host-acceptance-plan.md", "docs/product.md", "test/authentication-lab/Build-HostProbe.ps1") +
+val productionFiles = (listOf("bapp/build.gradle.kts", "bapp/gradle.properties", "bapp/settings.gradle.kts", "bapp/gradle.lockfile", "bapp/driver-assets.lock.json", "bapp/gradlew", "bapp/gradlew.bat", "bapp/settings-gradle.lockfile", "docs/designs/bapp-owned-authentication.md", "docs/designs/interface.md", "docs/designs/universal-packaging.md", "docs/designs/burp-host-acceptance-plan.md", "docs/product.md", "test/authentication-lab/Build-HostProbe.ps1") +
     auditedConfiguration.map { it.toString() } +
     auditedTrees.flatMap { subtree ->
         predecessorRoot.resolve(subtree).walkTopDown().filter { it.isFile }.map { it.relativeTo(predecessorRoot).invariantSeparatorsPath }.toList()
@@ -90,32 +90,6 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
             report.mkdirs()
             if (taskName in listOf("authLabBrowserTest", "authLabFederationTest", "authLabTransportTest")) {
                 @Suppress("UNCHECKED_CAST")
-                val lock = JsonSlurper().parse(productionSnapshot.resolve("bapp/browser-assets.lock.json")) as Map<String, Any?>
-                @Suppress("UNCHECKED_CAST")
-                val platforms = lock["platforms"] as List<Map<String, Any?>>
-                @Suppress("UNCHECKED_CAST")
-                val sources = (if (labAudit["packaging"] == "universal") platforms.filter { it["platform"] in listOf("windows-x64", "linux-x64", "macos-x64") }
-                    else platforms.filter { it["platform"] == "windows-x64" }).flatMap { it["sources"] as List<Map<String, Any?>> }.distinctBy { it["sha256"] }
-                sources.forEach { source ->
-                    @Suppress("UNCHECKED_CAST")
-                    val location = source["source"] as Map<String, Any?>
-                    if (location["type"] == "https") {
-                        val hash = source["sha256"].toString()
-                        check(hash.matches(Regex("[0-9a-f]{64}")))
-                        val target = productionSnapshot.resolve("bapp/build/browser-sources/$hash.zip")
-                        if (!target.isFile) {
-                            val cached = predecessorRoot.resolve("bapp/build/browser-sources/$hash.zip")
-                            check(cached.isFile && cached.length() == (source["bytes"] as Number).toLong() && labFileSha(cached) == hash) {
-                                "Locked browser source ${source["id"]} is not prepared. Prepare browser assets in the predecessor first; this offline lab command downloads no sources."
-                            }
-                            target.parentFile.mkdirs(); Files.copy(cached.toPath(), target.toPath())
-                        }
-                        check(target.length() == (source["bytes"] as Number).toLong() && labFileSha(target) == hash) { "Owned browser source cache does not match its lock." }
-                    }
-                }
-            }
-            if (taskName in listOf("authLabBrowserTest", "authLabFederationTest", "authLabTransportTest")) {
-                @Suppress("UNCHECKED_CAST")
                 val sourceLock = JsonSlurper().parse(predecessorRoot.resolve("bapp/third-party/jcifs-source.lock.json")) as Map<String, Any?>
                 val source = predecessorRoot.resolve("bapp/build/third-party/jcifs-ng-source.zip")
                 check(source.isFile && labFileSha(source) == sourceLock["sha256"]) { "Prepare the pinned jcifs source before captured browser acceptance." }
@@ -152,6 +126,7 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
             }
             val plan = linkedMapOf<String, Any?>(
                 "version" to 1, "invocationId" to invocation, "taskName" to taskName,
+                "burpBrowserExecutable" to providers.gradleProperty("burpBrowserExecutable").orNull?.let { file(it).canonicalPath },
                 "boundaryHash" to labBoundary, "productionRevision" to "${labAudit["head"]}+working-copy:$labBoundary",
                 "productionRoot" to productionSnapshot.absolutePath, "configurationHash" to labSha(configurationParts.joinToString("\n").toByteArray(Charsets.UTF_8)),
                 "auditFile" to labAuditFile.absolutePath, "auditSha256" to labFileSha(labAuditFile), "overlay" to labWorkspace.resolve("test/authentication-lab/production-tests").absolutePath,

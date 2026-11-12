@@ -250,7 +250,7 @@ public final class PlaywrightDriverAdapter {
                     || k.equals("NODE_PATH") || k.equals("NODE_TLS_REJECT_UNAUTHORIZED") || k.equals("NODE_EXTRA_CA_CERTS")
                     || k.equals("SELENIUM_REMOTE_URL") || k.equals("HTTP_PROXY") || k.equals("HTTPS_PROXY") || k.equals("ALL_PROXY") || k.equals("NO_PROXY");
         });
-        result.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"); result.put("PLAYWRIGHT_BROWSERS_PATH", runtime.browserRoot().toString());
+        result.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"); result.put("PLAYWRIGHT_BROWSERS_PATH", runtime.helperRoot().toString());
         result.put("PLAYWRIGHT_NODEJS_PATH", runtime.nodeExecutable().toString()); result.put("PW_LANG_NAME", "java");
         result.put("PW_LANG_NAME_VERSION", "21"); result.put("PW_CLI_DISPLAY_VERSION", "1.64.0");
         return Map.copyOf(result);

@@ -45,16 +45,15 @@ final class BrowserManifestCodec {
             requireSupportedPlatform(expectedPlatform);
             require(raw.length <= limits.manifestBytes(), "Manifest exceeds its size ceiling.");
             JsonNode n = JSON.readTree(utf8(raw));
-            object(n, "formatVersion", "platform", "playwrightJavaVersion", "browserName", "browserVersion", "browserRevision",
-                    "driverPackageVersion", "nodeVersion", "browserRoot", "browserExecutable", "nodeExecutable", "driverEntryPoint", "helpers",
+            object(n, "formatVersion", "platform", "playwrightJavaVersion",
+                    "driverPackageVersion", "nodeVersion", "helperRoot", "nodeExecutable", "driverEntryPoint", "helpers",
                     "archive", "unpackedBytes", "entries");
-            number(n.get("formatVersion"), 2, 2);
+            number(n.get("formatVersion"), 3, 3);
             if (!text(n, "platform").equals(expectedPlatform))
                 throw failure(AuthenticationFailure.Cause.UNSUPPORTED_PLATFORM, "This browser bundle was built for a different operating system or processor architecture.", "Reload the complete universal extension JAR.");
-            require(text(n, "playwrightJavaVersion").equals("1.64.0") && text(n, "browserName").equals("chromium"), "Unsupported bundled runtime version.");
-            text(n, "browserVersion"); text(n, "driverPackageVersion"); text(n, "nodeVersion");
-            require(text(n, "browserRevision").matches("[0-9]+"), "Invalid browser revision.");
-            String browserRoot = path(text(n, "browserRoot"), limits), browser = path(text(n, "browserExecutable"), limits);
+            require(text(n, "playwrightJavaVersion").equals("1.64.0"), "Unsupported bundled runtime version.");
+            text(n, "driverPackageVersion"); text(n, "nodeVersion");
+            String helperRoot = path(text(n, "helperRoot"), limits);
             String node = path(text(n, "nodeExecutable"), limits), driver = path(text(n, "driverEntryPoint"), limits);
             JsonNode archive = n.get("archive"); object(archive, "resource", "sha256", "bytes", "expandedBytes");
             require(text(archive, "resource").equals(platformResource(ARCHIVE_RESOURCE, expectedPlatform)), "Unexpected archive resource.");
@@ -66,6 +65,9 @@ final class BrowserManifestCodec {
             JsonNode rows = n.get("entries"); require(rows != null && rows.isArray() && rows.size() <= limits.entries(), "Invalid entry list.");
             for (JsonNode row : rows) {
                 String type = text(row, "type"), name = path(text(row, "path"), limits); Entry entry;
+                for (String part : name.toLowerCase(Locale.ROOT).split("/"))
+                    require(!Set.of("chrome", "chrome.exe", "chromium.app", "burp browser.app", "browsers").contains(part)
+                            && !part.startsWith("chromium-"), "Browser distribution in driver-only manifest.");
                 if (type.equals("file")) {
                     object(row, "path", "type", "bytes", "sha256", "executable");
                     require(row.get("executable").isBoolean(), "Executable mode must be boolean.");
@@ -94,8 +96,8 @@ final class BrowserManifestCodec {
             require(sum == declaredTotal, "Expanded byte sum mismatch.");
             for (String dir : directories) require(!entries.containsKey(dir), "File/link conflicts with a directory.");
             for (Entry e : entries.values()) if (e.link()) resolve(e.path(), entries, directories, limits);
-            require(directories.contains(resolve(browserRoot, entries, directories, limits)), "Browser root is not a directory.");
-            for (String selector : List.of(browser, node, driver)) {
+            require(directories.contains(resolve(helperRoot, entries, directories, limits)), "Driver helper root is not a directory.");
+            for (String selector : List.of(node, driver)) {
                 Entry e = entries.get(resolve(selector, entries, directories, limits));
                 require(e != null && !e.link(), "Executable/driver selector is not a regular file.");
                 if (!selector.equals(driver)) require(e.executable(), "Executable selector lacks executable mode.");
@@ -107,7 +109,7 @@ final class BrowserManifestCodec {
                 require(text(helper, "revision").matches("[0-9]+"), "Invalid helper revision.");
                 String value = path(text(helper, "path"), limits); resolve(value, entries, directories, limits); helpers.add(value);
             }
-            return new Manifest(expectedPlatform, browserRoot, browser, node, driver, archiveHash, archiveBytes, expandedBytes, sum,
+            return new Manifest(expectedPlatform, helperRoot, node, driver, archiveHash, archiveBytes, expandedBytes, sum,
                     Map.copyOf(entries), Set.copyOf(directories), List.copyOf(helpers));
         } catch (AuthenticationFailure ex) { throw ex; }
         catch (Exception ex) {
@@ -268,7 +270,7 @@ final class BrowserManifestCodec {
     static void requireSupportedPlatform(String target) throws AuthenticationFailure {
         if (!Set.of("windows-x64", "linux-x64", "macos-x64").contains(target))
             throw failure(AuthenticationFailure.Cause.UNSUPPORTED_PLATFORM,
-                    "Bundled Chromium does not support " + target + ".",
+                    "Browser drivers do not support " + target + ".",
                     "Supported targets: Windows x64, Linux x64 and Intel macOS. Use a supported JVM and operating system.");
     }
     /**

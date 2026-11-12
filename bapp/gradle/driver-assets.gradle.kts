@@ -113,22 +113,6 @@ fun hash(path: Path): String {
     return HexFormat.of().formatHex(digest.digest())
 }
 /**
- * Validates the developer's explicit asset-download HTTP proxy origin.
- *
- * No credentials, path beyond slash, query or fragment are accepted. This is separate from a
- * journey's browser proxy and from Gradle's Maven dependency settings; no Burp config is inferred.
- *
- * @param value assetDownloadProxy property supplied for browser-source HTTPS fetches.
- * @return Parsed proxy URI; an omitted port is used as port 80 by the caller.
- */
-fun exactOrigin(value: String): URI {
-    val uri = URI.create(value)
-    require(uri.scheme == "http" && uri.host != null && uri.userInfo == null && uri.port in -1..65535 && uri.port != 0
-        && uri.rawPath in listOf("", "/") && uri.rawQuery == null && uri.rawFragment == null) { "assetDownloadProxy must be an HTTP proxy origin without credentials." }
-    return uri
-}
-
-/**
  * Normalizes only known host OS/architecture names; unsupported hosts cannot select a guessed bundle.
  */
 val hostPlatform = when {
@@ -140,11 +124,11 @@ val hostPlatform = when {
 /**
  * Holds generated manifest/ZIP resources added by jar and explicit integration tasks, not unit tests.
  */
-val generatedAssets = layout.buildDirectory.dir("generated/browser-assets")
+val generatedAssets = layout.buildDirectory.dir("generated/driver-assets")
 /**
  * Names the committed release-input lock; hashes and member prefixes come from measured archives.
  */
-val assetLock = layout.projectDirectory.file("browser-assets.lock.json")
+val assetLock = layout.projectDirectory.file("driver-assets.lock.json")
 
 /** Pinned source ZIPs and isolated consumer-validator dependencies. */
 val runtime = configurations.getByName("runtimeClasspath")
@@ -165,50 +149,27 @@ fun deleteBuildTree(path: Path, buildRoot: Path) {
 
 /** Checks target labels, helper inventory and the matching Node subtree. */
 fun validateTarget(platform: JsonNode) {
-    fields(platform, "platform", "platform", "browserName", "browserVersion", "browserRevision", "driverPackageVersion", "nodeVersion",
-        "browserRoot", "browserExecutable", "nodeExecutable", "driverEntryPoint", "helpers", "sources")
+    fields(platform, "platform", "platform", "driverPackageVersion", "nodeVersion", "helperRoot", "nodeExecutable", "driverEntryPoint", "helpers", "sources")
     val target = string(platform, "platform"); require(target in supportedTargets)
-    require(string(platform, "browserName") == "chromium" && string(platform, "browserRevision") == "1248"
-        && string(platform, "browserVersion") == "156.0.8078.4" && string(platform, "driverPackageVersion") == "1.64.1"
-        && string(platform, "nodeVersion") == "24.22.1") { "Pinned runtime labels differ." }
-    listOf("browserRoot", "browserExecutable", "nodeExecutable", "driverEntryPoint").forEach { safePath(string(platform, it)) }
-    require(platform.path("helpers").isArray && platform.path("sources").isArray)
-    val helpers = platform.path("helpers").map {
-        fields(it, "helper", "name", "revision", "path"); safePath(string(it, "path"))
-        require(string(it, "revision").matches(Regex("[0-9]+"))); string(it, "name")
-    }
-    val expected = if (target == "windows-x64") setOf("ffmpeg", "winldd") else setOf("ffmpeg")
-    require(helpers.size == expected.size && helpers.toSet() == expected) { "Target helper inventory differs." }
+    require(string(platform, "driverPackageVersion") == "1.64.1" && string(platform, "nodeVersion") == "24.22.1") { "Pinned driver labels differ." }
+    listOf("helperRoot", "nodeExecutable", "driverEntryPoint").forEach { safePath(string(platform, it)) }
+    require(platform.path("helpers").isArray && platform.path("helpers").isEmpty) { "Custom executable launch and DOM recording require no bundled browser helpers." }
+    require(platform.path("sources").isArray)
     val ids = platform.path("sources").map { string(it, "id") }
-    require(ids.size == expected.size + 3 && ids.toSet() == expected + setOf("chromium", "node", "driver")) { "Source inventory differs." }
+    require(ids.size == 2 && ids.toSet() == setOf("node", "driver")) { "Driver-only source inventory differs." }
     val copies = platform.path("sources").single { string(it, "id") == "node" }.path("copies")
     val subtree = when (target) { "windows-x64" -> "win32_x64"; "linux-x64" -> "linux"; else -> "mac" }
-    require(copies.isArray && copies.size() == 1 && copies[0].path("from").asText() == "driver/$subtree"
-        && copies[0].path("to").asText() == "driver") { "Node source does not match target." }
+    require(copies.isArray && copies.size() == 1 && copies[0].path("from").asText() == "driver/$subtree" && copies[0].path("to").asText() == "driver") { "Node source does not match target." }
 }
 
 /** Returns a whole-source verified ZIP; offline misses never invoke the downloader. */
-fun loadVerifiedSource(source: JsonNode, cache: Path, offline: Boolean, resolved: Map<String, Path>,
-                       download: (URI, Path, Long, String) -> Unit): Path {
+fun loadVerifiedSource(source: JsonNode, resolved: Map<String, Path>): Path {
     fields(source, "source record", "id", "revision", "source", "sha256", "bytes", "copies")
     string(source, "id"); string(source, "revision")
     val expected = string(source, "sha256"); require(expected.matches(Regex("[0-9a-f]{64}")))
     val size = integer(source, "bytes", 1, 2L shl 30); val location = source.path("source")
-    val path = when (string(location, "type")) {
-        "maven" -> { fields(location, "Maven source", "type", "coordinates")
-            resolved[string(location, "coordinates")] ?: error("Missing locked Maven source.") }
-        "https" -> {
-            fields(location, "HTTPS source", "type", "url")
-            val uri = URI.create(string(location, "url")); require(uri.scheme == "https" && uri.host != null && uri.userInfo == null && uri.fragment == null)
-            val destination = cache.resolve("$expected.zip")
-            if (!Files.exists(destination)) {
-                require(!offline) { "Locked browser source missing in offline mode; prepare sources online first." }
-                Files.createDirectories(cache); download(uri, destination, size, expected)
-            }
-            destination
-        }
-        else -> error("Unsupported source type.")
-    }
+    fields(location, "Maven source", "type", "coordinates"); require(string(location, "type") == "maven") { "Only pinned driver Maven inputs are allowed." }
+    val path = resolved[string(location, "coordinates")] ?: error("Missing locked Maven driver source.")
     require(Files.isRegularFile(path) && Files.size(path) == size && hash(path) == expected) { "Locked source hash/size mismatch." }
     require(source.path("copies").isArray && !source.path("copies").isEmpty)
     source.path("copies").forEach {
@@ -249,14 +210,9 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
                          decode: (java.io.InputStream, java.io.OutputStream, JsonNode) -> Unit) {
     validateTarget(platform); val target = string(platform, "platform")
     java.util.zip.ZipFile(driver.toFile()).use { jar ->
-        val registry = jar.getInputStream(jar.getEntry("driver/package/browsers.json")).use { assetMapper.readTree(it) }
-        val chromium = registry.path("browsers").single { it.path("name").asText() == "chromium" }
-        require(chromium.path("revision").asText() == string(platform, "browserRevision") && chromium.path("browserVersion").asText() == string(platform, "browserVersion"))
         val pkg = jar.getInputStream(jar.getEntry("driver/package/package.json")).use { assetMapper.readTree(it) }
         require(pkg.path("version").asText() == string(platform, "driverPackageVersion"))
-        platform.path("helpers").forEach { helper ->
-            require(registry.path("browsers").any { it.path("name").asText() == string(helper, "name") && it.path("revision").asText() == string(helper, "revision") })
-        }
+
     }
     val mapped = mutableListOf<MappedAsset>(); val names = mutableSetOf<String>()
     sources.forEach { (source, path) ->
@@ -272,6 +228,7 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
                     val link = entry.isUnixSymlink; require(!link || target != "windows-x64")
                     val remainder = if (from.isEmpty()) entry.name else entry.name.removePrefix(from).removePrefix("/")
                     val name = safePath(if (remainder.isEmpty()) to else "$to/$remainder")
+                    require(name.startsWith("driver/")) { "Asset outside driver tree." }
                     require(names.add(name.lowercase(java.util.Locale.ROOT))) { "Duplicate or case-colliding asset path." }
                     require(entry.size in 0..(if (link) 4096L else (1L shl 30)))
                     require(entry.crc in 0..0xffffffffL) { "Source member lacks a valid CRC." }
@@ -283,8 +240,8 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
     }
     Files.createDirectories(output.parent); val stage = Files.createTempDirectory(output.parent, ".$target-")
     try {
-        val zip = stage.resolve("browser-assets.zip")
-        val manifest = assetMapper.createObjectNode().put("formatVersion", 2).put("playwrightJavaVersion", "1.64.0")
+        val zip = stage.resolve("driver-assets.zip")
+        val manifest = assetMapper.createObjectNode().put("formatVersion", 3).put("playwrightJavaVersion", "1.64.0")
         platform.fields().forEachRemaining { (key, value) -> if (key != "sources") manifest.set<JsonNode>(key, value) }
         val entries = manifest.putArray("entries"); var total = 0L
         val openSources = mutableMapOf<Path, ZipFile>()
@@ -319,7 +276,7 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
             }
         } finally { openSources.values.forEach { it.close() } }
         val expandedBytes = Files.size(zip); require(expandedBytes in 1..(2L shl 30))
-        val compressed = stage.resolve("browser-assets.zip.xz")
+        val compressed = stage.resolve("driver-assets.zip.xz")
         val lzma = LZMA2Options(9).apply { setDictSize(64 shl 20) }
         val filters = arrayOf<FilterOptions>(X86Options(), lzma)
         logger.lifecycle("Encoding $target sequentially: XZ encoder ${FilterOptions.getEncoderMemoryUsage(filters)} KiB, decoder ${FilterOptions.getDecoderMemoryUsage(filters)} KiB; build JVM max heap ${Runtime.getRuntime().maxMemory()} bytes.")
@@ -330,12 +287,12 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
         }
         require(Files.size(compressed) in 1..(2L shl 30))
         manifest.put("unpackedBytes", total)
-        manifest.putObject("archive").put("resource", "META-INF/bpsh/$target/browser-assets.zip.xz")
+        manifest.putObject("archive").put("resource", "META-INF/bpsh/$target/driver-assets.zip.xz")
             .put("sha256", hash(compressed)).put("bytes", Files.size(compressed)).put("expandedBytes", expandedBytes)
         val bytes = assetMapper.writeValueAsBytes(manifest); validate(bytes, target)
         decode(Files.newInputStream(compressed), java.io.OutputStream.nullOutputStream(), manifest)
         Files.delete(zip)
-        Files.write(stage.resolve("browser-assets.json"), bytes)
+        Files.write(stage.resolve("driver-assets.json"), bytes)
         deleteBuildTree(output, buildRoot)
         // Windows scanners can briefly retain the newly closed ZIP/manifest directory.
         // Retry only that same atomic publication; never substitute a partial copy or replace a foreign target.
@@ -352,9 +309,9 @@ fun prepareTargetPayload(platform: JsonNode, sources: List<Pair<JsonNode, Path>>
 }
 
 /** Prepares all three target archives without executing a native program. */
-tasks.register("prepareBrowserAssets") {
+tasks.register("prepareDriverAssets") {
     group = "build"; dependsOn("compileJava"); mustRunAfter("verifyIntegrationTestClasses")
-    inputs.file(assetLock); inputs.files(runtime); inputs.file(layout.projectDirectory.file("gradle/browser-assets.gradle.kts"))
+    inputs.file(assetLock); inputs.files(runtime); inputs.file(layout.projectDirectory.file("gradle/driver-assets.gradle.kts"))
     inputs.files(provider { project.extensions.getByType<JavaPluginExtension>().sourceSets.getByName("main").output.classesDirs.asFileTree.matching {
         include("bpsh/browser/runtime/BrowserRuntimeManager*.class", "bpsh/browser/runtime/BrowserManifestCodec*.class", "bpsh/browser/runtime/BrowserArchiveCodec*.class")
     } })
@@ -367,34 +324,11 @@ tasks.register("prepareBrowserAssets") {
         require(targets.size == 3 && targets.toSet() == supportedTargets.toSet()) { "Exactly three unique x64 targets are required." }
         val resolved = runtime.resolvedConfiguration.resolvedArtifacts.associate { "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}" to it.file.toPath() }
         val driver = resolved.getValue("com.microsoft.playwright:driver:1.64.0")
-        val cache = layout.buildDirectory.dir("browser-sources").get().asFile.toPath(); val buildRoot = layout.buildDirectory.get().asFile.toPath()
-        val proxy = providers.gradleProperty("assetDownloadProxy").orNull?.let(::exactOrigin)
-        val download: (URI, Path, Long, String) -> Unit = { uri, destination, size, expected ->
-            val direct = object : ProxySelector() {
-                override fun select(uri: URI): List<Proxy> = listOf(Proxy.NO_PROXY)
-                override fun connectFailed(uri: URI, sa: SocketAddress, ioe: java.io.IOException) {}
-            }
-            val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(60)).followRedirects(HttpClient.Redirect.NORMAL)
-                .proxy(if (proxy == null) direct else ProxySelector.of(InetSocketAddress(proxy.host, if (proxy.port == -1) 80 else proxy.port))).build()
-            val temporary = Files.createTempFile(cache, "asset-", ".part")
-            try {
-                logger.lifecycle("Fetching locked browser source via ${if (proxy == null) "direct connection" else "explicit proxy"}")
-                val response = client.send(HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(2)).GET().build(), HttpResponse.BodyHandlers.ofInputStream())
-                response.body().use { input ->
-                    require(response.statusCode() == 200) { "Locked source download failed; no direct fallback." }
-                    Files.newOutputStream(temporary).use { out ->
-                        val buffer = ByteArray(65536); var received = 0L
-                        while (true) { val n = input.read(buffer); if (n < 0) break; received += n; require(received <= size); out.write(buffer, 0, n) }
-                    }
-                }
-                require(Files.size(temporary) == size && hash(temporary) == expected)
-                Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE)
-            } finally { Files.deleteIfExists(temporary) }
-        }
+        val buildRoot = layout.buildDirectory.get().asFile.toPath()
         withAssetCodecs { validate, decode ->
             supportedTargets.forEach { target ->
                 val platform = lock.path("platforms").single { string(it, "platform") == target }; validateTarget(platform)
-                val sources = platform.path("sources").map { it to loadVerifiedSource(it, cache, gradle.startParameter.isOffline, resolved, download) }
+                val sources = platform.path("sources").map { it to loadVerifiedSource(it, resolved) }
                 prepareTargetPayload(platform, sources, driver, generatedAssets.get().asFile.toPath().resolve("META-INF/bpsh/$target"), buildRoot, validate, decode)
                 logger.lifecycle("Prepared verified $target browser payload.")
             }
@@ -403,11 +337,11 @@ tasks.register("prepareBrowserAssets") {
 }
 
 /** Exercises the real producer with tiny local sources, including invalid input and publication. */
-tasks.register("verifyBrowserAssetProducer") {
+tasks.register("verifyDriverAssetProducer") {
     group = "verification"; dependsOn("compileJava"); outputs.upToDateWhen { false }
     doLast {
         val buildRoot = layout.buildDirectory.get().asFile.toPath()
-        val root = layout.buildDirectory.dir("tmp/verifyBrowserAssetProducer").get().asFile.toPath()
+        val root = layout.buildDirectory.dir("tmp/verifyDriverAssetProducer").get().asFile.toPath()
         deleteBuildTree(root, buildRoot); Files.createDirectories(root)
         val results = assetMapper.createArrayNode()
         fun sampleZip(path: Path, entries: List<Triple<String, ByteArray, Int>>) {
@@ -435,35 +369,23 @@ tasks.register("verifyBrowserAssetProducer") {
             Triple("driver/linux/node", ordinary, 33261), Triple("driver/mac/node", ordinary, 33261)))
         val resolved = mapOf("com.microsoft.playwright:driver:1.64.0" to driver, "com.microsoft.playwright:driver-bundle:1.64.0" to node)
         val lock = assetMapper.readTree(Files.readString(assetLock.asFile.toPath()))
-        var downloads = 0
-        val noDownload: (URI, Path, Long, String) -> Unit = { _, _, _, _ -> downloads++; error("Unexpected download.") }
         fun fixture(target: String, folder: Path, extras: List<Triple<String, ByteArray, Int>> = emptyList()): JsonNode {
             Files.createDirectories(folder)
             val platform = lock.path("platforms").single { it.path("platform").asText() == target }.deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>()
+            val localDriver = folder.resolve("driver.jar")
+            val content = listOf(Triple("driver/package/cli.js", ordinary, 33188),
+                Triple("driver/package/package.json", """{"version":"1.64.1"}""".toByteArray(), 33188),
+                Triple("driver/package/data.js", ordinary, 33188), Triple("driver/package/extra-helper", ordinary, 33261)) +
+                extras.map { Triple("driver/package/" + it.first, it.second, it.third) }
+            sampleZip(localDriver, content)
             platform.path("sources").forEach { source ->
-                val id = string(source, "id")
-                val path = when (id) {
-                    "node" -> node
-                    "driver" -> driver
-                    else -> {
-                        val path = folder.resolve(id + ".zip")
-                        val members = if (id == "chromium") listOf(
-                            Triple(string(platform, "browserExecutable").removePrefix("browsers/chromium-1248/"), ordinary, 33261),
-                            Triple("extra-helper", ordinary, 35309), Triple("data.js", ordinary, 33188)) + extras
-                        else listOf(Triple(id + if (target == "windows-x64") ".exe" else "", ordinary, 33261))
-                        sampleZip(path, members); path
-                    }
-                }
+                val path = if (string(source, "id") == "node") node else localDriver
                 (source as com.fasterxml.jackson.databind.node.ObjectNode).put("sha256", hash(path)).put("bytes", Files.size(path))
-                if (source.path("source").path("type").asText() == "https") {
-                    val cache = folder.resolve("cache"); Files.createDirectories(cache)
-                    Files.copy(path, cache.resolve(hash(path) + ".zip"), StandardCopyOption.REPLACE_EXISTING)
-                }
             }
             return platform
         }
         fun sources(platform: JsonNode, folder: Path) = platform.path("sources").map {
-            it to loadVerifiedSource(it, folder.resolve("cache"), true, resolved, noDownload)
+            it to loadVerifiedSource(it, resolved + ("com.microsoft.playwright:driver:1.64.0" to folder.resolve("driver.jar")))
         }
         withAssetCodecs { validate, decode ->
             supportedTargets.forEach { target ->
@@ -472,39 +394,39 @@ tasks.register("verifyBrowserAssetProducer") {
                     val extra = if (target == "windows-x64") emptyList() else listOf(Triple("alias", "extra-helper".toByteArray(), 41471))
                     val platform = fixture(target, folder, extra)
                     prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode)
-                    val metadata = assetMapper.readTree(Files.readAllBytes(folder.resolve("out/browser-assets.json")))
-                    check(metadata.path("archive").path("resource").asText() == "META-INF/bpsh/" + target + "/browser-assets.zip.xz")
+                    val metadata = assetMapper.readTree(Files.readAllBytes(folder.resolve("out/driver-assets.json")))
+                    check(metadata.path("archive").path("resource").asText() == "META-INF/bpsh/" + target + "/driver-assets.zip.xz")
                     val rows = metadata.path("entries").associateBy { it.path("path").asText() }
-                    check(rows.getValue(string(platform, "browserExecutable")).path("executable").booleanValue())
-                    check(!rows.getValue("browsers/chromium-1248/data.js").path("executable").booleanValue())
+                    check(rows.getValue(string(platform, "nodeExecutable")).path("executable").booleanValue())
+                    check(!rows.getValue("driver/package/data.js").path("executable").booleanValue())
                     if (target != "windows-x64") {
-                        check(rows.getValue("browsers/chromium-1248/extra-helper").path("executable").booleanValue())
-                        check(rows.getValue("browsers/chromium-1248/alias").path("target").asText() == "extra-helper")
+                        check(rows.getValue("driver/package/extra-helper").path("executable").booleanValue())
+                        check(rows.getValue("driver/package/alias").path("target").asText() == "extra-helper")
                     }
-                    check(metadata.path("formatVersion").intValue() == 2)
+                    check(metadata.path("formatVersion").intValue() == 3 && !metadata.has("browserExecutable"))
                     check(Files.list(folder.resolve("out")).use { paths -> paths.map { it.fileName.toString() }.toList().toSet() }
-                        == setOf("browser-assets.json", "browser-assets.zip.xz"))
+                        == setOf("driver-assets.json", "driver-assets.zip.xz"))
                     val decoded = folder.resolve("decoded.zip")
-                    Files.newOutputStream(decoded).use { out -> decode(Files.newInputStream(folder.resolve("out/browser-assets.zip.xz")), out, metadata) }
+                    Files.newOutputStream(decoded).use { out -> decode(Files.newInputStream(folder.resolve("out/driver-assets.zip.xz")), out, metadata) }
                     ZipFile.builder().setFile(decoded.toFile()).get().use { zip ->
                         check(zip.entries.asSequence().all { it.method == ZipEntry.STORED })
                         check(zip.getEntry(string(platform, "nodeExecutable")).unixMode == 33261)
-                        check(zip.getEntry("browsers/chromium-1248/extra-helper").unixMode == if (target == "windows-x64") 33188 else 33261)
+                        check(zip.getEntry("driver/package/extra-helper").unixMode == if (target == "windows-x64") 33188 else 33261)
                     }
                     Files.delete(decoded)
                     prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("repeat"), buildRoot, validate, decode)
-                    listOf("browser-assets.json", "browser-assets.zip.xz").forEach { check(Files.mismatch(folder.resolve("out").resolve(it), folder.resolve("repeat").resolve(it)) == -1L) }
+                    listOf("driver-assets.json", "driver-assets.zip.xz").forEach { check(Files.mismatch(folder.resolve("out").resolve(it), folder.resolve("repeat").resolve(it)) == -1L) }
                 }
             }
             case("unrelated-targets-remain-identical") {
                 val otherTargets = listOf("windows-x64", "macos-x64")
-                val before = otherTargets.associateWith { target -> listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) } }
-                val oldLinux = hash(root.resolve("linux-x64/out/browser-assets.zip.xz"))
+                val before = otherTargets.associateWith { target -> listOf("driver-assets.json", "driver-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) } }
+                val oldLinux = hash(root.resolve("linux-x64/out/driver-assets.zip.xz"))
                 val folder = root.resolve("changed-linux")
                 val platform = fixture("linux-x64", folder, listOf(Triple("new-data", "different input".toByteArray(), 33188)))
                 prepareTargetPayload(platform, sources(platform, folder), driver, root.resolve("linux-x64/out"), buildRoot, validate, decode)
-                check(hash(root.resolve("linux-x64/out/browser-assets.zip.xz")) != oldLinux)
-                otherTargets.forEach { target -> check(before.getValue(target) == listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) }) }
+                check(hash(root.resolve("linux-x64/out/driver-assets.zip.xz")) != oldLinux)
+                otherTargets.forEach { target -> check(before.getValue(target) == listOf("driver-assets.json", "driver-assets.zip.xz").map { hash(root.resolve(target).resolve("out").resolve(it)) }) }
             }
             val invalid = listOf(
                 "traversal" to listOf(Triple("../escape", ordinary, 33188)),
@@ -527,42 +449,44 @@ tasks.register("verifyBrowserAssetProducer") {
             }
             case("missing-selector") {
                 val folder = root.resolve("missing-selector"); val platform = fixture("linux-x64", folder) as com.fasterxml.jackson.databind.node.ObjectNode
-                platform.put("browserExecutable", "browsers/missing")
+                platform.put("nodeExecutable", "driver/missing")
                 reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode) }
             }
-            case("offline-miss") {
+            case("missing-driver-input") {
                 val folder = root.resolve("offline"); val platform = fixture("linux-x64", folder)
-                val first = platform.path("sources")[0]; Files.delete(folder.resolve("cache").resolve(string(first, "sha256") + ".zip"))
-                reject { sources(platform, folder) }; check(downloads == 0); check(!Files.exists(folder.resolve("out")))
+                reject { loadVerifiedSource(platform.path("sources")[0], emptyMap()) }; check(!Files.exists(folder.resolve("out")))
             }
             case("source-size-and-digest") {
                 val folder = root.resolve("corrupt"); val platform = fixture("linux-x64", folder)
-                val first = platform.path("sources")[0]
-                Files.write(folder.resolve("cache").resolve(string(first, "sha256") + ".zip"), ordinary)
+                Files.write(folder.resolve("driver.jar"), ordinary)
                 reject { sources(platform, folder) }
                 val nodeRecord = platform.path("sources").single { it.path("id").asText() == "node" }.deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>()
                 nodeRecord.put("bytes", Files.size(node) + 1)
-                reject { loadVerifiedSource(nodeRecord, folder.resolve("cache"), true, resolved, noDownload) }
+                reject { loadVerifiedSource(nodeRecord, resolved) }
+            }
+            case("driver-only-inventory") {
+                val folder = root.resolve("browser-content"); val platform = fixture("linux-x64", folder, listOf(Triple("chrome", ordinary, 33261)))
+                reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode) }
+                check(!Files.exists(folder.resolve("out")))
             }
             case("failed-candidate-preserves-published-pair") {
                 val folder = root.resolve("preserve"); val platform = fixture("linux-x64", folder)
                 prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("out"), buildRoot, validate, decode)
-                val before = listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) }
+                val before = listOf("driver-assets.json", "driver-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) }
                 val bad = fixture("linux-x64", folder.resolve("bad"), listOf(Triple("alias", "../escape".toByteArray(), 41471)))
                 reject { prepareTargetPayload(bad, sources(bad, folder.resolve("bad")), driver, folder.resolve("out"), buildRoot, validate, decode) }
-                check(before == listOf("browser-assets.json", "browser-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) })
+                check(before == listOf("driver-assets.json", "driver-assets.zip.xz").map { hash(folder.resolve("out").resolve(it)) })
                 Files.write(folder.resolve("blocked"), ordinary)
                 reject { prepareTargetPayload(platform, sources(platform, folder), driver, folder.resolve("blocked/out"), buildRoot, validate, decode) }
             }
         }
-        check(downloads == 0)
-        val report = layout.buildDirectory.file("reports/browser-asset-producer/results.json").get().asFile.toPath()
+        val report = layout.buildDirectory.file("reports/driver-asset-producer/results.json").get().asFile.toPath()
         Files.createDirectories(report.parent); Files.write(report, assetMapper.writeValueAsBytes(results))
         check(results.all { it.path("status").asText() == "PASS" }) { "Producer verification failed; see results.json." }
         logger.lifecycle("Producer verification: " + results.size() + " cases passed; zero downloads/native executions.")
     }
 }
-tasks.named("check") { dependsOn("verifyBrowserAssetProducer") }
+tasks.named("check") { dependsOn("verifyDriverAssetProducer") }
 
 /**
  * Owns the rebuilt dependency-resource staging tree; cleanup is restricted to this checked build path.
@@ -722,7 +646,7 @@ val prepareJcifsSources = tasks.register("prepareJcifsSources") {
 }
 
 tasks.named<Jar>("jar") {
-    dependsOn("prepareBrowserAssets", "assemblePlatformRuntime", prepareJcifsSources)
+    dependsOn("prepareDriverAssets", "assemblePlatformRuntime", prepareJcifsSources)
     archiveFileName.set(provider { "browser-powered-session-handler-${project.version}.jar" })
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
@@ -731,8 +655,7 @@ tasks.named<Jar>("jar") {
     from(assembledRuntime); from(generatedAssets); from(thirdPartyOutput)
     doLast {
         val artifactBytes = archiveFile.get().asFile.length()
-        require(artifactBytes < (512L shl 20)) { "Universal JAR must remain below 512 MiB for Burp loading-memory headroom; actual $artifactBytes bytes." }
-        if (artifactBytes > (500L shl 20)) logger.warn("Universal JAR exceeds the 500 MiB engineering target: $artifactBytes bytes.")
+        require(artifactBytes < (128L shl 20)) { "Universal driver-only JAR must remain below 128 MiB for Burp loading-memory headroom; actual $artifactBytes bytes." }
         java.util.zip.ZipFile(archiveFile.get().asFile).use { jar ->
             val names = jar.entries().asSequence().map { it.name }.toList()
             require(names.toSet().size == names.size) { "Duplicate output JAR entries." }
@@ -748,7 +671,7 @@ tasks.named<Jar>("jar") {
             require(names.any { it.startsWith("META-INF/notices/org.tukaani.xz-1.12/") }) { "XZ license missing." }
             val pairs = names.filter { !it.endsWith("/") && it.startsWith("META-INF/bpsh/") }
             val thirdPartyNames=listOf("jcifs-ng-source.zip","jcifs-ng-LICENSE.txt","jcifs-ng.md","jcifs-ng-provenance.json").map { "META-INF/bpsh/third-party/$it" }
-            val expected=supportedTargets.flatMap { listOf("META-INF/bpsh/$it/browser-assets.json", "META-INF/bpsh/$it/browser-assets.zip.xz") } + thirdPartyNames
+            val expected=supportedTargets.flatMap { listOf("META-INF/bpsh/$it/driver-assets.json", "META-INF/bpsh/$it/driver-assets.zip.xz") } + thirdPartyNames
             require(pairs.toSet() == expected.toSet()) { "Universal browser/third-party inventory differs." }
             val provenance=jar.getInputStream(jar.getEntry("META-INF/bpsh/third-party/jcifs-ng-provenance.json")).use { assetMapper.readTree(it) }
             val sourceDigest=MessageDigest.getInstance("SHA-256")
@@ -766,9 +689,9 @@ tasks.named<Jar>("jar") {
             }
             withAssetCodecs { validate, decode ->
                 supportedTargets.forEach { target ->
-                    val raw = jar.getInputStream(jar.getEntry("META-INF/bpsh/$target/browser-assets.json")).use { it.readNBytes((32 shl 20) + 1) }
+                    val raw = jar.getInputStream(jar.getEntry("META-INF/bpsh/$target/driver-assets.json")).use { it.readNBytes((32 shl 20) + 1) }
                     validate(raw, target); val metadata = assetMapper.readTree(raw)
-                    val archive = jar.getEntry("META-INF/bpsh/$target/browser-assets.zip.xz") ?: error("Browser archive missing.")
+                    val archive = jar.getEntry("META-INF/bpsh/$target/driver-assets.zip.xz") ?: error("Browser archive missing.")
                     require(archive.size == metadata.path("archive").path("bytes").longValue())
                     decode(jar.getInputStream(archive), java.io.OutputStream.nullOutputStream(), metadata)
                 }

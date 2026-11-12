@@ -41,12 +41,38 @@ public class BrowserJourneyIntegrationTest {
     public static Pkcs11IdentityManager identities;
     public static AuthTrafficGuard guard;
     public static BrowserFlowRunner runner;
+    @Test public void launchedBrowsersUseDistinctOwnedProfilesAndSandbox() throws Exception {
+        var journey = IntegrationFixtures.journey(java.net.URI.create("http://localhost/login"), List.of());
+        var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
+        var launcher = new BrowserSessionLauncher(runtime, IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
+        var profiles = new HashSet<Path>();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            Path owned; PlaywrightDriverAdapter.Session driver;
+            try (var values = SecretStore.Values.empty(); var session = launcher.open(identity, bpsh.journey.BrowserSetup.from(journey), values,
+                    BrowserSessionLauncher.Visibility.HEADLESS, false, System.nanoTime() + TimeUnit.SECONDS.toNanos(30), () -> false, ignored -> {})) {
+                driver = session.driver();
+                var temporary = driver.getClass().getDeclaredField("temporary"); temporary.setAccessible(true);
+                owned = ((Path) temporary.get(driver)).toRealPath();
+                var commands = IntegrationFixtures.ownedBrowserCommandLines(driver).stream()
+                        .filter(command -> command.contains("--remote-debugging-pipe")).toList();
+                assertEquals(1, commands.size(), "Owned browser process metadata must expose its launch arguments");
+                String command = commands.getFirst();
+                var selected = java.util.regex.Pattern.compile("(?:^|\\s)(?:\"--user-data-dir=([^\"]+)\"|--user-data-dir=(\\S+))").matcher(command);
+                assertTrue(selected.find(), "Owned browser must declare a temporary user-data directory");
+                Path profile = Path.of(selected.group(1) == null ? selected.group(2) : selected.group(1)).toRealPath();
+                assertFalse(selected.find()); assertTrue(profile.startsWith(owned)); assertTrue(profiles.add(profile));
+                assertFalse(java.util.regex.Pattern.compile("(?:^|\\s|\")--no-sandbox(?:$|\\s|\")").matcher(command).find());
+
+            }
+            assertTrue(driver.terminated()); assertFalse(Files.exists(owned), "The closed attempt must remove its owned temporary profile tree");
+        }
+    }
     static bpsh.transport.httpauth.HttpTransportRuntime httpTransport;
 
     /** Fails if pinned assets are missing; this explicit suite never skips browser prerequisites. */
     public @BeforeAll static void setup() throws Exception {
         runtime = new BrowserRuntimeManager(); runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false);
-        identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); guard = new AuthTrafficGuard(); runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
+        identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); guard = new AuthTrafficGuard(); runner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
     }
     /** Releases only suite-owned services; the verified immutable browser cache remains reusable. */
     public @AfterAll static void shutdown() { if (runtime != null) runtime.close(); if (httpTransport != null) httpTransport.close(); if (identities != null) identities.close(); if (guard != null) guard.close(); }
@@ -66,15 +92,15 @@ public class BrowserJourneyIntegrationTest {
     @org.junit.jupiter.params.ParameterizedTest(name="application-authorization-fresh-{0}")
     @org.junit.jupiter.params.provider.EnumSource(bpsh.journey.HttpAuthentication.Protocol.class)
     public void httpApplicationAuthorizationOnFreshConnection(bpsh.journey.HttpAuthentication.Protocol protocol) throws Exception {
-        bpsh.support.HttpAuthenticationBrowserPolicies.authorization(new BrowserSessionLauncher(runtime,httpTransport,guard,Clock.systemUTC()),protocol,false);
+        bpsh.support.HttpAuthenticationBrowserPolicies.authorization(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC()),protocol,false);
     }
     @org.junit.jupiter.params.ParameterizedTest(name="application-authorization-reused-{0}")
     @org.junit.jupiter.params.provider.EnumSource(bpsh.journey.HttpAuthentication.Protocol.class)
     public void httpApplicationAuthorizationOnEstablishedConnection(bpsh.journey.HttpAuthentication.Protocol protocol) throws Exception {
-        bpsh.support.HttpAuthenticationBrowserPolicies.authorization(new BrowserSessionLauncher(runtime,httpTransport,guard,Clock.systemUTC()),protocol,true);
+        bpsh.support.HttpAuthenticationBrowserPolicies.authorization(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC()),protocol,true);
     }
     @Test public void httpBrowserTrustConsentIsScoped() throws Exception {
-        bpsh.support.HttpAuthenticationBrowserPolicies.trust(new BrowserSessionLauncher(runtime,httpTransport,guard,Clock.systemUTC()),httpTransport,httpPolicyTemporary);
+        bpsh.support.HttpAuthenticationBrowserPolicies.trust(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC()),httpTransport,httpPolicyTemporary);
     }
 
     private static AuthStep.Definition operation(AuthStep.Type type, String selector, AuthStep.Operation payload) {
@@ -93,7 +119,7 @@ public class BrowserJourneyIntegrationTest {
                     new JourneyDefinition.Browser(true,null,10000,5000),new JourneyDefinition.CookieExtraction(lab.url("/"),"app-session",null,"/"),
                     JourneyDefinition.Injection.perToken(List.of()),new JourneyDefinition.Cache(1800,10),null,
                     new bpsh.journey.HttpAuthentication(protocol,"user-a","LAB","",Set.of(lab.url("/"))),null);
-            try(var recorder=new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime,httpTransport,guard,Clock.systemUTC()),
+            try(var recorder=new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC()),
                     BrowserSessionLauncher.Visibility.HEADLESS,(context,control)->{
                         var page=context.pages().getFirst();page.locator("#user").fill("user-a");page.locator("#submit").click();control.stop();
                     })) {
@@ -265,7 +291,7 @@ public class BrowserJourneyIntegrationTest {
             var base = IntegrationFixtures.journey(origin, List.of());
             var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1);
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
-            var launcher = new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC());
+            var launcher = new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
             try (var session = launcher.open(identity, bpsh.journey.BrowserSetup.from(base), values, BrowserSessionLauncher.Visibility.HEADLESS,
                     false, deadline, () -> false, ignored -> {})) {
                 var context = session.context(); var main = context.newPage();
@@ -310,7 +336,7 @@ public class BrowserJourneyIntegrationTest {
                     assertTrue(error.getMessage().contains("ERR_CERT_AUTHORITY_INVALID"));
                 }
                 var closed = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Event>();
-                try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()),
+                try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()),
                         BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> fail("An untrusted initial navigation must not enter recording."))) {
                     recorder.start(recordingRequest(strict), SecretStore.Values.empty(), event -> {
                         if (event.state() == bpsh.journey.JourneyRecording.State.CLOSED || event.state() == bpsh.journey.JourneyRecording.State.REVIEW) closed.complete(event);
@@ -323,7 +349,7 @@ public class BrowserJourneyIntegrationTest {
                         new JourneyDefinition.Browser(true, configuredProxy, 5000, 1000, true), base.extraction(), null);
                 try (var values = SecretStore.Values.empty()) { assertEquals("tls-policy-token", run(permitted, values).token()); }
                 var captured = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Result>();
-                try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()),
+                try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()),
                         BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> { context.pages().getFirst().locator("#continue").click(); control.stop(); })) {
                     recorder.start(recordingRequest(permitted), SecretStore.Values.empty(), recordingResult(captured));
                     try (var result = captured.get(25, TimeUnit.SECONDS)) { assertTrue(result.complete(), () -> result.problems().toString()); }
@@ -339,7 +365,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
             LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin, List.of()); long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
-            var launcher = new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC());
+            var launcher = new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
             try (var session = launcher.open(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), bpsh.journey.BrowserSetup.from(base),
                     values, BrowserSessionLauncher.Visibility.HEADLESS, false, deadline, () -> false, ignored -> {});
                  var adapter = session.driver().recorder(session.context())) {
@@ -372,7 +398,7 @@ public class BrowserJourneyIntegrationTest {
             LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(40);
-            var launcher = new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC());
+            var launcher = new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
             try (var session = launcher.open(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), bpsh.journey.BrowserSetup.from(base),
                     values, BrowserSessionLauncher.Visibility.HEADLESS, false, deadline, () -> false, ignored -> {})) {
                 var context = session.context(); var sources = new java.util.HashMap<String, com.microsoft.playwright.Frame>();
@@ -446,7 +472,7 @@ public class BrowserJourneyIntegrationTest {
             LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
             var lifecycle = new java.util.concurrent.CopyOnWriteArrayList<BrowserSessionLauncher.Lifecycle>();
-            var launcher = new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC(), lifecycle::add);
+            var launcher = new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC(), lifecycle::add);
             try (var recorder = new BrowserJourneyRecorder(launcher, BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst();
                 page.locator("#username").fill("record-user"); page.locator("#password").fill("first-secret");
@@ -480,7 +506,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
             var observed = LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
-            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst(); page.locator("#username").fill("record-user"); page.locator("#password").fill("record-secret");
                 page.locator("#submit").click(); control.stop();
             })) {
@@ -504,7 +530,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
             var observed = LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
-            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst(); page.locator("#username").fill("tab-user");
                 page.locator("#username").press("Tab"); assertEquals("password", page.evaluate("document.activeElement.id"));
                 page.locator("#password").press("Shift+Tab"); assertEquals("username", page.evaluate("document.activeElement.id"));
@@ -531,7 +557,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
             var observed = LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
-            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst(); page.locator("#username").fill("partial-user"); page.locator("#username").press("Escape");
                 page.locator("#password").fill("partial-secret"); page.locator("#submit").click(); control.stop();
             })) {
@@ -558,7 +584,7 @@ public class BrowserJourneyIntegrationTest {
             var initial = IntegrationFixtures.journey(origin, List.of());
             var base = IntegrationFixtures.configured(initial, initial.authenticationUrl(), new JourneyDefinition.Browser(true,
                     new JourneyDefinition.Proxy(proxy.url()), 5000, 1000), initial.extraction(), null);
-            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst();
                 page.locator("#check").check(); page.locator("#check").uncheck(); page.locator("#radio").check();
                 page.locator("#single").selectOption("admin"); page.locator("#multi").selectOption(new String[0]);
@@ -602,7 +628,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
             LoginFlows.journeyControls(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin, List.of());
-            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
+            try (var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {
                 var page = context.pages().getFirst(); var popup = page.waitForPopup(() -> page.locator("#open").click());
                 popup.waitForCondition(() -> Boolean.TRUE.equals(popup.evaluate("async () => typeof window.__pw_recorderState === 'function' && (await window.__pw_recorderState()).mode === 'recording'")));
                 popup.locator("#popup-text").fill("last popup value"); popup.close(); control.stop();
@@ -625,7 +651,7 @@ public class BrowserJourneyIntegrationTest {
         try (var origin = IntegrationFixtures.http(); var cross = IntegrationFixtures.http()) {
             LoginFlows.recording(origin.owner, cross.owner); cross.start(); origin.start();
             var base = IntegrationFixtures.journey(origin.url("/recording"), List.of());
-            var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> control.cancel());
+            var recorder = new BrowserJourneyRecorder(new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC()), BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> control.cancel());
             try (recorder) {
                 var finished = new java.util.concurrent.CompletableFuture<bpsh.journey.JourneyRecording.Event>(); var setup = SecretStore.Values.empty();
                 recorder.start(recordingRequest(base), setup, event -> {
@@ -644,7 +670,7 @@ public class BrowserJourneyIntegrationTest {
             var fixture = LoginFlows.recovery(origin.owner);
             var loginAttempts = fixture.loginAttempts; var issuances = fixture.issuances; var protectedIngress = fixture.protectedIngress; var acceptedActions = fixture.acceptedActions;
             var acceptedToken = fixture.acceptedToken; origin.start(); var definition = IntegrationFixtures.journey(origin, List.of()); var registry = new JourneyWorkspace(secrets); CoordinatorFixtures.load(registry, List.of(definition));
-            var observedRunner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC(), lifecycle::add);
+            var observedRunner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC(), lifecycle::add);
             try (var coordinator = BrowserAuthentication.coordinator(registry, secrets, observedRunner, identities, RequestSettings.Controls.defaults()); var recovery = new SessionRecovery(coordinator)) {
                 var entry = registry.snapshot().resolve(definition.alias()); coordinator.acquire(List.of(entry)).future().get(25, TimeUnit.SECONDS);
                 var initial = coordinator.peek(entry.identity()); var client = java.net.http.HttpClient.newHttpClient();
@@ -879,7 +905,7 @@ public class BrowserJourneyIntegrationTest {
         java.util.List<ProcessHandle> children = java.util.List.of();
         try (var driver = PlaywrightDriverAdapter.open(ready, deadline, () -> false)) {
             driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true)
-                    .setChromiumSandbox(true).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
+                    .setChromiumSandbox(true).setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable()).setArgs(List.of("--no-proxy-server")));
             java.util.List<ProcessHandle> nodes;
             try (var descendants = ProcessHandle.current().descendants()) {
                 nodes = descendants.filter(handle -> handle.info().command()
@@ -934,7 +960,7 @@ public class BrowserJourneyIntegrationTest {
         var ready = runtime.acquire(deadline, () -> false);
         try (var driver = PlaywrightDriverAdapter.open(ready, deadline, () -> false)) {
             var browser = driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true)
-                    .setChromiumSandbox(true).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
+                    .setChromiumSandbox(true).setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable()).setArgs(List.of("--no-proxy-server")));
             var page = browser.newPage();
             long started = System.nanoTime(); driver.beginCleanup();
             assertThrows(com.microsoft.playwright.PlaywrightException.class, () -> page.waitForTimeout(15000));
@@ -963,18 +989,18 @@ public class BrowserJourneyIntegrationTest {
         public static void exercise(String loginUrl) throws Exception {
             ClassLoader loader = PlaywrightDriverAdapter.class.getClassLoader();
             String scope = "META-INF/bpsh/" + BrowserRuntimeManager.hostPlatform() + "/";
-            if (loader.getResource(scope + "browser-assets.json") == null || loader.getResource(scope + "browser-assets.zip.xz") == null)
+            if (loader.getResource(scope + "driver-assets.json") == null || loader.getResource(scope + "driver-assets.zip.xz") == null)
                 throw new AssertionError("Host payload resources missing.");
             for (String name : List.of("driver/package/cli.js", "driver/win32_x64/node.exe", "driver/linux/node", "driver/mac/node"))
                 if (loader.getResource(name) != null) throw new AssertionError("Duplicate driver execution resources remain.");
             var json = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode metadata;
-            try (var in = loader.getResourceAsStream(scope + "browser-assets.json")) { metadata = json.readTree(in); }
+            try (var in = loader.getResourceAsStream(scope + "driver-assets.json")) { metadata = json.readTree(in); }
             Class<?> driver = loader.loadClass("com.microsoft.playwright.impl.driver.Driver"); Field instance = driver.getDeclaredField("instance"); instance.setAccessible(true); Object before = instance.get(null);
             Map<Object, Object> properties = new java.util.HashMap<>(System.getProperties());
             try (var runtime = new BrowserRuntimeManager()) {
                 var ready = runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false);
-                if (!Files.isRegularFile(ready.nodeExecutable()) || !Files.isRegularFile(ready.driverEntryPoint()) || !Files.isRegularFile(ready.browserExecutable()))
+                if (!Files.isRegularFile(ready.nodeExecutable()) || !Files.isRegularFile(ready.driverEntryPoint()) || !Files.isRegularFile(bpsh.support.IntegrationFixtures.browserExecutable()))
                     throw new AssertionError("Verified host selectors are missing.");
                 var versionBuilder = new ProcessBuilder(ready.nodeExecutable().toString(), "--version").redirectError(ProcessBuilder.Redirect.DISCARD);
                 versionBuilder.environment().clear(); versionBuilder.environment().putAll(PlaywrightDriverAdapter.environment(ready));
@@ -986,9 +1012,9 @@ public class BrowserJourneyIntegrationTest {
                         throw new AssertionError("Pinned Node version differs.");
                 } finally { if (node.isAlive()) node.destroyForcibly(); }
                 try (var session = PlaywrightDriverAdapter.open(ready, System.nanoTime() + TimeUnit.SECONDS.toNanos(30), () -> false);
-                     var browser = session.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setTimeout(20000).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
+                     var browser = session.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setTimeout(20000).setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable()).setArgs(List.of("--no-proxy-server")));
                      var context = browser.newContext()) {
-                    if (!browser.version().equals(metadata.path("browserVersion").asText())) throw new AssertionError("Pinned Chromium version differs.");
+                    if (browser.version().isBlank()) throw new AssertionError("Installed Burp Browser did not report a version.");
                     var page = context.newPage(); page.navigate(loginUrl);
                     page.fill("#user", "fixture"); page.click("#submit");
                     if (!page.textContent("body").contains("packaged-owned-token")) throw new AssertionError("Packaged form/JSON flow failed.");

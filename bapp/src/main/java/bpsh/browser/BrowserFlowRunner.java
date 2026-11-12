@@ -56,8 +56,16 @@ public final class BrowserFlowRunner {
     /** Supplies a nonsecret production lifecycle observation seam without exposing browser/context handles. */
     public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock,
                              java.util.function.Consumer<Lifecycle> lifecycle) {
+        this(runtime, new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> ""), httpTransport, traffic, clock, lifecycle);
+    }
+    /** Uses a supplied installed-browser resolver without global driver configuration. */
+    public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.browser.runtime.BurpBrowserResolver resolver, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock) {
+        this(runtime, resolver, httpTransport, traffic, clock, event -> {});
+    }
+    /** Uses a supplied resolver and safe lifecycle observations. */
+    public BrowserFlowRunner(BrowserRuntimeManager runtime, bpsh.browser.runtime.BurpBrowserResolver resolver, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock, java.util.function.Consumer<Lifecycle> lifecycle) {
         java.util.Objects.requireNonNull(lifecycle); this.clock = clock;
-        this.launcher = new BrowserSessionLauncher(runtime, httpTransport, traffic, clock, event -> lifecycle.accept(new Lifecycle(
+        this.launcher = new BrowserSessionLauncher(runtime, resolver, httpTransport, traffic, clock, event -> lifecycle.accept(new Lifecycle(
                 event.resourceId(), event.parentId(), event.identity(), ResourceEvent.valueOf(event.event().name()), event.bootstrap())));
     }
 

@@ -32,6 +32,7 @@ public final class BrowserSessionLauncher {
     public record Lifecycle(long resourceId, long parentId, JourneyDefinition.Identity identity, ResourceEvent event, boolean bootstrap) {}
 
     private final BrowserRuntimeManager runtime;
+    private final bpsh.browser.runtime.BurpBrowserResolver resolver;
     private final bpsh.authentication.http.HttpTransportFactory httpTransport;
     private final AuthTrafficGuard traffic;
     private final Clock clock;
@@ -46,6 +47,17 @@ public final class BrowserSessionLauncher {
     /** Adds a safe observation seam while keeping resource ownership inside the browser boundary. */
     public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic,
             Clock clock, Consumer<Lifecycle> lifecycle) {
+        this(runtime, new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), () -> ""), httpTransport, traffic, clock, lifecycle);
+    }
+
+    /** Captures driver and installed-browser selection boundaries without starting either. */
+    public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.browser.runtime.BurpBrowserResolver resolver, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock) {
+        this(runtime, resolver, httpTransport, traffic, clock, ignored -> {});
+    }
+
+    /** Adds nonsecret lifecycle observations to the explicitly selected browser launcher. */
+    public BrowserSessionLauncher(BrowserRuntimeManager runtime, bpsh.browser.runtime.BurpBrowserResolver resolver, bpsh.authentication.http.HttpTransportFactory httpTransport, AuthTrafficGuard traffic, Clock clock, Consumer<Lifecycle> lifecycle) {
+        this.resolver = java.util.Objects.requireNonNull(resolver);
         this.runtime = runtime; this.httpTransport = httpTransport; this.traffic = traffic; this.clock = clock;
         this.lifecycle = java.util.Objects.requireNonNull(lifecycle);
     }
@@ -182,6 +194,7 @@ public final class BrowserSessionLauncher {
         var session = new Session();
         try {
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled);
+            var browserSelection = resolver.resolve(deadline, cancelled);
             BrowserRuntimeManager.Ready ready = runtime.acquire(deadline, cancelled, observer);
             if(setup.mtls()!=null || setup.httpAuthenticationEnabled()) {
                 var spec=new bpsh.authentication.http.HttpTransportFactory.ScopeSpec(java.util.UUID.randomUUID(),purpose,identity,0,setup,explicitRecovery);
@@ -206,7 +219,7 @@ public final class BrowserSessionLauncher {
             BrowserRuntimeManager.observed(observer, AuthenticationStage.STARTING_DRIVER);
             session.driver = PlaywrightDriverAdapter.open(ready, deadline, cancelled);
             boolean headless = switch (visibility) { case CONFIGURED -> setup.browser().headless(); case HEADED -> false; case HEADLESS -> true; };
-            var options = new BrowserType.LaunchOptions().setExecutablePath(ready.browserExecutable()).setHeadless(headless).setChromiumSandbox(true)
+            var options = new BrowserType.LaunchOptions().setExecutablePath(browserSelection.executable()).setHeadless(headless).setChromiumSandbox(true)
                     .setTimeout(AuthenticationFailure.remainingMs(setup.browser().navigationTimeoutMs(), deadline, cancelled));
             if (session.transport != null) options.setProxy(session.transport.browserProxy())
                     .setArgs(List.of("--ignore-certificate-errors-spki-list=" + session.transport.spkiSha256()));

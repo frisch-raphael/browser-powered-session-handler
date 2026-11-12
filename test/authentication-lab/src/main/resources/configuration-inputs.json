@@ -2,7 +2,7 @@
   "configurationFiles": [
     "bapp/build.gradle.kts",
     "bapp/gradle.properties",
-    "bapp/gradle/browser-assets.gradle.kts",
+    "bapp/gradle/driver-assets.gradle.kts",
     "bapp/gradle/architecture.gradle.kts",
     "bapp/gradle/auth-lab.gradle.kts",
     "bapp/gradle/auth-lab-host.gradle.kts",

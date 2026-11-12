@@ -304,7 +304,7 @@ class FederationJourneyIntegrationTest {
         var verifierProcesses=new ProductionLabAdapter.BrowserProcesses();
         try(verifierProcesses;var driver=PlaywrightDriverAdapter.open(ready,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(20),()->false);
             var browser=driver.playwright().chromium().launch(new com.microsoft.playwright.BrowserType.LaunchOptions()
-                    .setExecutablePath(ready.browserExecutable()).setHeadless(true).setArgs(List.of("--no-proxy-server")))) {
+                    .setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable()).setHeadless(true).setArgs(List.of("--no-proxy-server")))) {
             verifySso(browser,applications,first,upstream?"aaaaaaaa-aaaa-4aaa-8aaa-111111111111":"11111111-1111-4111-8111-111111111111",upstream);
             verifySso(browser,applications,null,null,upstream);
             verifySso(browser,applications,second,upstream?"aaaaaaaa-aaaa-4aaa-8aaa-222222222222":"22222222-2222-4222-8222-222222222222",upstream);

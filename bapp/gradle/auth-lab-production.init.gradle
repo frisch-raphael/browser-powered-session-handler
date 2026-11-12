@@ -109,11 +109,12 @@ gradle.projectsEvaluated {
         def observedMethods = new java.util.concurrent.ConcurrentSkipListSet()
         dependsOn project.tasks.named('testClasses')
         if (browser) {
-            dependsOn project.tasks.named('verifyIntegrationTestClasses'), project.tasks.named('prepareBrowserAssets'), project.tasks.named('jar')
+            dependsOn project.tasks.named('verifyIntegrationTestClasses'), project.tasks.named('prepareDriverAssets'), project.tasks.named('jar')
         }
         testClassesDirs = project.sourceSets.test.output.classesDirs
         classpath = project.sourceSets.test.runtimeClasspath
-        if (browser) classpath += project.files(new File(project.buildDir, 'generated/browser-assets'))
+        if (browser) classpath += project.files(new File(project.buildDir, 'generated/driver-assets'))
+        if (plan.burpBrowserExecutable) systemProperty 'bpsh.test.burpBrowserExecutable', plan.burpBrowserExecutable
         useJUnitPlatform()
         methods.each { filter.includeTestsMatching(it) }
         filter.failOnNoMatchingTests = true

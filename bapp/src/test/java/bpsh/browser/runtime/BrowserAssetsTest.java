@@ -55,6 +55,32 @@ class BrowserAssetsTest {
         }
     }
 
+    @Test void driverManifestRejectsBrowserFieldsAndLegacyFormats() throws Exception {
+        var valid = new Bundle();
+        try (var runtime = manager(valid)) { assertNotNull(runtime.acquire(deadline(), () -> false)); }
+        for (int old : List.of(1, 2)) {
+            var legacy = new Bundle(); legacy.edit(n -> n.put("formatVersion", old));
+            assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(legacy.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard()));
+        }
+        var browser = new Bundle(); browser.edit(n -> n.put("browserExecutable", "driver/node.exe"));
+        assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(browser.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard()));
+    }
+
+    @Test void driverOnlyManifestRejectsBrowserDistributionEntries() throws Exception {
+        var bundle = new Bundle(); bundle.files.put("driver/package/chrome.exe", "browser".getBytes()); bundle.rebuild();
+        assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(bundle.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard()));
+    }
+
+    @Test void driverCacheCannotAdoptOrDeleteBrowserCache() throws Exception {
+        Path old = Files.createDirectories(temp.resolve("cache/" + PLATFORM + "/old-browser-cache"));
+        Files.writeString(old.resolve("chrome.exe"), "existing browser cache owned by another extension");
+        try (var runtime = manager(new Bundle())) {
+            var ready = runtime.acquire(deadline(), () -> false);
+            assertNotEquals(old, ready.root()); assertEquals("node", Files.readString(ready.nodeExecutable()));
+            assertTrue(Files.isRegularFile(old.resolve("chrome.exe")));
+        }
+    }
+
     /** Stores independent manifest/archive bytes and counts archive resource reads. */
     static final class Bundle implements BrowserRuntimeManager.Resources {
         byte[] manifest, archive;
@@ -67,17 +93,15 @@ class BrowserAssetsTest {
         /** @param platform Exact test target. */
         Bundle(String platform) throws Exception {
             this.platform = platform;
-            files.put("browsers/chromium/chrome.exe", "browser".getBytes());
             files.put("driver/node.exe", "node".getBytes()); files.put("driver/package/cli.js", "driver".getBytes());
             rebuild();
         }
         /** Rebuilds the ZIP and exact digest/size declarations from the selected test files. */
         void rebuild() throws Exception {
             archive = zip(files, List.of(), false);
-            ObjectNode n = JSON.createObjectNode().put("formatVersion", 2).put("platform", platform).put("playwrightJavaVersion", "1.64.0")
-                    .put("browserName", "chromium").put("browserVersion", "156.0.8078.4").put("browserRevision", "1248")
-                    .put("driverPackageVersion", "1.64.1").put("nodeVersion", "24.22.1").put("browserRoot", "browsers")
-                    .put("browserExecutable", "browsers/chromium/chrome.exe").put("nodeExecutable", "driver/node.exe").put("driverEntryPoint", "driver/package/cli.js");
+            ObjectNode n = JSON.createObjectNode().put("formatVersion", 3).put("platform", platform).put("playwrightJavaVersion", "1.64.0")
+                    .put("driverPackageVersion", "1.64.1").put("nodeVersion", "24.22.1").put("helperRoot", "driver")
+                    .put("nodeExecutable", "driver/node.exe").put("driverEntryPoint", "driver/package/cli.js");
             n.putArray("helpers"); var rows = n.putArray("entries"); long total = 0;
             for (var entry : files.entrySet()) {
                 rows.addObject().put("path", entry.getKey()).put("type", "file").put("bytes", entry.getValue().length)
@@ -149,7 +173,7 @@ class BrowserAssetsTest {
                 assertEquals(1, bundle.archives.get());
             }
             for (String resource : List.of(BrowserRuntimeManager.ARCHIVE_RESOURCE,
-                    "META-INF/bpsh/foreign-x64/browser-assets.zip")) {
+                    "META-INF/bpsh/foreign-x64/driver-assets.zip")) {
                 bundle.edit(n -> ((ObjectNode) n.get("archive")).put("resource", resource));
                 assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(bundle.manifest, platform, BrowserRuntimeManager.Limits.standard()));
             }
@@ -174,7 +198,7 @@ class BrowserAssetsTest {
         Bundle b = new Bundle(); Path root;
         try (var manager = manager(b)) {
             var first = manager.acquire(deadline(), () -> false); root = first.root();
-            assertEquals("browser", Files.readString(first.browserExecutable())); assertEquals("node", Files.readString(first.nodeExecutable()));
+            assertEquals("node", Files.readString(first.nodeExecutable()));
             assertSame(first, manager.acquire(deadline(), () -> false)); assertTrue(Files.isRegularFile(root.resolve(".complete.json"))); assertEquals(1, b.archives.get());
         }
         try (var manager = manager(b)) { assertEquals(root, manager.acquire(deadline(), () -> false).root()); assertEquals(1, b.archives.get(), "cache hit verifies files without extracting another ZIP"); }
@@ -193,16 +217,16 @@ class BrowserAssetsTest {
         assertFalse(Files.exists(temp.resolve("cache")));
     }
     @Test void strictManifestVersionTypeFieldsAndSelectorsAreChecked() throws Exception {
-        List<Consumer<ObjectNode>> invalid = List.of(n -> n.put("formatVersion", 1), n -> n.put("formatVersion", "2"), n -> n.put("unexpected", "value"),
-                n -> n.put("nodeExecutable", "missing.exe"), n -> n.put("driverEntryPoint", "browsers"), n -> n.put("browserRoot", "driver/node.exe"),
-                n -> ((ObjectNode) n.get("entries").get(1)).put("executable", false), n -> n.put("unpackedBytes", Long.MAX_VALUE),
+        List<Consumer<ObjectNode>> invalid = List.of(n -> n.put("formatVersion", 1), n -> n.put("formatVersion", "3"), n -> n.put("unexpected", "value"),
+                n -> n.put("nodeExecutable", "missing.exe"), n -> n.put("driverEntryPoint", "driver"), n -> n.put("helperRoot", "driver/node.exe"),
+                n -> ((ObjectNode) n.get("entries").get(0)).put("executable", false), n -> n.put("unpackedBytes", Long.MAX_VALUE),
                 n -> ((ObjectNode) n.get("archive")).put("resource", "https://example.invalid/browser.zip"),
                 n -> ((ObjectNode) n.get("archive")).put("expandedBytes", 0),
                 n -> ((ObjectNode) n.get("archive")).put("expandedBytes", (2L << 30) + 1),
                 n -> ((ObjectNode) n.get("archive")).remove("expandedBytes"),
                 n -> ((ObjectNode) n.get("entries").get(0)).put("bytes", 1.5), n -> ((ObjectNode) n.get("entries").get(0)).put("executable", "true"));
         for (var change : invalid) { Bundle b = new Bundle(); b.edit(change); assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(b.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard())); }
-        Bundle duplicate = new Bundle(); duplicate.manifest = new String(duplicate.manifest).replace("\"formatVersion\":2", "\"formatVersion\":2,\"formatVersion\":2").getBytes();
+        Bundle duplicate = new Bundle(); duplicate.manifest = new String(duplicate.manifest).replace("\"formatVersion\":3", "\"formatVersion\":3,\"formatVersion\":3").getBytes();
         assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(duplicate.manifest, PLATFORM, BrowserRuntimeManager.Limits.standard()));
     }
     @Test void wrongPlatformAndMissingResourcesHaveSpecificGuidance() throws Exception {
@@ -279,14 +303,14 @@ class BrowserAssetsTest {
     }
     @Test void loweredLimitsExerciseBoundariesWithoutLargeAllocations() throws Exception {
         Bundle b = new Bundle(); var max = BrowserRuntimeManager.Limits.standard();
-        var exact = new BrowserRuntimeManager.Limits(b.manifest.length, Math.max(b.archive.length, b.expandedBytes()), 17, 7, 3, max.pathBytes(), max.depth(), max.linkHops());
+        var exact = new BrowserRuntimeManager.Limits(b.manifest.length, Math.max(b.archive.length, b.expandedBytes()), 10, 6, 2, max.pathBytes(), max.depth(), max.linkHops());
         try (var manager = manager(b, exact, BrowserAssetsTest::publish)) { assertNotNull(manager.acquire(deadline(), () -> false)); }
         List<BrowserRuntimeManager.Limits> small = List.of(
                 new BrowserRuntimeManager.Limits(b.manifest.length - 1, max.zipBytes(), max.totalBytes(), max.fileBytes(), max.entries(), 4096, 32, 16),
                 new BrowserRuntimeManager.Limits(max.manifestBytes(), b.archive.length - 1, 17, 7, 3, 4096, 32, 16),
-                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 16, 7, 3, 4096, 32, 16),
-                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 17, 6, 3, 4096, 32, 16),
-                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 17, 7, 2, 4096, 32, 16),
+                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 9, 6, 2, 4096, 32, 16),
+                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 10, 5, 2, 4096, 32, 16),
+                new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 10, 6, 1, 4096, 32, 16),
                 new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 17, 7, 3, 10, 32, 16),
                 new BrowserRuntimeManager.Limits(max.manifestBytes(), max.zipBytes(), 17, 7, 3, 4096, 2, 16));
         for (var limits : small) assertThrows(AuthenticationFailure.class, () -> BrowserRuntimeManager.parseManifest(b.manifest, PLATFORM, limits));

@@ -60,7 +60,7 @@ class Pkcs11JourneyIntegrationTest {
         fixture = IntegrationFixtures.nativeFixture(); root = Path.of(fixture.path("root").textValue());
         providers = Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList(); defaultContext = SSLContext.getDefault();
         identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
-        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
+        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
     }
     private static boolean dynamicOwner(String method) {
         return Set.of("explicitUpstreamUrlTunnelWorksWithoutLeakingAttemptCredentials","wrongChainWrongHostnameAndUnlistedCertificateOriginFailClosed").contains(method);

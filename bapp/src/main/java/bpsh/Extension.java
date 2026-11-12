@@ -98,6 +98,8 @@ public final class Extension implements BurpExtension {
         final JourneyWorkspace registry = new JourneyWorkspace(secrets);
         final UserLibraryStore library = new UserLibraryStore();
         final BrowserRuntimeManager runtime = new BrowserRuntimeManager();
+        final bpsh.browser.runtime.BrowserExecutableSettings browserSettings = new bpsh.browser.runtime.BrowserExecutableSettings();
+        final bpsh.browser.runtime.BurpBrowserResolver browserResolver = new bpsh.browser.runtime.BurpBrowserResolver(bpsh.browser.runtime.BurpBrowserResolver.currentEnvironment(), browserSettings::executableOverride);
         final Pkcs11IdentityManager identities = new Pkcs11IdentityManager();
         final AuthTrafficGuard guard = new AuthTrafficGuard();
         final bpsh.authentication.http.HttpAuthenticationActivity httpActivity = new bpsh.authentication.http.HttpAuthenticationActivity(registry);
@@ -161,7 +163,7 @@ public final class Extension implements BurpExtension {
                 }
             };
             httpIdentities = new bpsh.authentication.http.HttpIdentityManager(registry,secrets,httpFactory,httpActivity);
-            var launcher = new BrowserSessionLauncher(runtime, httpFactory, guard, Clock.systemUTC());
+            var launcher = new BrowserSessionLauncher(runtime, browserResolver, httpFactory, guard, Clock.systemUTC());
             var runner = new BrowserFlowRunner(launcher, Clock.systemUTC());
             recorder = new BrowserJourneyRecorder(launcher);
             coordinator = BrowserAuthentication.coordinator(registry, secrets, runner, identities, controls.snapshot().controls()); resolver = new NativeTagResolver(registry, coordinator);

@@ -62,7 +62,7 @@ class Pkcs11JourneyIntegrationTest {
         fixture = IntegrationFixtures.nativeFixture(); root = Path.of(fixture.path("root").textValue());
         providers = Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList(); defaultContext = SSLContext.getDefault();
         identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
-        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, httpTransport, guard, Clock.systemUTC());
+        runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
     }
     /** Removes only owned providers/listeners; shared token logout/default TLS changes are prohibited. */
     @AfterAll static void shutdown() throws Exception {
@@ -265,7 +265,7 @@ class Pkcs11JourneyIntegrationTest {
             try (var httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime();
              var proxy = bpsh.support.IntegrationFixtures.browserProxy(httpTransport, definition, select(definition), null, Clock.systemUTC());
                  var driver = PlaywrightDriverAdapter.open(runtime.acquire(deadline(), () -> false), deadline(), () -> false);
-                 var browser = driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setExecutablePath(runtime.acquire(deadline(), () -> false).browserExecutable())
+                 var browser = driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable())
                          .setProxy(proxy.browserProxy()).setArgs(List.of("--ignore-certificate-errors-spki-list=" + foreign.spkiSha256())));
                  var context = browser.newContext()) {
                 var ex = assertThrows(com.microsoft.playwright.PlaywrightException.class, () -> context.newPage().navigate(origin.url("/login").toString()));

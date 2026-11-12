@@ -112,6 +112,7 @@ fun registerIntegrationTest(taskName: String, className: String) = tasks.registe
     inputs.files(candidate)
     outputs.upToDateWhen { false }
     doFirst {
+        providers.gradleProperty("burpBrowserExecutable").orNull?.let { systemProperty("bpsh.test.burpBrowserExecutable", file(it).canonicalPath) }
         val artifact = candidate.singleFile.canonicalFile
         check(artifact.isFile) { "The selected packagedJar must be an existing JAR." }
         JarFile(artifact).use { jar ->
@@ -161,7 +162,7 @@ tasks.named<Test>("pkcs11IntegrationTest") {
     }
 }
 
-apply(from = "gradle/browser-assets.gradle.kts")
+apply(from = "gradle/driver-assets.gradle.kts")
 
 // Recording metadata is shipped as source JavaScript; no npm or TypeScript installation is involved.
 tasks.named<Jar>("jar") {
