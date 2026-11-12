@@ -14,6 +14,8 @@ public final class BrowserFailureClassifier {
     /** Matches Chromium's bounded Linux sandbox fatal record, never a loose mention in user arguments. */
     private static final java.util.regex.Pattern NO_LINUX_SANDBOX = java.util.regex.Pattern.compile(
             "(?m)^[\\t ]*(?:\\[pid=[0-9]+\\]\\[err\\][\\t ]*)?\\[[^\\r\\n\\]]{1,160}:FATAL:[^\\r\\n\\]]{0,200}zygote_host_impl_linux\\.cc:[0-9]+\\][\\t ]+No usable sandbox!");
+    private static final java.util.regex.Pattern MISCONFIGURED_LINUX_SANDBOX_HELPER = java.util.regex.Pattern.compile(
+            "(?m)^[\\t ]*(?:\\[pid=[0-9]+\\]\\[err\\][\\t ]*)?\\[[^\\r\\n\\]]{1,160}:FATAL:[^\\r\\n\\]]{0,200}setuid_sandbox_host\\.cc:[0-9]+\\][\\t ]+The SUID sandbox helper binary was found, but is not configured correctly\\.");
     private BrowserFailureClassifier() {}
     /**
      * Reports a typed timeout or a positively identified native sandbox fatal; other startup failures stay unknown.
@@ -21,6 +23,12 @@ public final class BrowserFailureClassifier {
      * @return Safe startup observation and explicit retry action.
      */
     static AuthenticationFailure launchFailure(RuntimeException error) {
+        if (!(error instanceof TimeoutError) && error instanceof PlaywrightException && error.getMessage() != null
+                && error.getMessage().length() <= 65536 && MISCONFIGURED_LINUX_SANDBOX_HELPER.matcher(error.getMessage()).find())
+            return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,
+                    "Burp Browser's Linux sandbox helper is not configured correctly.",
+                    "Ask an administrator to fix the ownership and permissions of chrome-sandbox next to the selected executable: owner root:root, mode 4755. Recheck after Burp Browser updates, then use Test login to try again.")
+                    .atInput(AuthenticationFailure.Input.BROWSER_EXECUTABLE);
         if (!(error instanceof TimeoutError) && error instanceof PlaywrightException && error.getMessage() != null
                 && error.getMessage().length() <= 65536 && NO_LINUX_SANDBOX.matcher(error.getMessage()).find())
             return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,

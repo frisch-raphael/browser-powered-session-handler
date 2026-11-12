@@ -166,7 +166,8 @@ existing browser/profile and never imports cookies or storage from it.
 
 Login and recording explicitly require Chromium sandboxing. Linux must allow the
 installed Burp Browser to create the namespaces its sandbox requires; AppArmor policy can
-restrict this permission. A confirmed native sandbox failure reports this
+restrict this permission. Its installed SUID sandbox helper must also have the ownership
+and permissions required by Chromium. A confirmed native sandbox failure reports this
 prerequisite with administrator guidance. PKCS#11 configuration, login and
 private-key signing use owned helper processes. The host retains public
 certificate chains and opaque signing references, not native key handles. Unload

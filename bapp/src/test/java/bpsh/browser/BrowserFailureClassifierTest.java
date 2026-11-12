@@ -28,6 +28,28 @@ class BrowserFailureClassifierTest {
         for(String diagnostic:new String[]{"--user-data-dir=/tmp/No usable sandbox!", "No usable sandbox!", "unrelated text [123:FATAL:zygote_host_impl_linux.cc:128] No usable sandbox!"})
             assertEquals(AuthenticationFailure.Cause.UNKNOWN,BrowserFailureClassifier.launchFailure(new PlaywrightException(diagnostic)).reason());
     }
+    @Test void misconfiguredNativeSandboxHelperGetsSpecificSafeGuidance() {
+        for(String prefix:new String[]{"","[pid=123][err] "}) {
+            String diagnostic=prefix+"[123:123:1112/193438.272694:FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:172] The SUID sandbox helper binary was found, but is not configured correctly. CANARY_PASSWORD /PRIVATE_PATH\n";
+            var failure=BrowserFailureClassifier.launchFailure(new PlaywrightException(diagnostic));
+            assertEquals(AuthenticationFailure.Cause.CONFIGURATION,failure.reason());
+            assertEquals(AuthenticationFailure.Input.BROWSER_EXECUTABLE,failure.input().input());
+            assertEquals("Burp Browser's Linux sandbox helper is not configured correctly.",failure.problem());
+            assertTrue(failure.recovery().contains("administrator"));assertTrue(failure.recovery().contains("ownership and permissions"));
+            for(String required:new String[]{"chrome-sandbox","root:root","4755","updates","Test login"})
+                assertTrue(failure.recovery().contains(required),"Guidance must identify the helper, exact repair, update caveat and retry action.");
+            assertFalse(failure.getMessage().contains("CANARY"));assertFalse(failure.getMessage().contains("PRIVATE"));assertNull(failure.getCause());
+        }
+    }
+    @Test void helperWordsWithoutTheNativeFatalRecordCannotEstablishMisconfiguration() {
+        String text="The SUID sandbox helper binary was found, but is not configured correctly.";
+        for(String diagnostic:new String[]{text,"--user-data-dir=/tmp/"+text,"unrelated [123:FATAL:setuid_sandbox_host.cc:172] "+text})
+            assertEquals(AuthenticationFailure.Cause.UNKNOWN,BrowserFailureClassifier.launchFailure(new PlaywrightException(diagnostic)).reason());
+        String record="[123:123:1112/193438.272694:FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:172] "+text;
+        assertEquals(AuthenticationFailure.Cause.TIMEOUT,BrowserFailureClassifier.launchFailure(new TimeoutError(record)).reason());
+        assertEquals(AuthenticationFailure.Cause.UNKNOWN,BrowserFailureClassifier.launchFailure(new IllegalArgumentException(record)).reason());
+        assertEquals(AuthenticationFailure.Cause.UNKNOWN,BrowserFailureClassifier.launchFailure(new PlaywrightException(" ".repeat(65536)+"\n"+record)).reason());
+    }
     @Test void unknownLaunchFailureDoesNotInventSandboxOrOperatingSystemAdvice() {
         var failure = BrowserFailureClassifier.launchFailure(new PlaywrightException("sandbox CANARY_PASSWORD https://secret.example/token"));
         assertEquals(AuthenticationFailure.Cause.UNKNOWN, failure.reason());

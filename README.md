@@ -165,7 +165,13 @@ it keeps credentials that are still usable.
 
 Chromium sandboxing is required for login and recording. On Linux, allow the
 user namespaces needed by Chromium and install the documented browser libraries.
-A failed sandboxed launch reports an error.
+The installed sandbox helper must have the ownership and permissions required by
+Chromium; BPSH reports a confirmed helper configuration failure with administrator guidance.
+For this specific failure, an administrator can set the `chrome-sandbox` file next
+to the selected executable to owner `root:root` and mode `4755`, as documented in
+[PortSwigger's Linux troubleshooting guidance](https://portswigger.net/burp/documentation/dast/user-guide/reference/browser-powered).
+Recheck after Burp Browser updates, which may install a new version-specific helper.
+BPSH does not change these permissions automatically.
 
 For a test website or proxy certificate that Chromium does not trust, enable **Allow untrusted HTTPS certificates** in the journey's **Setup**. It applies to that journey's recording and login only and defaults to off. Client-certificate journeys retain their separate server-trust checks and Trusted CA setting.
 
