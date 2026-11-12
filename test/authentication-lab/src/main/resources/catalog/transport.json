@@ -59,7 +59,7 @@
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -72,7 +72,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabBrowserTest",
-        "configurationHash": "1ad5f10ad439fdfdb547438964102ea42990241def254348b87f151e5ce549a0",
+        "configurationHash": "668fb9e4de04b18097495159c639aea5a6952b1825855b254f829412d5c4e5b0",
         "xmlCaseName": "[case=TLS.proxy.direct]"
       },
       "disposition": "EXTEND"
@@ -135,7 +135,7 @@
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -148,7 +148,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabBrowserTest",
-        "configurationHash": "1ad5f10ad439fdfdb547438964102ea42990241def254348b87f151e5ce549a0",
+        "configurationHash": "668fb9e4de04b18097495159c639aea5a6952b1825855b254f829412d5c4e5b0",
         "xmlCaseName": "[case=TLS.proxy.http-proxy]"
       },
       "disposition": "EXTEND"
@@ -214,7 +214,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -227,7 +227,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "[case=TLS.proxy.connect]"
       },
       "disposition": "EXTEND"
@@ -293,7 +293,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -306,7 +306,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "[case=TLS.proxy.proxy-unavailable]"
       },
       "disposition": "EXTEND"
@@ -369,7 +369,7 @@
         ],
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -382,7 +382,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabBrowserTest",
-        "configurationHash": "1ad5f10ad439fdfdb547438964102ea42990241def254348b87f151e5ce549a0",
+        "configurationHash": "668fb9e4de04b18097495159c639aea5a6952b1825855b254f829412d5c4e5b0",
         "xmlCaseName": "[case=TLS.proxy.no-direct-fallback]"
       },
       "disposition": "EXTEND"
@@ -448,7 +448,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -461,7 +461,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"
@@ -527,7 +527,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -540,7 +540,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"
@@ -604,7 +604,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -617,7 +617,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt()"
       },
       "disposition": "EXTEND"
@@ -681,7 +681,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -694,7 +694,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()"
       },
       "disposition": "EXTEND"
@@ -758,7 +758,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -771,7 +771,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "certificatePickerListsDistinctSameSubjectIdentitiesAndHonorsSelectionAndCancel()"
       },
       "disposition": "EXTEND"
@@ -837,7 +837,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -850,7 +850,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"
@@ -916,7 +916,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -929,7 +929,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "[case=TLS.mtls.disallowed-origin]"
       },
       "disposition": "EXTEND"
@@ -995,7 +995,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1008,7 +1008,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"
@@ -1074,7 +1074,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1087,7 +1087,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"
@@ -1158,7 +1158,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1171,7 +1171,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "localEndpointRejectsMissingAndIncorrectAttemptCredentials()"
       },
       "disposition": "EXTEND"
@@ -1235,7 +1235,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1248,7 +1248,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "[case=TLS.trust.untrusted-origin]"
       },
       "disposition": "EXTEND"
@@ -1312,7 +1312,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1325,7 +1325,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "[case=TLS.trust.wrong-host]"
       },
       "disposition": "EXTEND"
@@ -1391,7 +1391,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/browser/mtls/Pkcs11JourneyIntegrationTest.java": "5034fea8c0b3004551f168d8d744023ec0f9ff224731fdce14c96fc05c6f6ad5",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
           "test/authentication-lab/src/main/java/lab/auth/LabTransportEvidence.java": "1de08a6339b4460f6063cc9a2d84c6b8624ac3e7e51fab472d77ee7c3ada164a",
@@ -1404,7 +1404,7 @@
           "test/authentication-lab/src/main/java/lab/auth/ControlledApplication.java": "ce7d19f7c439301f4e77c5394411a0415c73729715486d400b4c53968ed7c5f8"
         },
         "taskPath": ":authLabTransportTest",
-        "configurationHash": "540129ff8a468af34339a975bf79e91d79aba8798e5d5660faa080e0bf54aaed",
+        "configurationHash": "a72ff47bd1cfcf29f5819e3a7b3642399d4649cee95b30639fff80dde6184d1d",
         "xmlCaseName": "twoConcurrentProductionJourneysKeepSameHostIdentityAcrossReuseAndReconnects()"
       },
       "disposition": "EXTEND"

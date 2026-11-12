@@ -128,7 +128,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -260,7 +260,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -396,7 +396,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -532,7 +532,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -664,7 +664,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -796,7 +796,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -932,7 +932,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -1068,7 +1068,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=status-match~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -1200,7 +1200,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -1332,7 +1332,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -1468,7 +1468,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -1604,7 +1604,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -1736,7 +1736,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -1868,7 +1868,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -2004,7 +2004,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -2140,7 +2140,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=body-match~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -2272,7 +2272,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -2404,7 +2404,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -2540,7 +2540,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -2676,7 +2676,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -2808,7 +2808,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -2940,7 +2940,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -3076,7 +3076,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -3212,7 +3212,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=no-match~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -3344,7 +3344,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -3476,7 +3476,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -3612,7 +3612,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -3748,7 +3748,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -3880,7 +3880,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -4012,7 +4012,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -4148,7 +4148,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -4284,7 +4284,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=disabled~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -4416,7 +4416,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -4548,7 +4548,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -4684,7 +4684,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -4820,7 +4820,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -4952,7 +4952,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -5084,7 +5084,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -5220,7 +5220,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -5356,7 +5356,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=success~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -5493,7 +5493,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -5630,7 +5630,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -5771,7 +5771,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -5912,7 +5912,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -6049,7 +6049,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -6186,7 +6186,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -6327,7 +6327,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -6468,7 +6468,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replacement-rejected~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -6605,7 +6605,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -6742,7 +6742,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -6883,7 +6883,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -7024,7 +7024,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -7161,7 +7161,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -7298,7 +7298,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -7439,7 +7439,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -7580,7 +7580,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=acquisition-failed~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -7712,7 +7712,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -7844,7 +7844,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -7980,7 +7980,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -8116,7 +8116,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -8248,7 +8248,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -8380,7 +8380,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -8516,7 +8516,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -8652,7 +8652,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=original-timeout~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -8789,7 +8789,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -8926,7 +8926,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -9067,7 +9067,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -9208,7 +9208,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -9345,7 +9345,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -9482,7 +9482,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -9623,7 +9623,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -9764,7 +9764,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=post-action~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -9901,7 +9901,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=auto~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -10038,7 +10038,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=auto~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -10179,7 +10179,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=auto~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -10320,7 +10320,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=auto~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -10457,7 +10457,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=tagged~outputs=single~originals=1]"
       },
       "disposition": "EXTEND"
@@ -10594,7 +10594,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=tagged~outputs=single~originals=8]"
       },
       "disposition": "EXTEND"
@@ -10735,7 +10735,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=tagged~outputs=combined~originals=1]"
       },
       "disposition": "EXTEND"
@@ -10876,7 +10876,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.recovery.trigger=replay-once~requestMode=tagged~outputs=combined~originals=8]"
       },
       "disposition": "EXTEND"
@@ -10956,7 +10956,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "explicitRecoveryIsNotRepeatedOnAutomaticTransportRetryAndRetryAfterMayIncreaseDelay()"
       },
       "disposition": "REUSE"
@@ -11036,7 +11036,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "concurrentLossesShareThreeRecoveryAttemptsAndInitialAcquisitionIsCountedSeparately()"
       },
       "disposition": "REUSE"
@@ -11121,7 +11121,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.retry.temporary-TRANSPORT]"
       },
       "disposition": "REUSE"
@@ -11201,7 +11201,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "concurrentLossesShareThreeRecoveryAttemptsAndInitialAcquisitionIsCountedSeparately()"
       },
       "disposition": "REUSE"
@@ -11281,7 +11281,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "backoffAndQueuedCancelRemoveTheirTimersAndRejectLatePublication()"
       },
       "disposition": "REUSE"
@@ -11361,7 +11361,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "retryAfterCannotExtendTheCycleAndAttemptBudgetStartsOnActualAdmission()"
       },
       "disposition": "REUSE"
@@ -11441,7 +11441,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.retry.terminal-EXTRACTION]"
       },
       "disposition": "REUSE"
@@ -11521,7 +11521,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.retry.terminal-PIN_REJECTED]"
       },
       "disposition": "REUSE"
@@ -11601,7 +11601,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "[case=CORE.retry.terminal-PIN_INDETERMINATE]"
       },
       "disposition": "REUSE"
@@ -11659,7 +11659,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/src/main/resources/production-policy.json": "32b895acd27c659dff4d77e286748135f670f10947d7e2372427abb61f558a20",
           "test/authentication-lab/src/main/java/lab/auth/LabBrowserEvidence.java": "5b4c6766e2b42b74b3f94acfa5b02ff6ccd9755c7179eac0134c02cf33f41f18",
@@ -11675,7 +11675,7 @@
           "test/authentication-lab/src/test/java/lab/auth/RetryEvidenceTest.java": "4df111327274c8b1fd7c7be3803c0a961302b36daf965ffdad55051093a55bec"
         },
         "taskPath": ":authLabBrowserTest",
-        "configurationHash": "1ad5f10ad439fdfdb547438964102ea42990241def254348b87f151e5ce549a0",
+        "configurationHash": "668fb9e4de04b18097495159c639aea5a6952b1825855b254f829412d5c4e5b0",
         "xmlCaseName": "unconfiguredSubresource503DoesNotBecomeAnAuthenticationRetry()"
       },
       "disposition": "EXTEND"
@@ -11747,7 +11747,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "oneCallerTimeoutAndCancellationLeaveOtherOwnersAndTheirBudgetsIntact()"
       },
       "disposition": "REUSE"
@@ -11819,7 +11819,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "oneCallerTimeoutAndCancellationLeaveOtherOwnersAndTheirBudgetsIntact()"
       },
       "disposition": "REUSE"
@@ -11891,7 +11891,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "finiteCycleQueueRejectsNewAtomicRequestsWithoutAttachingOrStartingAnything()"
       },
       "disposition": "EXTEND"
@@ -11966,7 +11966,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "manyRequestsShareOneAttemptAndReleaseEveryReservation()"
       },
       "disposition": "EXTEND"
@@ -12038,7 +12038,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "finiteAdmissionFailureLeavesBothOrdinaryAndTaggedSourceBytesUntouched()"
       },
       "disposition": "EXTEND"
@@ -12110,7 +12110,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "oneCallerTimeoutAndCancellationLeaveOtherOwnersAndTheirBudgetsIntact()"
       },
       "disposition": "EXTEND"
@@ -12182,7 +12182,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "queuedCancelRemovesOnlyTheSelectedCycleAndManualInvalidatePreventsOldCommit()"
       },
       "disposition": "EXTEND"
@@ -12254,7 +12254,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "operatorCancelSupersedesRunningWorkReleasesAllOwnersAndKeepsOtherJourneyAlive()"
       },
       "disposition": "EXTEND"
@@ -12326,7 +12326,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "backoffAndQueuedCancelRemoveTheirTimersAndRejectLatePublication()"
       },
       "disposition": "EXTEND"
@@ -12403,7 +12403,7 @@
           "bapp/src/test/java/bpsh/browser/runtime/RuntimeFixtures.java": "b596739cb6b2a884b07247dc77a3d3524c3e3fdb5db6dc3a1deb665af6adaf42"
         },
         "taskPath": ":authLabComponentTest",
-        "configurationHash": "c77aa5ea60c90d9995d9429b3aa2860a1562ee8ae7572a82423dd92eafcd0432",
+        "configurationHash": "79a0a0186eee92cbe12d1b277ade117aacd4150729748c30fb91bb26a0b38621",
         "xmlCaseName": "configurationReplacementAndUnloadReleaseWaitersAndRejectRunningLateResults()"
       },
       "disposition": "EXTEND"
@@ -12478,7 +12478,7 @@
         "sourceRevision": "fbb1d72f5722fe1642da05223114751642990878+working-copy:cf523e3047ba13907ea7f2ac5a5bd4a166e9dd3852dfd1b4cc322d4baa33192f",
         "sourceHashes": {
           "test/authentication-lab/production-tests/bpsh/support/AuthLabSupport.java": "d1a0028550c98ee86bc7ab811d00efef9984cc040973e4ffcde7b84e5255682c",
-          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "010f1c17a55f05085336b5ac4af4db535ef67c88d4be9b90b26ecc81f89632d9",
+          "test/authentication-lab/production-tests/bpsh/browser/BrowserJourneyIntegrationTest.java": "fc17b28d86c3e8efb67dd31c87ae8e29a22311d175a6012e1507219c6aaec8d9",
           "test/authentication-lab/production-tests/bpsh/support/ProductionLabAdapter.java": "f600ea9b8e0ee17bfa4f397c86e78e5147716fe16cb9114cc27abe1be8007d0d",
           "test/authentication-lab/src/main/resources/production-policy.json": "32b895acd27c659dff4d77e286748135f670f10947d7e2372427abb61f558a20",
           "test/authentication-lab/src/main/java/lab/auth/LabEvidence.java": "46c8fc363bceb69bb8c86e75086e322c64bb86ff24c6075eaadc5564f4058e37",
@@ -12490,7 +12490,7 @@
           "test/authentication-lab/src/test/java/lab/auth/ProductionEvidenceTest.java": "00625ecfc523bc375c15898421b01c7f1fade8c2b6ed5707049fa8bab6638195"
         },
         "taskPath": ":authLabBrowserTest",
-        "configurationHash": "1ad5f10ad439fdfdb547438964102ea42990241def254348b87f151e5ce549a0",
+        "configurationHash": "668fb9e4de04b18097495159c639aea5a6952b1825855b254f829412d5c4e5b0",
         "xmlCaseName": "sessionLossRecoveryUsesThreeSequentialFreshBrowsersAndReplaysEightActualRequestsOnce()"
       },
       "disposition": "EXTEND"

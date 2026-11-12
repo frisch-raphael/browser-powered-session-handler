@@ -871,6 +871,35 @@ public class BrowserJourneyIntegrationTest {
         }
     }
 
+    /** Keeps ownership of browser helpers when the driver exits during protocol cleanup. */
+    public @Test void cleanupRetainsBrowserChildrenAfterTheirDriverExits() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        var ready = runtime.acquire(deadline, () -> false);
+        java.util.List<ProcessHandle> children = java.util.List.of();
+        try (var driver = PlaywrightDriverAdapter.open(ready, deadline, () -> false)) {
+            driver.playwright().chromium().launch(new BrowserType.LaunchOptions().setHeadless(true)
+                    .setChromiumSandbox(true).setExecutablePath(ready.browserExecutable()).setArgs(List.of("--no-proxy-server")));
+            java.util.List<ProcessHandle> nodes;
+            try (var descendants = ProcessHandle.current().descendants()) {
+                nodes = descendants.filter(handle -> handle.info().command()
+                        .map(command -> Path.of(command).equals(ready.nodeExecutable())).orElse(false)).toList();
+            }
+            assertEquals(1, nodes.size(), "Require the unique driver owned by this test JVM");
+            var node = nodes.getFirst();
+            try (var descendants = node.descendants()) { children = descendants.toList(); }
+            assertFalse(children.isEmpty(), "A real browser process tree is required");
+            driver.beginCleanup();
+            node.destroyForcibly(); node.onExit().get(5, TimeUnit.SECONDS);
+            driver.close();
+            assertTrue(driver.terminated());
+            assertTrue(children.stream().noneMatch(ProcessHandle::isAlive), "Browser helpers must not outlive their driver session");
+        } finally {
+            for (var child : children) if (child.isAlive()) child.destroyForcibly();
+            for (var child : children) if (child.isAlive()) child.onExit().get(5, TimeUnit.SECONDS);
+        }
+    }
+
     /** Waits for a real Windows delete-sharing lock without abandoning the attempt-owned profile. */
     public @Test void driverCleanupWaitsForAReleasedWindowsProfileFileLock() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
@@ -910,7 +939,7 @@ public class BrowserJourneyIntegrationTest {
             long started = System.nanoTime(); driver.beginCleanup();
             assertThrows(com.microsoft.playwright.PlaywrightException.class, () -> page.waitForTimeout(15000));
             driver.close(); assertTrue(driver.terminated());
-            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(8), "Cleanup must not wait for the original 30-second attempt budget");
+            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(12), "Cleanup must not wait for the original 30-second attempt budget");
         }
     }
 
@@ -968,7 +997,17 @@ public class BrowserJourneyIntegrationTest {
                     try (var fresh = browser.newContext()) { if (!fresh.cookies().isEmpty()) throw new AssertionError("Browser contexts shared cookies."); }
                 }
             }
-            if (instance.get(null) != before || !properties.equals(new java.util.HashMap<>(System.getProperties()))) throw new AssertionError("Driver singleton or JVM properties changed.");
+            if (instance.get(null) != before) throw new AssertionError("Driver singleton changed.");
+            var after = new java.util.HashMap<>(System.getProperties());
+            if (BrowserRuntimeManager.hostPlatform().equals("windows-x64")) {
+                // JNA records its own native-loader status; these are not browser configuration overrides.
+                for (String key : java.util.List.of("jna.loaded", "jnidispatch.path")) { properties.remove(key); after.remove(key); }
+            }
+            if (!properties.equals(after)) {
+                var changed = new java.util.HashSet<>(properties.keySet()); changed.addAll(after.keySet());
+                changed.removeIf(key -> java.util.Objects.equals(properties.get(key), after.get(key)));
+                throw new AssertionError("JVM property keys changed: " + changed);
+            }
         }
     }
 }

@@ -29,7 +29,7 @@ import java.util.function.BooleanSupplier;
  *
  * The public factory caches driver/environment state globally. Instead, this adapter launches
  * verified Node/JS selectors and constructs the pinned implementation's pipe connection. No
- * driver installer, shared Driver singleton or JVM-wide property/environment mutation occurs.
+ * driver installer, shared Driver singleton or JVM-wide browser property/environment override occurs.
  * Reflection is limited to this library's own unnamed-module classes and checked by integration.
  */
 public final class PlaywrightDriverAdapter {
@@ -57,6 +57,8 @@ public final class PlaywrightDriverAdapter {
         private volatile boolean terminated;
         private final java.util.concurrent.atomic.AtomicLong cleanupDeadline;
         private final Path temporary, temporaryParent;
+        private final WindowsBrowserJob windowsJob;
+        private boolean jobObservationFailed;
 
         /**
          * Binds a fully initialized pipe to its owning worker and existing watchdog.
@@ -68,13 +70,14 @@ public final class PlaywrightDriverAdapter {
          * @param temporary Private directory used by this driver and its browser children.
          * @throws IOException If the captured temporary parent cannot be resolved.
          */
-        private Session(Process process, Playwright playwright, Object connection, PlaywrightRecorderAdapter.Tap recordingTap, BrowserRuntimeManager.Ready runtime, Method closeConnection, ScheduledExecutorService watchdog, Path temporary, java.util.Set<ProcessHandle> children, java.util.concurrent.atomic.AtomicLong cleanupDeadline) throws IOException {
+        private Session(Process process, Playwright playwright, Object connection, PlaywrightRecorderAdapter.Tap recordingTap, BrowserRuntimeManager.Ready runtime, Method closeConnection, ScheduledExecutorService watchdog, Path temporary, java.util.Set<ProcessHandle> children, java.util.concurrent.atomic.AtomicLong cleanupDeadline, WindowsBrowserJob windowsJob) throws IOException {
             this.process = process; this.playwright = playwright; this.connection = connection;
             this.recordingTap = recordingTap;
             this.runtime = runtime;
             this.closeConnection = closeConnection; this.watchdog = watchdog;
             this.children = children;
             this.cleanupDeadline = cleanupDeadline;
+            this.windowsJob = windowsJob;
             this.temporary = temporary; this.temporaryParent = temporary.getParent().toRealPath();
         }
 
@@ -100,7 +103,13 @@ public final class PlaywrightDriverAdapter {
         /** Confirms termination of the owned driver and every captured descendant, independent of protocol events. */
         public boolean terminated() { return terminated; }
         /** Bounds graceful browser/context protocol closes before forced owned-process shutdown. */
-        public void beginCleanup() { owner(); cleanupDeadline.compareAndSet(Long.MAX_VALUE, System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); }
+        public void beginCleanup() { owner(); captureWindowsMembers(); children.addAll(process.descendants().toList()); cleanupDeadline.compareAndSet(Long.MAX_VALUE, System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); }
+
+        /** Keeps cleanup running after an observation error; successful termination is still required. */
+        private void captureWindowsMembers() {
+            if (windowsJob != null) try { windowsJob.captureMembers(); }
+            catch (IOException | RuntimeException failure) { jobObservationFailed = true; }
+        }
 
         /**
          * Rejects cross-thread use of the Playwright event loop before touching its connection.
@@ -113,6 +122,7 @@ public final class PlaywrightDriverAdapter {
         @Override public void close() throws AuthenticationFailure {
             owner(); if (!closed.compareAndSet(false, true)) return;
             boolean interrupted = Thread.interrupted();
+            captureWindowsMembers();
             recordingTap.releaseRecorder();
             watchdog.shutdownNow();
             children.addAll(process.descendants().toList());
@@ -120,8 +130,14 @@ public final class PlaywrightDriverAdapter {
             try { if (!process.waitFor(500, TimeUnit.MILLISECONDS)) terminate(process); }
             catch (InterruptedException ex) { interrupted = true; terminate(process); }
             finally {
+                // Native Windows termination also waits for pending I/O and sandboxed children.
+                long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(windowsJob == null ? 2 : 5);
+                boolean jobTerminated = true;
+                if (windowsJob != null) {
+                    try { windowsJob.close(end); }
+                    catch (IOException | RuntimeException failure) { jobTerminated = false; }
+                }
                 children.forEach(PlaywrightDriverAdapter::terminate); if (process.isAlive()) terminate(process);
-                long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
                 try {
                     if (process.isAlive()) process.waitFor(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS);
                     watchdog.awaitTermination(Math.max(1, end - System.nanoTime()), TimeUnit.NANOSECONDS);
@@ -129,7 +145,8 @@ public final class PlaywrightDriverAdapter {
                 } catch (InterruptedException stopped) { interrupted = true; }
                 catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException ignored) { /* Report actual liveness below. */ }
                 try {
-                    terminated = !process.isAlive() && children.stream().noneMatch(ProcessHandle::isAlive) && watchdog.isTerminated();
+                    terminated = !jobObservationFailed && jobTerminated && !process.isAlive()
+                            && (windowsJob != null || children.stream().noneMatch(ProcessHandle::isAlive)) && watchdog.isTerminated();
                     cleanup(temporary, temporaryParent);
                     if (!terminated) throw setup("The owned browser processes did not finish closing.", "");
                 } finally { if (interrupted) Thread.currentThread().interrupt(); }
@@ -150,7 +167,7 @@ public final class PlaywrightDriverAdapter {
         // Connection's channel logger reads the parent environment, not CreateOptions.env.
         if (System.getenv("DEBUG") != null && System.getenv("DEBUG").contains("pw:channel"))
             throw setup("Playwright debug logging is enabled and could expose login values.", "Remove pw:channel from the DEBUG environment variable and restart Burp.");
-        Process process = null; Path temporary = null;
+        Process process = null; Path temporary = null; WindowsBrowserJob windowsJob = null;
         var children = java.util.concurrent.ConcurrentHashMap.<ProcessHandle>newKeySet();
         var cleanupDeadline = new java.util.concurrent.atomic.AtomicLong(Long.MAX_VALUE);
         ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -167,6 +184,7 @@ public final class PlaywrightDriverAdapter {
             Files.readAttributes(runtime.driverEntryPoint(), BasicFileAttributes.class);
             if (!Files.isExecutable(runtime.nodeExecutable())) throw new java.nio.file.AccessDeniedException("Bundled Node is not executable.");
             builder.redirectError(ProcessBuilder.Redirect.DISCARD); process = builder.start();
+            windowsJob = WindowsBrowserJob.attach(process);
             Process owned = process;
             watchdog.scheduleWithFixedDelay(() -> {
                 try {
@@ -189,12 +207,12 @@ public final class PlaywrightDriverAdapter {
             Playwright playwright = (Playwright) connectionType.getMethod("initializePlaywright").invoke(connection);
             Field driverProcess = playwright.getClass().getDeclaredField("driverProcess"); driverProcess.setAccessible(true); driverProcess.set(playwright, process);
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
-            return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary, children, cleanupDeadline);
+            return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary, children, cleanupDeadline, windowsJob);
         } catch (AuthenticationFailure ex) {
-            watchdog.shutdownNow(); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent()); throw ex;
+            watchdog.shutdownNow(); closeJob(windowsJob); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent()); throw ex;
         } catch (Exception | LinkageError ex) {
             boolean exited = process != null && !process.isAlive();
-            watchdog.shutdownNow(); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent());
+            watchdog.shutdownNow(); closeJob(windowsJob); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent());
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
             throw startupFailure(ex, exited);
         }
@@ -249,6 +267,12 @@ public final class PlaywrightDriverAdapter {
      * @param handle Node/browser descendant owned by the current session.
      */
     private static void terminate(ProcessHandle handle) { if (handle.isAlive()) handle.destroyForcibly(); }
+
+    /** Releases an assigned Windows job on failed initialization before removing its private files. */
+    private static void closeJob(WindowsBrowserJob job) {
+        if (job != null) try { job.close(System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); }
+        catch (IOException | RuntimeException ignored) { /* Original initialization failure remains primary. */ }
+    }
 
     /**
      * Removes only a checked attempt-owned temporary tree without following links or touching user profiles.

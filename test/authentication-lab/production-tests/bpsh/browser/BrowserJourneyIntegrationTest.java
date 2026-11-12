@@ -1046,7 +1046,17 @@ public class BrowserJourneyIntegrationTest {
                     try (var fresh = browser.newContext()) { if (!fresh.cookies().isEmpty()) throw new AssertionError("Browser contexts shared cookies."); }
                 }
             }
-            if (instance.get(null) != before || !properties.equals(new java.util.HashMap<>(System.getProperties()))) throw new AssertionError("Driver singleton or JVM properties changed.");
+            if (instance.get(null) != before) throw new AssertionError("Driver singleton changed.");
+            var after = new java.util.HashMap<>(System.getProperties());
+            if (BrowserRuntimeManager.hostPlatform().equals("windows-x64")) {
+                // JNA records its own native-loader status; these are not browser configuration overrides.
+                for (String key : java.util.List.of("jna.loaded", "jnidispatch.path")) { properties.remove(key); after.remove(key); }
+            }
+            if (!properties.equals(after)) {
+                var changed = new java.util.HashSet<>(properties.keySet()); changed.addAll(after.keySet());
+                changed.removeIf(key -> java.util.Objects.equals(properties.get(key), after.get(key)));
+                throw new AssertionError("JVM property keys changed: " + changed);
+            }
         }
     }
 }

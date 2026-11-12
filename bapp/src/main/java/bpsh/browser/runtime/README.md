@@ -12,6 +12,7 @@ Verifies bundled platform assets and owns extraction, immutable cache publicatio
 - [InvalidAsset](./InvalidAsset.java): Distinguishes a proved asset invariant failure from unrelated filesystem I/O.
 - [BoundedTokenResponses](./BoundedTokenResponses.java): Streams selected decoded Chromium responses under the 1 MiB extraction ceiling.
 - [PlaywrightDriverAdapter](./PlaywrightDriverAdapter.java): Isolates the exact Playwright 1.64.0 pipe bootstrap from browser workflow code.
+- [WindowsBrowserJob](./WindowsBrowserJob.java): Owns the Windows driver and its descendants as one native job, verifies group termination and closes its noninherited handle before profile removal.
 - [PlaywrightRecorderAdapter](./PlaywrightRecorderAdapter.java): Pins private structured recording commands/events and drops generated source before Java dispatch.
 
 ## Invariants
