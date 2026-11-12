@@ -62,7 +62,8 @@ public class AuthenticationCoordinatorTest {
 
     public @Test void manyRequestsShareOneAttemptAndReleaseEveryReservation() throws Exception {
         long began=System.nanoTime();Map<String,Object> observed,resources;
-        try (var f = new Fixture(new RequestSettings.Controls(false, List.of(), RequestSettings.SUPPORTED_TOOLS, 60_000, 60_000, 300_000, 256, 256))) {
+        var limits=new RequestSettings.Controls(false, List.of(), RequestSettings.SUPPORTED_TOOLS, 60_000, 60_000, 300_000, 256, 256);
+        try (var f = new Fixture(limits)) {
             var callers = java.util.stream.IntStream.range(0, 100).mapToObj(i -> f.acquire(0)).toList();
             assertEquals(100, f.coordinator.capacity().waitingRequests()); assertEquals(1, f.clock.workers.size());
             f.clock.runWorker(); assertEquals(1, f.attempts.get());
@@ -71,7 +72,7 @@ public class AuthenticationCoordinatorTest {
             assertEquals(0, f.coordinator.capacity().waitingRequests()); assertEquals(1, f.clock.timers());
             var cached=f.acquire(0);assertTrue(cached.future().isDone()); assertEquals(0, f.coordinator.capacity().waitingRequests());
             observed=Map.of("attempts",f.attempts.get(),"waitingRequests",f.coordinator.capacity().waitingRequests(),"workers",f.clock.workers.size(),"callers",callers.size(),"cachedVersionMatches",cached.future().join().get(f.entry(0).identity()).version()==version,"cachedImmediate",cached.future().isDone());
-            resources=Map.of("callers",callers.size(),"completed",callers.stream().filter(c->c.future().isDone()&&!c.future().isCompletedExceptionally()).count(),"limitsDisabled",RequestSettings.Controls.defaults().maxWaitingRequestsGlobal()==null&&RequestSettings.Controls.defaults().maxWaitingRequestsPerJourney()==null,"attempts",f.attempts.get(),"waitingRequests",f.coordinator.capacity().waitingRequests());
+            resources=Map.of("callers",callers.size(),"completed",callers.stream().filter(c->c.future().isDone()&&!c.future().isCompletedExceptionally()).count(),"configuredGlobal",limits.maxWaitingRequestsGlobal(),"configuredPerJourney",limits.maxWaitingRequestsPerJourney(),"defaultGlobal",RequestSettings.Controls.defaults().maxWaitingRequestsGlobal(),"defaultPerJourney",RequestSettings.Controls.defaults().maxWaitingRequestsPerJourney(),"attempts",f.attempts.get(),"waitingRequests",f.coordinator.capacity().waitingRequests());
         }
         TokenLifetimeTest.lifetime("fresh",observed,began);
         recordResources("waiter-unlimited",resources,began);

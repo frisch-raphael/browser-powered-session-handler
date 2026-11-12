@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.CDPSession;
-import com.microsoft.playwright.Page;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -31,18 +30,17 @@ public final class BoundedTokenResponses implements AutoCloseable {
     private final BrowserContext context;
     private final Capture capture;
     private final java.util.List<CDPSession> sessions = new java.util.ArrayList<>();
-    private final java.util.function.Consumer<Page> pageListener;
+    private EarlyBrowserTargets targets;
     private boolean closed;
 
     /** Owns the listeners and protocol sessions until extraction finishes. */
-    private BoundedTokenResponses(BrowserContext context, Capture capture) { this.context = context; this.capture = capture; this.pageListener = page -> attach(context, page, capture); }
+    private BoundedTokenResponses(BrowserContext context, Capture capture) { this.context = context; this.capture = capture;  }
 
     /** Installs attempt-owned response interception on initial pages and popups. */
     public static BoundedTokenResponses install(BrowserContext context, Capture extractor) {
         var owner = new BoundedTokenResponses(context, extractor);
         try {
-            context.onPage(owner.pageListener);
-            context.pages().forEach(owner.pageListener);
+            owner.targets = new EarlyBrowserTargets(context, session -> owner.intercept(session, extractor));
             return owner;
         } catch (RuntimeException error) { owner.close(); throw error; }
     }
@@ -50,25 +48,13 @@ public final class BoundedTokenResponses implements AutoCloseable {
     /** Revokes callbacks before disabling interception and before the browser context starts closing. */
     @Override public void close() {
         if (closed) return;
-        closed = true; context.offPage(pageListener);
+        closed = true;
         for (var session : java.util.List.copyOf(sessions)) {
             try { session.send("Fetch.disable"); } catch (RuntimeException ignored) { /* page may already be gone */ }
             try { session.send("Network.disable"); } catch (RuntimeException ignored) { /* page may already be gone */ }
             try { session.detach(); } catch (RuntimeException ignored) { /* page may already be gone */ }
         }
-        sessions.clear();
-    }
-
-    /** Attaches collection to a page and its out-of-process frames. */
-    private void attach(BrowserContext context, Page page, Capture extractor) {
-        if (closed) return;
-        CDPSession cdp = context.newCDPSession(page);
-        page.onFrameNavigated(frame -> {
-            if (closed || frame == page.mainFrame()) return;
-            try { intercept(context.newCDPSession(frame), extractor); }
-            catch (com.microsoft.playwright.PlaywrightException ignored) { /* in-process frames share the page session */ }
-        });
-        intercept(cdp, extractor);
+        sessions.clear(); if (targets != null) targets.close();
     }
 
     /** Enables response-stage collection on one page or out-of-process frame target. */
@@ -147,10 +133,17 @@ public final class BoundedTokenResponses implements AutoCloseable {
                 byte[] pending = body.bytes.toByteArray(); body.bytes.reset(); body.append(buffered); body.append(pending);
                 body.initializing = false;
                 if (body.finished && streams.remove(id) != null) capture.response(body.url, body.bytes.toByteArray(), body.status >= 200 && body.status < 300);
-            } catch (AuthenticationFailure | RuntimeException error) {
-                streams.remove(id); capture.failure(error instanceof AuthenticationFailure safe ? safe : new AuthenticationFailure(
-                        AuthenticationFailure.Phase.EXTRACTION, AuthenticationFailure.Cause.EXTRACTION,
-                        "The service-worker token response could not be streamed within the extraction limit."));
+            } catch (AuthenticationFailure error) {
+                streams.remove(id);capture.failure(error);
+            } catch (RuntimeException error) {
+                // Chromium rejects streamResourceContent after loading has finished. Queued data/EOF
+                // events positively establish the decoded length before bounded buffered retrieval.
+                boolean completed=body.finished&&streams.remove(id)!=null;
+                if(completed)try {
+                    byte[] bytes=completedWorkerBody(cdp,id,body.observed);
+                    capture.response(body.url,bytes,body.status>=200&&body.status<300);
+                }catch(AuthenticationFailure|RuntimeException unavailable){capture.failure(unavailable instanceof AuthenticationFailure safe?safe:workerReadFailure());}
+                else {streams.remove(id);capture.failure(workerReadFailure());}
             }
         });
         cdp.on("Network.dataReceived", event -> {
@@ -158,8 +151,9 @@ public final class BoundedTokenResponses implements AutoCloseable {
             var body = streams.get(event.get("requestId").getAsString());
             if (body == null) return;
             try {
-                body.observed += event.get("dataLength").getAsLong();
-                if (body.observed > LIMIT) throw oversized();
+                long length=event.get("dataLength").getAsLong();
+                if(length<0||length>LIMIT-body.observed)throw oversized();
+                body.observed+=length;
                 if (event.has("data")) body.append(Base64.getDecoder().decode(event.get("data").getAsString()));
             }
             catch (AuthenticationFailure error) {
@@ -175,6 +169,22 @@ public final class BoundedTokenResponses implements AutoCloseable {
         });
         cdp.on("Network.loadingFailed", event -> streams.remove(event.get("requestId").getAsString()));
     }
+
+    /** Retrieves only a positively completed response within the Network domain's fixed resource buffer. */
+    static byte[] completedWorkerBody(CDPSession session,String id,long received) throws AuthenticationFailure {
+        if(received<=0||received>LIMIT)throw workerReadFailure();
+        var response=session.send("Network.getResponseBody",params("requestId",id));
+        String raw=response.get("body").getAsString();
+        boolean base64=response.has("base64Encoded")&&response.get("base64Encoded").getAsBoolean();
+        if(raw.length()>(base64?4L*((LIMIT+2L)/3L):LIMIT))throw oversized();
+        byte[] bytes=base64?Base64.getDecoder().decode(raw):raw.getBytes(StandardCharsets.UTF_8);
+        if(bytes.length>LIMIT)throw oversized();
+        if(bytes.length!=received)throw workerReadFailure();
+        return bytes;
+    }
+    /** Safe service-worker collection error, with no browser/vendor data. */
+    private static AuthenticationFailure workerReadFailure(){return new AuthenticationFailure(AuthenticationFailure.Phase.EXTRACTION,
+            AuthenticationFailure.Cause.EXTRACTION,"The service-worker token response could not be streamed within the extraction limit.");}
 
     /** One bounded decoded service-worker response. */
     private static final class WorkerBody {

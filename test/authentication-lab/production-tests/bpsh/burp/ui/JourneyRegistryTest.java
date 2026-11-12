@@ -43,6 +43,21 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class JourneyRegistryTest {
+    @Test public void evidenceCaptureKeepsJacksonValuesAsJson(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        String previous=System.getProperty("authlab.plan");
+        var plan=directory.resolve("plan.json");var reports=directory.resolve("report");
+        java.nio.file.Files.writeString(plan,AuthLabSupport.JSON.writeValueAsString(Map.of("reportDirectory",reports.toString(),
+                "invocationId",UUID.randomUUID().toString(),"taskName","authLabComponentTest","productionRevision","owned-test-revision")));
+        try {
+            System.setProperty("authlab.plan",plan.toString());
+            var snapshot=AuthLabSupport.JSON.readTree("{\"state\":\"CLOSED\",\"count\":1,\"active\":true,\"roles\":[\"C1\"],\"absent\":null}");
+            AuthLabSupport.component("owned-serialization-test",Map.of("snapshot",snapshot,"proofs",List.of(Map.of("roles",snapshot.path("roles")))));
+            try(var files=java.nio.file.Files.list(reports.resolve("component-observations"))) {
+                var observed=AuthLabSupport.JSON.readTree(java.nio.file.Files.readAllBytes(files.findFirst().orElseThrow())).path("observed");
+                assertEquals(snapshot,observed.path("snapshot"));assertEquals(snapshot.path("roles"),observed.path("proofs").get(0).path("roles"));
+            }
+        }finally{if(previous==null)System.clearProperty("authlab.plan");else System.setProperty("authlab.plan",previous);}
+    }
     @Test void hostExamplesUseTheNativeCodecWithBothAccountsProtocolsAndDeterministicHostCache() throws Exception {
         var target=new bpsh.support.ProductionLabAdapter.LoginTarget("BROW.basic.json",7,
                 URI.create("http://127.0.0.1:43123"),URI.create("http://127.0.0.1:43124"));

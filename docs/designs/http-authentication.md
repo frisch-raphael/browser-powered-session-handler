@@ -1118,12 +1118,12 @@ does not claim that the current artifact already meets it. See the
 Add maintained `bapp/third-party/jcifs-ng.md` with version, license, source identity,
 local replacement steps and artifact verification. Add
 `bapp/third-party/jcifs-source.lock.json` pinning the complete upstream tag source
-archive, including build files, size and SHA-256. The existing browser-assets
+archive, including build files, size and SHA-256. The existing driver-assets
 Gradle assembly retains notices under META-INF/notices and embeds the verified
 current source at META-INF/bpsh/third-party/jcifs-ng-source.zip. No dependency
 binary/source payload is committed. Normal offline builds require the locked cache.
 
-Extend bapp/gradle/browser-assets.gradle.kts and build.gradle.kts with explicit
+Extend bapp/gradle/driver-assets.gradle.kts and build.gradle.kts with explicit
 local jcifsReplacement and jcifsReplacementSources properties. A replacement
 build excludes the original library classes, compiles against the supplied
 compatible replacement, includes that replacement's corresponding source/notices
@@ -1297,7 +1297,7 @@ and remove obsolete owners rather than retain compatibility or historical copies
 | --- | --- | --- | --- |
 | 1 | Add | `bapp/third-party/jcifs-ng.md` | Current library attribution, source identity and reproducible local replacement instructions. |
 | 1 | Add | `bapp/third-party/jcifs-source.lock.json` | Lock complete corresponding upstream source and build files; no source payload committed. |
-| 1 | Modify | `bapp/gradle/browser-assets.gradle.kts` | Embed current corresponding source/notices, reject duplicate library classes and support explicit qualified replacement inputs. |
+| 1 | Modify | `bapp/gradle/driver-assets.gradle.kts` | Embed current corresponding source/notices, reject duplicate library classes and support explicit qualified replacement inputs. |
 | 1 | Modify | `bapp/build.gradle.kts` | Pin and qualify dependencies; register nonempty browser HTTP-auth integration execution. |
 | 1 | Modify | `bapp/gradle.lockfile` | Lock the reviewed production and test dependency graph. |
 | 1 | Modify | `bapp/gradle/verification-metadata.xml` | Verify new artifacts while preserving current verification. |

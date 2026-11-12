@@ -53,6 +53,10 @@ final class LabTransportEvidence {
         if(!Files.isRegularFile(processFile))return null;
         var process=readOwned(directory,processFile);
         if(!validProcess(process,key,spec,context))return null;
+        if(spec.task().equals(":authLabTransportTest")) {
+            Path providers=directory.resolve("process-observations/providers.json");
+            if(!Files.isRegularFile(providers)||!validProcess(readOwned(directory,providers),"Pkcs11JourneyIntegrationTest.providers",new Input("providers",0,spec.task()),context))return null;
+        }
         JsonObject observed=null;
         if(Files.isRegularFile(factsFile)) {
             var facts=readOwned(directory,factsFile);
@@ -81,7 +85,7 @@ final class LabTransportEvidence {
                     !sameInput(process,input,spec,context)||!s(process,"cleanup").equals("COMPLETE"))return false;
             var observed=process.getAsJsonObject("observed");
             if(!observed.keySet().equals(Set.of("drivers","processes","alive"))||n(observed,"drivers")!=spec.drivers()||n(observed,"alive")!=0||
-                    (spec.drivers()==0?(spec.label().equals("native-picker")?n(observed,"processes")<1:n(observed,"processes")!=0):n(observed,"processes")<2L*spec.drivers()))return false;
+                    (spec.drivers()==0?(spec.label().equals("providers")?n(observed,"processes")<1:n(observed,"processes")!=0):n(observed,"processes")<2L*spec.drivers()))return false;
             var timings=process.getAsJsonObject("timings");if(!timings.keySet().equals(Set.of("startupMs","caseMs","cleanupMs")))return false;
             for(String field:timings.keySet())n(timings,field);
             return true;

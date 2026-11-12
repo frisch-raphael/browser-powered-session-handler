@@ -93,10 +93,10 @@ final class JourneyRecordingDialog implements AutoCloseable {
         switch (state) {
             case PREPARING -> progress.setText("Preparing browser...");
             case WAITING_FOR_BROWSER -> progress.setText("Waiting for browser setup...");
-            case VERIFYING_BROWSER -> progress.setText("Verifying bundled browser files...");
-            case EXTRACTING_BROWSER -> progress.setText("Extracting bundled browser files...");
+            case VERIFYING_BROWSER -> progress.setText("Verifying bundled driver files...");
+            case EXTRACTING_BROWSER -> progress.setText("Extracting bundled driver files...");
             case STARTING_DRIVER -> progress.setText("Starting the browser driver...");
-            case STARTING_BROWSER -> progress.setText("Starting Chromium...");
+            case STARTING_BROWSER -> progress.setText("Starting Burp Browser...");
             case OPENING_LOGIN -> progress.setText("Opening the login page...");
             default -> { }
         }

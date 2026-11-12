@@ -2,8 +2,7 @@
 
 A Burp Suite extension that runs browser authentication journeys and reuses their
 tokens and cookies in HTTP requests. Authentication, caching and request tags are
-owned by the Java extension. One universal JAR includes Playwright, Chromium and
-its driver; there is no Python service or Hackvertor dependency.
+owned by the Java extension. One universal JAR includes Playwright and its platform drivers; there is no Python service or Hackvertor dependency.
 
 This branch contains the native development build for Windows x64, Linux x64 and
 Intel macOS. Apple Silicon and other ARM systems are not supported. See the
@@ -15,17 +14,26 @@ the payload layout and platform contract; native macOS testing remains outstandi
 1. Use Burp with Java 21 or newer and the Montoya 2026.4 request-drop and Proxy
    action capabilities. Burp 2026.10.1 has been used for interactive checks.
 2. Build or obtain `bapp/build/libs/browser-powered-session-handler-dev.jar`
-   (about 740 MB). See the developer instructions for runtime prerequisites.
+   (below 128 MiB). Install Burp Browser through Burp before using browser login or recording.
 3. In Burp, open **Extensions → Installed → Add**, select **Java**, and choose that JAR.
 4. Open the **Browser Powered Session Handler** tab.
 
-On first authentication, bundled browser files are verified and extracted to
-`user.home/.bpsh/cache`. Later runs reuse that cache. Runtime setup does not
-download a browser or require a separate Java or Node installation.
-Only the current system's files are extracted. First use requires additional
-temporary disk space; old version caches are retained for rollback. Linux needs
-Chromium's system libraries, and visible browsers need a desktop session. The
-[developer instructions](bapp/README.md) list these prerequisites and disk usage.
+Login and recording launch the installed Burp Browser in separate temporary
+sessions. Existing Burp browser accounts, cookies and profiles are never adopted
+or cleared. There is no bundled or downloaded browser fallback.
+
+Automatic discovery uses the running Burp installation when identifiable. If
+several installations are found, open **Settings > Burp Browser** and select the
+intended executable. An explicit selection is authoritative; **Use automatic**
+clears it. The selection is local to your Burp user preferences and is absent
+from journey exports. A missing or invalid browser is reported beside this setting.
+
+On first authentication, bundled Node/driver files are verified and extracted to
+`user.home/.bpsh/cache/drivers-v3`. Later attempts reuse that verified cache.
+Runtime setup requires no separate Java or Node installation and downloads
+nothing. Linux needs the installed browser's shared libraries and sandbox
+permissions; visible recording needs a desktop. The
+[developer instructions](bapp/README.md) describe prerequisites and disk usage.
 
 PKCS#11 authentication additionally requires your token vendor's middleware.
 [Developer build instructions](bapp/README.md) describe preparation and packaging.

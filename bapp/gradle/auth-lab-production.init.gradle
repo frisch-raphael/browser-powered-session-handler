@@ -113,7 +113,11 @@ gradle.projectsEvaluated {
         }
         testClassesDirs = project.sourceSets.test.output.classesDirs
         classpath = project.sourceSets.test.runtimeClasspath
-        if (browser) classpath += project.files(new File(project.buildDir, 'generated/driver-assets'))
+        if (browser) {
+            def delivered = project.tasks.named('jar').get().archiveFile.get().asFile
+            classpath = project.files(delivered) + (project.sourceSets.test.runtimeClasspath - project.sourceSets.main.output)
+            systemProperty 'bpsh.packagedJar', delivered.absolutePath
+        }
         if (plan.burpBrowserExecutable) systemProperty 'bpsh.test.burpBrowserExecutable', plan.burpBrowserExecutable
         useJUnitPlatform()
         methods.each { filter.includeTestsMatching(it) }

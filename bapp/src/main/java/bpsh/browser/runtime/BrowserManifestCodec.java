@@ -113,7 +113,7 @@ final class BrowserManifestCodec {
                     Map.copyOf(entries), Set.copyOf(directories), List.copyOf(helpers));
         } catch (AuthenticationFailure ex) { throw ex; }
         catch (Exception ex) {
-            throw failure(AuthenticationFailure.Cause.ASSET_CORRUPT, "The bundled browser configuration is invalid.",
+            throw failure(AuthenticationFailure.Cause.ASSET_CORRUPT, "The bundled driver configuration is invalid.",
                     "Rebuild or download the complete universal extension JAR, then reload it.");
         }
     }

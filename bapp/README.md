@@ -6,97 +6,95 @@ User setup and request examples are in the [project README](../README.md).
 
 ## Runtime and host
 
-The universal JAR runs inside Burp's Java 21+ JVM and bundles Chromium, Node and
-Playwright driver assets for Windows x64, Linux x64 and Intel macOS. It does not require a Python API,
-Hackvertor, a runtime browser download or a separate Java executable.
+The universal JAR runs inside Burp's Java 21+ JVM and bundles Node and Playwright
+driver assets for Windows x64, Linux x64 and Intel macOS. Browser login and
+recording require Burp's installed browser. No browser distribution, runtime
+download, Python service, Hackvertor or separate Java executable is required.
 Vendor PKCS#11 middleware is needed only for certificate journeys.
 
 The compiled Montoya API is 2026.4. Startup probes the required global
 request-drop and Proxy action factories before registering authentication hooks.
 Burp 2026.10.1 has been used for manual checks. ARM systems are rejected before
-cache preparation. Native macOS execution has not been tested; the Mac payload
-is structurally verified during packaging.
+cache preparation. Intel macOS resources are structurally verified; native macOS
+execution remains unverified.
 
 ## Build
 
 Use JDK 21 and the checked-in wrapper, dependency locks and verification metadata.
-The checked-in Gradle settings allow a 2 GiB build heap. Universal payload
-encoding runs sequentially: XZ preset 9 with a 64 MiB dictionary needs about
-673 MiB per encoder. Unchanged prepared assets skip encoding on cached builds.
-From this directory, after dependencies and source archives are prepared:
+The checked-in Gradle settings allow a 2 GiB build heap. Universal driver encoding
+runs sequentially with fixed XZ options. Unchanged inputs skip preparation.
+From this directory:
 
 ```powershell
-.\gradlew.bat classes check verifyBrowserAssetProducer verifyNativeDocumentation jar --offline --console=plain
+.\gradlew.bat check verifyDriverAssetProducer verifyNativeDocumentation jar --offline --console=plain
 ```
 
-The development artifact is
-`build/libs/browser-powered-session-handler-dev.jar`.
-The JAR task requires the complete artifact to remain below 512 MiB, with an
-engineering target of at most 500 MiB. It verifies all three bounded XZ decodes
-and rejects host/test APIs, retired runtime classes, duplicate entries and stale
-signatures. Build directly to this path; do not create a candidate JAR.
+Build directly to `build/libs/browser-powered-session-handler-dev.jar`. The final
+artifact must remain below 128 MiB (134,217,728 bytes). The verifier requires
+exactly three format-3 driver manifest/archive pairs and streams all three
+bounded XZ decodes. It rejects browser distributions, duplicate execution
+resources, host/test APIs and stale signatures. Do not create a candidate JAR.
 
-For a fresh build environment, resolve Gradle dependencies and explicitly
-prepare the locked browser sources:
+For a fresh machine, resolve the pinned Maven dependencies and prepare drivers:
 
 ```powershell
-.\gradlew.bat prepareBrowserAssets --console=plain
+.\gradlew.bat prepareDriverAssets --console=plain
 ```
 
-These downloads happen only on the developer's build machine. Installing or
-using the finished extension JAR does not download browser components; runtime
-setup verifies and extracts the files already bundled in the JAR.
-
-The source lock is `browser-assets.lock.json`; source archives are cached under
-`build/browser-sources`. Build-time browser source downloads can use
-`-PassetDownloadProxy=http://127.0.0.1:8080`. This build setting is independent
-of journey proxy URLs and Gradle's Maven/wrapper download settings.
-Runtime uses the verified payload embedded in the JAR.
-`prepareBrowserAssets` prepares all three targets without executing foreign
-binaries. The old `bundlePlatform` property is rejected. The producer's 17
-synthetic checks exercise the same packing functions, with no browser downloads.
-
-On Linux/macOS use `./gradlew` with the same tasks. On a prepared machine,
-`--offline` requires every locked source archive and dependency to be cached;
-missing source archives fail before a downloader can run.
+`driver-assets.lock.json` pins the Maven input archives, selected Node/JavaScript
+subtrees, sizes and SHA-256 hashes. No browser source download or browser-download
+proxy is used. `prepareDriverAssets` prepares all targets without executing foreign
+binaries. `verifyDriverAssetProducer` runs 18 synthetic cases using the same
+packing/validation functions. Offline builds require the locked Maven inputs in
+the local dependency cache. On Linux/macOS use `./gradlew` with the same tasks.
 
 ## Runtime prerequisites and space
 
-The JAR contains browser executables, not an operating system or Java runtime.
-Use Java 21+ in Burp and allow enough heap to load the complete universal JAR.
-Plan disk space for the JAR, the selected extracted browser and temporary
-verification/extraction files. Package size alone is not the installed footprint.
+Install Burp Browser through the intended Burp installation. Automatic discovery
+prefers identifiable active-installation roots and otherwise requires one unique
+known installation. Numeric version directories select the newest complete
+browser. Multiple installations, a missing active-installation browser or an
+invalid explicit selection fail with Settings guidance. There is no alternate
+edition/browser fallback. **Settings > Burp Browser** accepts a per-user executable
+override; **Use automatic** clears it. Layout validation is not cryptographic
+attestation. Resolution runs afresh for each attempt; changing Settings affects
+subsequent attempts only.
 
-Linux verification uses Ubuntu 24.04 x64. Install Chromium's shared libraries
-through the OS package manager: `libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64
+The extension never attaches to a running browser, reads its profile or imports
+its state. Every login/recording owns a separate sandboxed browser process,
+temporary profile and context. Only owned processes and temporary data are
+cleaned. Compatibility with arbitrary Chromium versions is not guaranteed.
+
+Linux requires the installed browser's shared libraries and namespace/sandbox
+permissions; visible recording also needs a working desktop/display. Ubuntu
+24.04 x64 libraries include `libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64
 libatspi2.0-0t64 libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64
 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1
 libxext6 libxfixes3 libxkbcommon0 libxrandr2 libgtk-3-0t64`, plus suitable fonts.
-Other distributions may use different package names. Visible browser windows
-also require a working desktop/display session. Headless login still needs the
-shared libraries. Native Windows and macOS prerequisites follow the pinned
-Chromium build; no claim is made for untested OS versions.
+Other distributions and installed Burp versions can need different packages.
+A confirmed sandbox denial requires administrator correction; BPSH never disables
+the sandbox or changes system policy.
 
-Each target has its own format-2 manifest and `browser-assets.zip.xz` under
-`META-INF/bpsh/<target>/`. Only that target is read at runtime. Extraction uses
-`user.home/.bpsh/cache/<target>/<bundle digest>`. The runtime streams XZ through
-a 128 MiB decoder ceiling into a private temporary STORED ZIP and checks exact
-compressed size/SHA-256 and expanded size before ZIP extraction. Plan temporary
-space for that expanded ZIP plus the selected extracted tree. Cancellation and
-the original attempt deadline apply during both stages. The completion marker
-remains version 1; exact manifest/archive bytes determine cache identity. Published old
-caches are retained for rollback. To reclaim one, close all extension sessions
-using it and manually remove only the obsolete digest directory. There is no
-automatic published-cache eviction.
+Each target has `driver-assets.json` and `driver-assets.zip.xz` under
+`META-INF/bpsh/<target>/`. Only the selected target is extracted into
+`user.home/.bpsh/cache/drivers-v3/<target>/<digest>`. Plan disk space for the JAR,
+expanded temporary ZIP, extracted driver and attempt profiles, plus the separate
+Burp installation. The 128 MiB decoder ceiling, declared compressed/expanded byte
+bounds, hashes, inventory, file modes, links, cancellation and original attempt
+deadline all apply. Published caches are immutable; old browser caches are never
+adopted or automatically removed. Close all users before manually removing an
+unused digest directory.
 
 ## Existing verification
 
 The default `test` task runs local unit/component tests without starting a
-browser or initializing native middleware. Explicit integration tasks fail
+browser or initializing native middleware. The optional `-PburpBrowserExecutable=<absolute executable>` explicitly selects the
+installed browser for integration/captured tests only; production reads user preferences.
+Explicit integration tasks fail
 when required prerequisites are absent:
 
 ```powershell
-.\gradlew.bat browserIntegrationTest --offline --console=plain
+.\gradlew.bat browserIntegrationTest '-PburpBrowserExecutable=C:/Burp/burpbrowser/<version>/chrome.exe' --offline --console=plain
 .\gradlew.bat browserIntegrationTest '-PpackagedJar=C:/artifacts/browser-powered-session-handler-dev.jar' '-PoldPackagedJar=C:/artifacts/previous.jar' --offline --console=plain
 .\gradlew.bat pkcs11IntegrationTest '-Ppkcs11Fixture=build/pkcs11-fixtures/my-run/fixture.json' --offline --console=plain
 ```
@@ -104,9 +102,9 @@ when required prerequisites are absent:
 Create a fresh owned PKCS#11 fixture using the
 [software-token fixture instructions](../test/authentication-lab/README.md#disposable-software-token-transport-checks).
 `verifyNativeDocumentation` checks private-member Javadoc too.
-`packagedJar` tests an already delivered artifact without preparing browser
+`packagedJar` tests an already delivered artifact without preparing driver
 sources or rebuilding it. The integration JVM loads production classes and
-browser resources from that JAR, not loose main output. The browser suite
+driver resources from that JAR, not loose main output. The browser suite
 requires fresh-home cold-start and cached-start probes with the normal
 60-second attempt budget. `oldPackagedJar` additionally runs update and rollback
 checks against a compatible previous JAR; if omitted, those checks are explicitly
@@ -147,7 +145,7 @@ Production code lives in feature packages under `src/main/java/bpsh`; tests mirr
 
 Project storage uses `bpsh_project_v3`; the User library is
 `user.home/.bpsh/library-v3.json`. Browser extraction uses
-`user.home/.bpsh/cache`. Journey authentication configuration is separate from
+`user.home/.bpsh/cache/drivers-v3`. Journey authentication configuration is separate from
 project-wide ordered Session handling rules.
 
 ## Development boundaries

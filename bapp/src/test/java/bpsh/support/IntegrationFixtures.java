@@ -91,6 +91,7 @@ public final class IntegrationFixtures {
     private IntegrationFixtures() {}
     /** Selects only the explicit integration executable or current Burp installation hints. */
     public static bpsh.browser.runtime.BurpBrowserResolver browserResolver() {
+        try { packagedJar(); } catch (Exception unavailable) { throw new AssertionError("Real browser tests require their selected packaged production JAR.",unavailable); }
         return bpsh.browser.runtime.BurpBrowserResolver.current( () -> System.getProperty("bpsh.test.burpBrowserExecutable", ""));
     }
     /** Returns a fresh test selection; never reads a real browser profile. */
@@ -250,6 +251,8 @@ public final class IntegrationFixtures {
         if (value == null || value.isBlank()) throw new IllegalArgumentException("The packaged JAR input is required.");
         Path path = Path.of(value).toRealPath();
         if (!Files.isRegularFile(path)) throw new IllegalArgumentException("The packaged JAR must be a regular file.");
+        Path loaded=Path.of(BrowserRuntimeManager.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
+        assertEquals(path,loaded,"Real execution must load production classes and helper dependencies from the selected packaged JAR");
         try (var jar = new java.util.jar.JarFile(path.toFile())) {
             if (jar.getEntry("bpsh/browser/runtime/BrowserRuntimeManager.class") == null) throw new IllegalArgumentException("The supplied JAR is not this extension.");
         }

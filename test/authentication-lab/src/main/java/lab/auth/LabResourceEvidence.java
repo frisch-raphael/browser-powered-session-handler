@@ -13,7 +13,7 @@ final class LabResourceEvidence {
     static boolean valid(String id,JsonObject a) {
         try {
             if(id.endsWith("late-publication"))return LabOutputEvidence.valid("CORE.outputs.late-retired-attempt",a);
-            if(id.endsWith("waiter-unlimited"))return LabLifetimeEvidence.keys(a,"callers","completed","limitsDisabled","attempts","waitingRequests")&&n(a,"callers")==100&&n(a,"completed")==100&&b(a,"limitsDisabled")&&n(a,"attempts")==1&&n(a,"waitingRequests")==0;
+            if(id.endsWith("waiter-unlimited"))return LabLifetimeEvidence.keys(a,"callers","completed","configuredGlobal","configuredPerJourney","defaultGlobal","defaultPerJourney","attempts","waitingRequests")&&n(a,"callers")==100&&n(a,"completed")==100&&n(a,"configuredGlobal")==256&&n(a,"configuredPerJourney")==256&&n(a,"defaultGlobal")==64&&n(a,"defaultPerJourney")==16&&n(a,"attempts")==1&&n(a,"waitingRequests")==0;
             if(Set.of("CORE.resources.one-caller-timeout","CORE.resources.slow-form","CORE.resources.held-token").contains(id))return LabLifetimeEvidence.keys(a,"timedOutCause","otherCompleted","thirdCancelled","attempts","deadlineNanos","waitingRequests")&&LabRun.text(a,"timedOutCause").equals("TIMEOUT")&&b(a,"otherCompleted")&&b(a,"thirdCancelled")&&n(a,"attempts")==1&&n(a,"deadlineNanos")==11_000_000_000L&&n(a,"waitingRequests")==0;
             if(id.endsWith("queue-full"))return LabLifetimeEvidence.keys(a,"admitted","fullWaiting","fullRunning","fullQueued","deniedCause","closedCallers","waitingRequests","runningAttempts","queuedCycles")
                 &&n(a,"admitted")==34&&n(a,"fullWaiting")==34&&n(a,"fullRunning")==2&&n(a,"fullQueued")==32&&LabRun.text(a,"deniedCause").equals("CAPACITY")&&n(a,"closedCallers")==34&&released(a);

@@ -52,6 +52,7 @@ class Pkcs11JourneyIntegrationTest {
     static BrowserFlowRunner runner;
     static bpsh.transport.httpauth.HttpTransportRuntime httpTransport;
     private static ProductionLabAdapter.BrowserProcesses ownedProcesses;
+    private static bpsh.support.BrowserProcessWitness providerProcesses;
     static SSLContext defaultContext;
     static List<String> providers;
 
@@ -59,6 +60,7 @@ class Pkcs11JourneyIntegrationTest {
     @BeforeAll static void setup() throws Exception {
         fixture = IntegrationFixtures.nativeFixture(); root = Path.of(fixture.path("root").textValue());
         providers = Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList(); defaultContext = SSLContext.getDefault();
+        providerProcesses = new bpsh.support.BrowserProcessWitness(bpsh.support.BrowserProcessWitness.Scope.PROVIDER);
         identities = new Pkcs11IdentityManager(); httpTransport = new bpsh.transport.httpauth.HttpTransportRuntime(identities); runtime = new BrowserRuntimeManager(); guard = new AuthTrafficGuard();
         runtime.acquire(System.nanoTime() + TimeUnit.MINUTES.toNanos(5), () -> false); runner = new BrowserFlowRunner(runtime, bpsh.support.IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC());
     }
@@ -76,7 +78,9 @@ class Pkcs11JourneyIntegrationTest {
 
     /** Removes only owned providers/listeners; shared token logout/default TLS changes are prohibited. */
     @AfterAll static void shutdown() throws Exception {
-        if (httpTransport != null) httpTransport.close(); if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
+        try {
+            if (httpTransport != null) httpTransport.close(); if (identities != null) identities.close(); if (runtime != null) runtime.close(); if (guard != null) guard.close();
+        } finally { if(providerProcesses != null) ProductionLabAdapter.finishProviderObservation(providerProcesses); }
         if (defaultContext != null) assertSame(defaultContext, SSLContext.getDefault());
         if (providers != null) assertEquals(providers, Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList());
     }

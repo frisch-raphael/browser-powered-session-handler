@@ -31,6 +31,15 @@ Focused profiles write `build/authlab/{invocationId}/report-profiles.jsonl`, alo
 
 Packaging and delivered-artifact cold/cache checks are maintained by the native build. Follow the [packaging contract](../../docs/designs/universal-packaging.md) and qualify the exact JAR independently of broader authentication acceptance.
 
+Browser integration and captured production owners use the installed Burp Browser.
+Supply `-PburpBrowserExecutable=<absolute Burp browser executable>` when automatic
+discovery would be ambiguous, including `browserIntegrationTest`,
+`pkcs11IntegrationTest`, `authLab` and scoped production tasks. This property is
+carried through the captured plan and is test-only; production uses its local
+Settings preference. No bundled browser fallback exists. Universal driver-only
+resources remain verified from each captured JAR. Native macOS and actual Linux
+VMware console input need separate qualification.
+
 ## Test the actual extension outside Burp
 
 ```powershell

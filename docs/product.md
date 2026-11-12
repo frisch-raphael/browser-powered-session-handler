@@ -154,8 +154,21 @@ Automatic edits process headers separately and preserve body bytes. Recovery
 copies are admitted before construction, only for enabled detection, within
 4 MiB per template and 32 MiB retained in aggregate.
 
-Login and recording explicitly require Chromium sandboxing. PKCS#11 configuration,
-login and private-key signing use owned helper processes. The host retains public
+Browser login and recording use only the installed Burp Browser. Automatic
+selection prefers the running installation when identifiable; ambiguous or missing
+installations require correction in Settings. A per-user explicit executable is
+authoritative, survives invalid paths for correction and never enters project or
+journey exports. Selection is captured afresh per attempt, with no retry of another
+binary after launch failure. Verified bundled Node/driver files use the independent
+`drivers-v3` cache. Every browser launch owns a separate process, temporary profile
+and fresh context. BPSH never attaches to, reads, clears or terminates a user's
+existing browser/profile and never imports cookies or storage from it.
+
+Login and recording explicitly require Chromium sandboxing. Linux must allow the
+installed Burp Browser to create the namespaces its sandbox requires; AppArmor policy can
+restrict this permission. A confirmed native sandbox failure reports this
+prerequisite with administrator guidance. PKCS#11 configuration, login and
+private-key signing use owned helper processes. The host retains public
 certificate chains and opaque signing references, not native key handles. Unload
 revokes admission, attempts every resource close despite individual failures and
 observes bounded worker/helper termination away from the EDT. A helper failure or

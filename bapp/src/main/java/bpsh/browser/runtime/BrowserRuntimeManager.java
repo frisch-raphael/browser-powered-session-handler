@@ -43,7 +43,7 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 import static bpsh.browser.runtime.BrowserManifestCodec.*;
 
 /**
- * Verifies and extracts only the JAR's bundled browser assets, with no network/install fallback.
+ * Verifies and extracts only the JAR's bundled driver assets, with no network/install fallback.
  *
  * Each extension instance fully verifies its first cache acquisition, then reuses an immutable
  * ready handle. Published caches are never repaired/deleted in place. Cancellation cleans only
@@ -306,7 +306,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
         try {
             long usable = Files.getFileStore(parent).getUsableSpace();
             if (usable > 0 && usable < manifest.expandedBytes() + manifest.unpackedBytes())
-                throw failure(AuthenticationFailure.Cause.CONFIGURATION, "There is not enough free space to prepare the bundled browser.",
+                throw failure(AuthenticationFailure.Cause.CONFIGURATION, "There is not enough free space to prepare the bundled driver.",
                         "Free space for the selected archive and extracted browser, then try again.");
         } catch (IOException | UnsupportedOperationException | SecurityException ignored) { /* no positive space evidence */ }
         Path stage = parent.resolve(bundle + ".staging-" + UUID.randomUUID());
@@ -505,7 +505,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
      */
     private InputStream resource(String name) throws AuthenticationFailure {
         try { return resources.open(name); }
-        catch (IOException ex) { throw failure(AuthenticationFailure.Cause.ASSET_MISSING, "The extension JAR is missing its bundled browser files.", "Rebuild or download the complete universal extension JAR, then reload it."); }
+        catch (IOException ex) { throw failure(AuthenticationFailure.Cause.ASSET_MISSING, "The extension JAR is missing its bundled driver files.", "Rebuild or download the complete universal extension JAR, then reload it."); }
     }
 
     /**
@@ -629,7 +629,7 @@ public final class BrowserRuntimeManager implements AutoCloseable {
      */
     public static AuthenticationFailure setupFailure(Exception error, String safe) {
         if (error instanceof java.nio.file.AccessDeniedException)
-            return failure(AuthenticationFailure.Cause.CONFIGURATION, "Burp cannot access the bundled browser files.",
+            return failure(AuthenticationFailure.Cause.CONFIGURATION, "Burp cannot access the bundled driver files.",
                     "Allow Burp to read, write and execute files in its browser cache.");
         if (error instanceof InvalidAsset || error instanceof java.util.zip.ZipException || error instanceof java.nio.file.NoSuchFileException)
             return failure(AuthenticationFailure.Cause.ASSET_CORRUPT, safe, "Reload the complete universal extension JAR and check the selected cache.");

@@ -185,6 +185,47 @@ public class BrowserJourneyIntegrationTest {
         }
     }
 
+    public @Test void tokenCaptureIncludesAnImmediatePopupFetch() throws Exception {
+        try(var origin=IntegrationFixtures.http();var values=SecretStore.Values.empty()) {
+            origin.route("/login",e->IntegrationFixtures.respond(e,200,"text/html",
+                    "<button id=open onclick=\"window.open('/popup')\">Open</button><script>addEventListener('message',()=>document.body.insertAdjacentHTML('beforeend','<div id=done>Done</div>'))</script>"));
+            origin.route("/popup",e->IntegrationFixtures.respond(e,200,"text/html","<script>fetch('/token').then(r=>r.json()).then(()=>opener.postMessage('done','*'))</script>"));
+            origin.route("/token",e->IntegrationFixtures.respond(e,200,"application/json","{\"access_token\":\"popup-token\"}"));origin.start();
+            assertEquals("popup-token",run(IntegrationFixtures.journey(origin,List.of(step(AuthStep.Type.CLICK,"#open",null),step(AuthStep.Type.WAIT_SELECTOR,"#done",null))),values).token());
+        }
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    public void tokenResponseLimitCoversForwardedServiceWorkerResponses(boolean large) throws Exception {
+        try(var origin=IntegrationFixtures.http();var values=SecretStore.Values.empty()) {
+            origin.route("/login",e->IntegrationFixtures.respond(e,200,"text/html","<script>navigator.serviceWorker.addEventListener('controllerchange',()=>fetch('/token'));navigator.serviceWorker.register('/sw.js')</script>"));
+            origin.route("/sw.js",e->IntegrationFixtures.respond(e,200,"application/javascript","self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname==='/token')e.respondWith(fetch('/upstream'))})"));
+            origin.route("/upstream",e->IntegrationFixtures.respond(e,200,"application/json","{\"access_token\":\"forwarded-token\",\"padding\":\""+"x".repeat(large?1048576:10)+"\"}"));origin.start();
+            var journey=IntegrationFixtures.journey(origin,List.of());
+            if(large)assertTrue(assertThrows(AuthenticationFailure.class,()->run(journey,values)).getMessage().contains("extraction limit"));
+            else assertEquals("forwarded-token",run(journey,values).token());
+        }
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"popup","service-worker"})
+    public void controlledLabResponseSurfacesAuthenticateTheCapturedAccount(String surface) throws Exception {
+        var spec=new lab.auth.LabRun.RunSpec(UUID.randomUUID(),List.of("browser"),lab.auth.ScenarioCatalog.load(),isolationTemporary,List.of(),60000);
+        try(var fixtureRun=lab.auth.LabRun.start(spec);var client=lab.auth.ControlledApplication.localClientBuilder().build()) {
+            String id="BROW.surfaces."+surface;var target=fixtureRun.prepareCase(id);var secret=step(AuthStep.Type.SECURE_INPUT,"#pass",null);
+            var steps=List.of(step(AuthStep.Type.INPUT,"#user","user2"),secret,step(AuthStep.Type.CLICK,"#login",null),
+                    step(AuthStep.Type.CLICK,"#surface-entry",null),step(AuthStep.Type.WAIT_SELECTOR,"#ready",null),
+                    step(AuthStep.Type.CLICK,surface.equals("popup")?"#open-popup":"#fetch-token",null),step(AuthStep.Type.WAIT_SELECTOR,"#done",null));
+            var base=IntegrationFixtures.journey(target.endpoint("start"),steps);
+            var extraction=new JourneyDefinition.JsonExtraction(bpsh.authentication.credentials.TokenExtractor.origin(base.authenticationUrl()),
+                    "/cases/"+id+"/surface/"+(surface.equals("service-worker")?"sw/token":"token"),"data.access_token");
+            var journey=new JourneyDefinition(base.id(),base.displayName(),base.alias(),base.authenticationUrl(),false,steps,base.browser(),extraction,base.injection(),base.cache(),null);
+            try(var values=new SecretStore.Values(null,Map.of(secret.id(),"pass2".toCharArray()))) {
+                var result=run(journey,values);
+                var proof=client.send(java.net.http.HttpRequest.newBuilder(target.endpoint("protected/b")).header("Authorization","Bearer "+result.token()).GET().build(),java.net.http.HttpResponse.BodyHandlers.ofString());
+                assertEquals(200,proof.statusCode());assertEquals("user2",new com.fasterxml.jackson.databind.ObjectMapper().readTree(proof.body()).path("accountId").asText());
+            }
+        }
+    }
     public @Test void tokenCaptureStreamsOutOfProcessFrameResponses() throws Exception {
         try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
             origin.route("/login", e -> IntegrationFixtures.respond(e, 200, "text/html", "<iframe src='http://localhost:" + origin.url("/").getPort() + "/token'></iframe>"));

@@ -7,7 +7,7 @@
 
 ## Overview
 
-Allow a Burp user to create login journey steps by performing the login in a visible browser. The resulting steps appear in the existing Login steps editor, where the user can inspect and edit them before testing replay. This extends the Java-owned extension and its bundled browser runtime.
+Allow a Burp user to create login journey steps by performing the login in a visible browser. The resulting steps appear in the existing Login steps editor, where the user can inspect and edit them before testing replay. This extends the Java-owned extension and its installed Burp Browser and bundled drivers.
 
 This design uses the bundled Playwright recorder through a version-pinned Java adapter for form controls, frames and popups, and replacement of the current step sequence after review. Password inputs become secret steps with their recorded values retained; explicit context-switch steps control page and frame targeting.
 
@@ -690,7 +690,7 @@ Binding refresh updates existing configuration fingerprints across catalog data 
 
 ### Verification and delivery
 
-Use deterministic unit fixtures for transformation/ownership behavior and the real bundled browser for event transport, navigation and replay. Tests must assert actual values/state and protected identity, not only that a callback ran. Keep fixture passwords local to tests; no production credentials enter evidence. No percentage coverage target substitutes for the cases below.
+Use deterministic unit fixtures for transformation/ownership behavior and the installed Burp Browser for event transport, navigation and replay. Tests must assert actual values/state and protected identity, not only that a callback ran. Keep fixture passwords local to tests; no production credentials enter evidence. No percentage coverage target substitutes for the cases below.
 
 | Scope | Required observed outcome |
 | --- | --- |

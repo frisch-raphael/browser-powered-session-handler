@@ -95,7 +95,13 @@ The builder chooses internal class names, filesystem adapters, concrete helper f
 
 ## Current evidence and references
 
-The prototype only selects an explicit installed executable while still preparing the full browser bundle. It has not executed the new isolation test or qualified a smaller JAR. The recorded full build produced a 530,340,132-byte artifact and failed four authentication-lab tests; it is not a successful delivery of this design.
+The driver-only runtime, installed-browser resolver and local Settings are implemented.
+The direct browser and disposable software-token suites have executed against the
+canonical artifact. Captured acceptance exposed an evidence serializer boundary,
+early popup response attachment and a completed service-worker response race;
+regressions and fixes are under qualification. Exact-artifact VM qualification
+and native Intel macOS execution must be reported separately. Build/test results
+remain tied to their specific artifact, rather than inherited prototype reports.
 
 - [Playwright executable selection and compatibility warning](https://playwright.dev/java/docs/api/class-browsertype#browser-type-launch-option-executable-path): an external executable is supported as an option, but arbitrary Chromium compatibility is not guaranteed.
 - [PortSwigger PwnFox](https://github.com/PortSwigger/pwnfox-for-chromium#burp-browser-location): prior art for installed Burp Browser discovery and platform layouts, not proof of this extension's compatibility or isolation.

@@ -226,7 +226,7 @@ public final class PlaywrightDriverAdapter {
     public static AuthenticationFailure startupFailure(Throwable error, boolean exited) {
         if (error instanceof LinkageError || error.getCause() instanceof LinkageError)
             return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,
-                    "The bundled browser runtime could not load.", "Reload the complete universal extension JAR, then try again.");
+                    "The bundled driver runtime could not load.", "Reload the complete universal extension JAR, then try again.");
         var cause = error instanceof java.nio.file.AccessDeniedException ? AuthenticationFailure.Cause.CONFIGURATION
                 : error instanceof java.nio.file.NoSuchFileException ? AuthenticationFailure.Cause.ASSET_MISSING : AuthenticationFailure.Cause.UNKNOWN;
         String safe = cause == AuthenticationFailure.Cause.CONFIGURATION ? "Burp cannot execute the bundled browser driver."

@@ -52,7 +52,8 @@
     "bpsh.burp.http.SessionRoutingTest.taggedExcludedToolUsesProxyRecoveryWithoutJoiningEqualGlobalIds",
     "bpsh.burp.http.SessionRoutingTest.capturedNativeLookingDataCannotTriggerAnotherGlobalCredentialPass",
     "bpsh.burp.ui.AutoSaveLoginTest.invalidCompiledRulesAndFailedStorageKeepTheAppliedPublication",
-    "bpsh.burp.ui.AutoSaveLoginTest.listenerExportsAreCoalescedOffEdtWithoutSavingOrStartingAuthentication"
+    "bpsh.burp.ui.AutoSaveLoginTest.listenerExportsAreCoalescedOffEdtWithoutSavingOrStartingAuthentication",
+    "bpsh.burp.ui.JourneyRegistryTest.evidenceCaptureKeepsJacksonValuesAsJson"
   ],
   "federationMethods": [
     "bpsh.browser.FederationJourneyIntegrationTest.realBrowserOutputsAuthenticateExpectedAccountsWithFreshIssuances",

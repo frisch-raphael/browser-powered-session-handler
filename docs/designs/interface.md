@@ -462,11 +462,22 @@ send-unchanged versus explicit fail-closed policy. The Setup proxy tooltip names
 browser login, recording and Basic/NTLM delivery and explains that an empty field
 means direct and Burp upstream-proxy settings are not inherited.
 
-A sandboxed Chromium launch is required. Unknown launch failures report that
-Chromium could not start, without inferring missing libraries or sandbox
-permissions. A typed startup timeout is identified separately. Test errors with
-no associated UI input may use a generic popup; input/step errors use the inline
-route above. Recording retains its existing error route.
+Settings includes a native **Burp Browser** group with an editable executable,
+**Browse**, **Use automatic**, detected/selected location and persistent help about
+separate temporary sessions. The raw per-user selection stays visible even when
+invalid. Clearing it restores automatic discovery. File discovery runs on workers;
+stale results cannot overwrite a newer selection or unloaded UI. Paths render as
+literal text with plain accessible descriptions and the normal tooltip factory.
+The override is absent from journey/project exports and affects later attempts.
+
+Browser prerequisite and launch errors appear inline at this group. Explicit
+Test login, Retry and recording reveal Settings and focus the executable input,
+with no error popup. Background failures display the result without navigation or
+focus changes. Unknown failures say Burp Browser could not start without inferring
+missing libraries, permissions or version incompatibility. Confirmed sandbox
+failures and startup timeouts have specific guidance. A sandboxed launch is always
+required. A generic popup remains available only for errors without an associated
+input or journey step.
 Recorded option values and event rows disable Swing HTML before their first text
 assignment, while their literal saved/replayed values remain unchanged.
 

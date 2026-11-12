@@ -133,11 +133,40 @@ class ProductionEvidenceTest {
         String pickerInput=pickerRow.binding().methodSignature().replaceFirst("\\(\\)$","");
         var pickerContext=context.deepCopy();pickerContext.addProperty("taskPath",":authLabTransportTest");
         var picker=pickerContext.deepCopy();picker.addProperty("version",1);picker.addProperty("input",pickerInput);picker.addProperty("cleanup","COMPLETE");
-        picker.add("timings",process.get("timings"));picker.add("observed",LabRun.JSON.toJsonTree(Map.of("drivers",0,"processes",1,"alive",0)));
+        picker.add("timings",process.get("timings"));picker.add("observed",LabRun.JSON.toJsonTree(Map.of("drivers",0,"processes",0,"alive",0)));
         Path pickerFile=directory.resolve("process-observations/"+LabEvidence.sha256(pickerInput.getBytes(java.nio.charset.StandardCharsets.UTF_8))+".json");
-        Files.writeString(pickerFile,picker.toString());assertNotNull(LabTransportEvidence.read(directory,pickerRow,pickerContext),"PIN-free discovery has an owned helper even though no browser is opened.");
+        var providers=picker.deepCopy();providers.addProperty("input","Pkcs11JourneyIntegrationTest.providers");providers.add("observed",LabRun.JSON.toJsonTree(Map.of("drivers",0,"processes",1,"alive",0)));
+        Path providerFile=directory.resolve("process-observations/providers.json");Files.writeString(providerFile,providers.toString());
+        Files.writeString(pickerFile,picker.toString());assertNotNull(LabTransportEvidence.read(directory,pickerRow,pickerContext),"PIN-free discovery has suite-scoped helper closure even though no browser is opened.");
         picker.getAsJsonObject("observed").addProperty("alive",1);Files.writeString(pickerFile,picker.toString());assertNull(LabTransportEvidence.read(directory,pickerRow,pickerContext),"A surviving discovery helper must reject cleanup.");
-        picker.getAsJsonObject("observed").addProperty("alive",0);picker.getAsJsonObject("observed").addProperty("processes",0);Files.writeString(pickerFile,picker.toString());assertNull(LabTransportEvidence.read(directory,pickerRow,pickerContext),"Absent helper observation cannot establish discovery cleanup.");
+        picker.getAsJsonObject("observed").addProperty("alive",0);Files.writeString(pickerFile,picker.toString());
+        providers.getAsJsonObject("observed").addProperty("processes",0);Files.writeString(providerFile,providers.toString());
+        assertNull(LabTransportEvidence.read(directory,pickerRow,pickerContext),"Absent helper observation cannot establish discovery cleanup.");
+    }
+    @Test void nativeTransportRequiresCurrentSuiteProviderClosureInAdditionToEachBrowser() throws Exception {
+        var row=ScenarioCatalog.load().requirement("TLS.mtls.expected-fingerprint");
+        String input=row.binding().methodSignature().replaceFirst("\\(\\)$", "");
+        var c=context.deepCopy();c.addProperty("taskPath",":authLabTransportTest");
+        var process=c.deepCopy();process.addProperty("version",1);process.addProperty("input",input);process.addProperty("cleanup","COMPLETE");
+        process.add("observed",LabRun.JSON.toJsonTree(Map.of("drivers",2,"processes",8,"alive",0)));
+        process.add("timings",LabRun.JSON.toJsonTree(Map.of("startupMs",0,"caseMs",2,"cleanupMs",1)));
+        Files.createDirectories(directory.resolve("process-observations"));
+        Files.writeString(directory.resolve("process-observations/"+LabEvidence.sha256(input.getBytes(java.nio.charset.StandardCharsets.UTF_8))+".json"),process.toString());
+        assertNull(LabTransportEvidence.read(directory,row,c), "Closed browsers cannot hide missing suite provider closure.");
+        var providers=c.deepCopy();providers.addProperty("version",1);providers.addProperty("input","Pkcs11JourneyIntegrationTest.providers");providers.addProperty("cleanup","COMPLETE");
+        providers.add("observed",LabRun.JSON.toJsonTree(Map.of("drivers",0,"processes",3,"alive",0)));providers.add("timings",process.get("timings"));
+        Path receipt=directory.resolve("process-observations/providers.json");Files.writeString(receipt,providers.toString());
+        assertNotNull(LabTransportEvidence.read(directory,row,c));
+        for(String field:List.of("input","invocationId","taskPath","productionRevision","configurationHash","cleanup")) {
+            var foreign=providers.deepCopy();foreign.addProperty(field,"foreign");Files.writeString(receipt,foreign.toString());
+            assertNull(LabTransportEvidence.read(directory,row,c),field);
+        }
+        for(String field:List.of("alive","drivers","processes")) {
+            var invalid=providers.deepCopy();invalid.getAsJsonObject("observed").addProperty(field,field.equals("processes")?0:1);Files.writeString(receipt,invalid.toString());
+            assertNull(LabTransportEvidence.read(directory,row,c),field);
+        }
+        var invalid=providers.deepCopy();invalid.addProperty("ignored",true);Files.writeString(receipt,invalid.toString());
+        assertNull(LabTransportEvidence.read(directory,row,c),"Unknown provider receipt fields are rejected.");
     }
     @Test void unavailableTransportCannotEarnTheExpectedResultFromAnAuthenticationMisclassification() {
         var a=LabRun.JSON.toJsonTree(Map.of("phase","PROXY","cause","PROXY_AUTH","retryable",false,"originRequests",0,"configuredProxyHadCredentials",false)).getAsJsonObject();

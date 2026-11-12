@@ -89,14 +89,14 @@ class JourneyRecordingTest {
     @Test void startupProgressIdentifiesTheBlockedStageBeforeRecordingIsReady() throws Exception {
         var h = harness(); try (var fake = new Fake(); var editor = h.new Editor(fixture(), null, null, fake)) {
             fake.ready = false; open(h, editor); start(h, editor, fake);
-            for (var phase : Map.of(JourneyRecording.State.EXTRACTING_BROWSER, "Extracting bundled browser files...",
+            for (var phase : Map.of(JourneyRecording.State.EXTRACTING_BROWSER, "Extracting bundled driver files...",
                     JourneyRecording.State.STARTING_DRIVER, "Starting the browser driver...",
-                    JourneyRecording.State.STARTING_BROWSER, "Starting Chromium...").entrySet()) {
+                    JourneyRecording.State.STARTING_BROWSER, "Starting Burp Browser...").entrySet()) {
                 h.edt(() -> fake.observer.accept(new JourneyRecording.Event(phase.getKey(), null, null)));
                 h.edt(() -> { assertEquals(phase.getValue(), dialog(h, editor).progress.getText()); assertFalse(dialog(h, editor).stop.isEnabled()); });
             }
             h.edt(() -> fake.observer.accept(new JourneyRecording.Event(JourneyRecording.State.CLOSED, null,
-                    new JourneyRecording.Problem(JourneyRecording.Field.GENERAL, "The bundled browser runtime could not load."))));
+                    new JourneyRecording.Problem(JourneyRecording.Field.GENERAL, "The bundled driver runtime could not load."))));
             h.edt(() -> { assertNull(dialog(h, editor)); assertTrue(((SessionStatusBar) h.member(editor.ui, "status")).getText().contains("runtime could not load")); });
         }
     }

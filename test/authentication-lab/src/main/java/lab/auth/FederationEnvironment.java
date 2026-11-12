@@ -353,9 +353,12 @@ public final class FederationEnvironment implements AutoCloseable {
     }
     /** Labels alone are insufficient: the retained immutable ID must also match the actual object. */
     private void verifyOwner(JsonObject observed,String id) throws IOException {
-        var labels=observed.has("bpsh.request.RequestSettings")?observed.getAsJsonObject("bpsh.request.RequestSettings").getAsJsonObject("Labels"):observed.getAsJsonObject("Labels");
-        if(!id.equals(LabRun.text(observed,"Id"))||labels==null||!owner.runId().toString().equals(LabRun.text(labels,"authlab.run"))
-                ||!owner.spec().invocationId().toString().equals(LabRun.text(labels,"authlab.invocation")))throw new IOException("Docker resource ownership differs; it was not removed.");
+        verifyDockerOwner(observed,id,owner.runId(),owner.spec().invocationId());
+    }
+    static void verifyDockerOwner(JsonObject observed,String id,UUID runId,UUID invocationId) throws IOException {
+        var labels=observed.has("Config")?observed.getAsJsonObject("Config").getAsJsonObject("Labels"):observed.getAsJsonObject("Labels");
+        if(!id.equals(LabRun.text(observed,"Id"))||labels==null||!runId.toString().equals(LabRun.text(labels,"authlab.run"))
+                ||!invocationId.toString().equals(LabRun.text(labels,"authlab.invocation")))throw new IOException("Docker resource ownership differs; it was not removed.");
     }
     /** Invokes Docker without a shell; failures never echo captured environment/seed contents. */
     private static String docker(List<String> arguments) throws Exception {

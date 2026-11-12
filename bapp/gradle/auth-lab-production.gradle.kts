@@ -94,7 +94,12 @@ listOf("authLabComponentTest", "authLabBrowserTest", "authLabFederationTest", "a
                 val source = predecessorRoot.resolve("bapp/build/third-party/jcifs-ng-source.zip")
                 check(source.isFile && labFileSha(source) == sourceLock["sha256"]) { "Prepare the pinned jcifs source before captured browser acceptance." }
                 val target = productionSnapshot.resolve("bapp/build/third-party/jcifs-ng-source.zip")
-                target.parentFile.mkdirs(); Files.copy(source.toPath(), target.toPath())
+                target.parentFile.mkdirs()
+                if (!Files.exists(target.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)) Files.copy(source.toPath(), target.toPath())
+                check(Files.isRegularFile(target.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        && labFileSha(target)==sourceLock["sha256"] && labFileSha(source)==sourceLock["sha256"]) {
+                    "Captured pinned jcifs source differs."
+                }
             }
             // Running target JVMs must never load a JAR being replaced by another lab build.
             val labClasspath = rootProject.configurations.getByName("authLabRuntime").files.sortedBy { it.name }.map { source ->

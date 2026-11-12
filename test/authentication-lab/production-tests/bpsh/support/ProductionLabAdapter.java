@@ -51,17 +51,22 @@ public final class ProductionLabAdapter {
         });
     }
     public static void finishProcessObservation(String input,BrowserProcesses processes,int expectedDrivers) throws Exception {
+        try{retainProcessClosure(input,processes,digest(input));}finally{PROCESS_INPUT.remove();}
+        if(expectedDrivers>0)processes.requireObserved(expectedDrivers);else assertEquals(0,processes.drivers(),"This setup/picker operation must not launch a browser.");
+    }
+    /** Shared PKCS#11 helpers close with their suite owner, after all browser attempts. */
+    public static void finishProviderObservation(BrowserProcessWitness processes) throws Exception {
+        retainProcessClosure("Pkcs11JourneyIntegrationTest.providers",processes,"providers");processes.requireObserved(0);
+    }
+    private static void retainProcessClosure(String input,BrowserProcessWitness processes,String name) throws Exception {
         long cleanupBegan=System.nanoTime();boolean cleaned=false;
         try{processes.close();cleaned=true;}
         finally {
-            try {
                 var capture=processEnvelope(input,Map.of("drivers",processes.drivers(),"processes",processes.processes(),"alive",processes.alive()));
                 capture.put("cleanup",cleaned&&processes.alive()==0?"COMPLETE":"INCOMPLETE");
                 capture.put("timings",Map.of("startupMs",0,"caseMs",TimeUnit.NANOSECONDS.toMillis(cleanupBegan-processes.began),"cleanupMs",TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-cleanupBegan)));
-                writeProcessCapture("process-observations",digest(input),capture);
-            }finally{PROCESS_INPUT.remove();}
+                writeProcessCapture("process-observations",name,capture);
         }
-        if(expectedDrivers>0)processes.requireObserved(expectedDrivers);else assertEquals(0,processes.drivers(),"This setup/picker operation must not launch a browser.");
     }
     public static void retainProcessFacts(String label,Map<String,Object> facts) throws Exception {
         String input=java.util.Objects.requireNonNull(PROCESS_INPUT.get(),"Facts need their actual executing input scope.");

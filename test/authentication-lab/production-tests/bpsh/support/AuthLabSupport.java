@@ -35,7 +35,9 @@ public final class AuthLabSupport implements AutoCloseable {
         component(id, observed, null);
     }
     public static void component(String id, Map<String, Object> observed, Map<String, Long> timings) throws Exception {
-        lab.auth.LabObservationCapture.write(id, observed, timings);
+        // Cross the serializer boundary as JSON values, never Jackson implementation fields.
+        Map<String,Object> values=JSON.convertValue(observed,new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        lab.auth.LabObservationCapture.write(id, values, timings);
     }
     public final JsonNode plan;
     public final Path report, environment;

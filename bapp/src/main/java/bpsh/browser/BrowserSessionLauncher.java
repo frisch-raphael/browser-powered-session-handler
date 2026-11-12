@@ -242,7 +242,7 @@ public final class BrowserSessionLauncher {
             AuthenticationFailure failure;
             if (error instanceof AuthenticationFailure classified) failure = classified;
             else if (error instanceof LinkageError) failure = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
-                    AuthenticationFailure.Cause.CONFIGURATION, "The bundled browser runtime could not load.",
+                    AuthenticationFailure.Cause.CONFIGURATION, "The bundled driver runtime could not load.",
                     "Reload the complete universal extension JAR, then try again.");
             else {
                 try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled); }
