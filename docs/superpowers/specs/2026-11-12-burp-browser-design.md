@@ -1,6 +1,6 @@
 # Burp Browser with isolated BPSH sessions
 
-Status: proposed design; awaiting user approval. The user selected Burp Browser exclusively, with no fallback, on 2026-11-12. That selection approves the delivery approach, not this design or the existing prototype.
+Status: approved on 2026-11-12; implementation not started. The user selected Burp Browser exclusively, with no fallback, and then approved this written design. The existing prototype remains unqualified.
 
 ## Intent and success
 
