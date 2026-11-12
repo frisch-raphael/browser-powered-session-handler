@@ -12,6 +12,8 @@ import javax.swing.JButton;
 import javax.swing.JTextArea;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Verifies confirmed recovery in the existing project, including cancellation and failed writes. */
@@ -79,6 +81,40 @@ class ProjectStorageResetTest {
             harness.await(() -> { try { return editor.status().contains("Project storage reset"); } catch (Exception failure) { return false; } });
             assertEquals(2, dialogs.confirmations);
             assertFalse(editor.registry.snapshot().unavailableScopes().contains(JourneyDefinition.Scope.PROJECT));
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"unversioned", "unsupported"})
+    void resetRecoversOldRuleStorageWithoutExposingOrKeepingProjectSecrets(String version) throws Exception {
+        var project = (com.fasterxml.jackson.databind.node.ObjectNode) JourneyRegistryTest.JSON.readTree(
+                JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, true, true));
+        var controls = (com.fasterxml.jackson.databind.node.ObjectNode) project.get("controls");
+        controls.putArray("rules");
+        if (version.equals("unsupported")) controls.put("rulesVersion", 99);
+        String stored = JourneyRegistryTest.JSON.writeValueAsString(project);
+        String library = JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.LIBRARY, true, true);
+        Files.writeString(root.resolve("library.json"), library);
+        var harness = harness();
+        try (var editor = harness.new Editor(stored)) {
+            harness.edt(() -> {
+                harness.call(editor.ui, "refreshJourneyUi", new Class<?>[]{});
+                JTextArea feedback = harness.member(editor.ui, "collectionFeedback");
+                assertTrue(feedback.getText().contains("Unsupported Session handling storage format"));
+                assertTrue(feedback.getText().contains("Reset project storage"));
+                assertFalse(feedback.getText().contains("EXAMPLE_SECRET"));
+            });
+            assertEquals(stored, editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY), "Rejected storage must survive until explicit confirmation");
+            install(editor.ui, new ResetDialogs(true));
+            harness.edt(() -> ((JButton) harness.member(editor.ui, "resetProjectStorageButton")).doClick(0));
+            harness.await(() -> { try { return editor.status().contains("Project storage reset"); } catch (Exception failure) { return false; } });
+            String reset = editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY);
+            assertFalse(reset.contains("EXAMPLE_SECRET"));
+            try (var parsed = JourneyJson.read(reset, JourneyDocument.DocumentKind.PROJECT)) {
+                assertTrue(parsed.journeys().isEmpty()); assertTrue(parsed.secrets().isEmpty());
+                assertEquals(RequestSettings.Controls.defaults(), parsed.controls());
+            }
+            assertEquals(library, Files.readString(editor.library.path()), "User journeys and their remembered secrets must survive");
+            assertEquals(1, editor.registry.snapshot().entries().size());
         }
     }
 

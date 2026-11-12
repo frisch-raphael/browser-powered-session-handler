@@ -22,7 +22,7 @@ class AutomaticRuleCodecTest {
 
     @Test void currentTypedRulesRoundTripAndUnsupportedLayoutsAreRejected() throws Exception {
         missingMembersInvalidPortTypesAndConflictingUrlMembersAreRejected();
-        unsupportedOrUnversionedRulesRequireANewProjectWithoutSilentReinterpretation();
+        unsupportedOrUnversionedRulesRequireExplicitResetWithoutSilentReinterpretation();
         for(String type:List.of("all_requests","burp_scope","prefix","regex"))for(Integer port:new Integer[]{null,8081}) {
             var root=project();var url=rule(root).putObject("url");url.put("type",type);
             if(type.equals("prefix"))url.put("value","https://app.example/api/");
@@ -55,7 +55,7 @@ class AutomaticRuleCodecTest {
         }
     }
 
-    private void unsupportedOrUnversionedRulesRequireANewProjectWithoutSilentReinterpretation() throws Exception {
+    private void unsupportedOrUnversionedRulesRequireExplicitResetWithoutSilentReinterpretation() throws Exception {
         for(String version:List.of("null","\"1\"","1.5","2","-1")) {
             var root=project();((ObjectNode)root.get("controls")).set("rulesVersion",JourneyRegistryTest.JSON.readTree(version));
             var error=assertThrows(ConfigurationException.class,()->read(root));assertTrue(error.getMessage().contains("Reset project storage"));
