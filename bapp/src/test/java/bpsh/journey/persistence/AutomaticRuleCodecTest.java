@@ -58,7 +58,7 @@ class AutomaticRuleCodecTest {
     private void unsupportedOrUnversionedRulesRequireANewProjectWithoutSilentReinterpretation() throws Exception {
         for(String version:List.of("null","\"1\"","1.5","2","-1")) {
             var root=project();((ObjectNode)root.get("controls")).set("rulesVersion",JourneyRegistryTest.JSON.readTree(version));
-            var error=assertThrows(ConfigurationException.class,()->read(root));assertTrue(error.getMessage().contains("Use a new Burp project"));
+            var error=assertThrows(ConfigurationException.class,()->read(root));assertTrue(error.getMessage().contains("Reset project storage"));
         }
         var unversioned=project();((ObjectNode)unversioned.get("controls")).remove("rulesVersion");
         assertTrue(assertThrows(ConfigurationException.class,()->read(unversioned)).getMessage().contains("Unsupported Session handling storage format"));

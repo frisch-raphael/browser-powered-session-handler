@@ -195,6 +195,9 @@ public final class UserLibraryStore implements AutoCloseable {
                     .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
             JourneyDocument document = JourneyJson.read(json, JourneyDocument.DocumentKind.LIBRARY);
             return new Loaded(document, new Version(document.revision(), sha256(bytes)));
+        } catch (bpsh.journey.ConfigurationException ex) {
+            // Native validation messages contain only authored field paths and reasons, never input values.
+            throw new LibraryException(file, "cannot read the saved journey library: " + ex.getMessage());
         } catch (IOException | IllegalArgumentException ex) {
             // Never attach raw parser/IO causes that might contain JSON or credentials.
             throw new LibraryException(file, "cannot read the saved journey library");

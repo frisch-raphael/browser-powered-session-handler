@@ -107,9 +107,9 @@ rule's URL and listener restrictions understandable.
 - Choosing a journey dynamically from regex capture groups.
 - Migrating old session-handling rules, maintaining legacy rule readers or
   preserving old internal constructors/storage fields for compatibility.
-  Recovering an existing project whose stored rules are unsupported is also
-  outside scope. Its project journey collection may remain unavailable; use a
-  fresh Burp project. Do not automatically delete or rewrite unsupported storage.
+  Unsupported stored rules block the Project collection. Offer a confirmed reset
+  of BPSH project storage in the existing Burp project, preserving User journeys
+  and other Burp data. Do not automatically delete or rewrite unsupported storage.
 - Adding new response selectors; existing response-based recovery remains separate.
 
 ## Critical User Journeys
@@ -326,10 +326,10 @@ URL fields or an old-rule conversion path.
 
 The author explicitly removed the backward-compatibility requirement for rule
 storage. Replace the old rule layout with the versioned current layout specified
-below. Reject unsupported/unversioned stored rules with guidance to use a fresh
-Burp project. The author accepts that the existing project's whole journey
-collection may remain unavailable; no recovery/reset flow for that project is
-required. Never reinterpret old rules as unrestricted or automatically overwrite
+below. Reject unsupported/unversioned stored rules and offer **Reset project
+storage...** beside the persistent error. Confirmation replaces only BPSH's
+project entry with an empty current-format document, keeping User journeys and
+all other Burp project data. Never reinterpret old rules as unrestricted or automatically overwrite
 the document. Reject out-of-range ports, unsupported matcher kinds and conflicting
 URL members at the shared codec boundary. Serialize explicitly so compiled
 patterns and display-only listener states cannot enter storage. Keep project
@@ -616,9 +616,8 @@ but would constrain the current model or require a conversion path.
 for session-handling rules is not required. Use one typed URL condition and the
 current versioned rule block; remove obsolete rule fields/readers rather than
 maintain them for old documents. Unsupported stored rules produce an explicit
-load error directing the user to a fresh Burp project, without silent
-reinterpretation or automatic data deletion. Recovering the existing project's
-journey collection is explicitly not required.
+load error with an explicit, confirmed reset of BPSH project storage in place,
+without silent reinterpretation or automatic data deletion.
 
 ## Open Questions
 
@@ -809,8 +808,9 @@ be supplied and supported. Writing project controls always emits rulesVersion: 1
 and the rules array, including when empty. A controls object that omits both
 rules members means no rules. Reject an unversioned rules array or an unsupported
 rulesVersion with the guidance “Unsupported Session handling storage format.
-Use a new Burp project.” Do not add migration, reset or recovery UI for the old
-project. Do not silently ignore or rewrite the saved block. Keep the surrounding journey
+Reset project storage to create journeys in this project.” Offer the confirmed
+reset described in [the interface contract](interface.md). Do not silently ignore
+or rewrite the saved block. Keep the surrounding journey
 envelope/secret representation unchanged: the new rule-version boundary does
 not require a migration of unrelated journey fields.
 

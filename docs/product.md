@@ -179,8 +179,10 @@ use the normal native Proxy DROP action on a best-effort basis. Successful Proxy
 or global retry. Captured data cannot create HTTP identity or ownership commands.
 
 Project controls use rulesVersion 1 with explicit typed url and nullable proxyPort
-members. Unsupported or unversioned saved rule arrays require a fresh Burp project;
-there is no silent migration or deletion of stored journeys. Invalid drafts and
+members. Unsupported or unversioned saved rule arrays block the Project collection
+and offer an explicit, confirmed reset of BPSH project storage in the same Burp
+project. User journeys and all other Burp project data remain intact; there is no
+silent migration or deletion of stored journeys. Invalid drafts and
 failed saves retain the last atomically applied controls and matching plan.
 
 ### Accepted Proxy DROP limitation

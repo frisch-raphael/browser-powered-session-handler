@@ -24,6 +24,16 @@ Save activity appears only in Event log: coalesced Info creation/success, Warnin
 for a temporary failure with a pending automatic retry, and Error when saving
 stops. Do not show Saving/Saved/Unsaved notices or a separate save-status widget.
 Retain stale-storage guidance when external changes require a reload.
+When a collection cannot be loaded, keep its specific storage error and recovery
+guidance visible beside the journey list, including an empty list. Creation
+reveals the same inline explanation without a popup. Changing collection shows
+only that collection's storage error; a healthy collection remains usable.
+For unavailable Project storage, offer **Reset project storage...** beside the
+error. Confirm deletion of BPSH project journeys, remembered secrets, unsaved
+journey edits and Session handling settings. Replace only the extension's native
+project entry with an empty valid document; preserve User journeys and all other
+Burp project data. A successful reset immediately permits creating journeys in
+the same Burp project. Cancel and failed writes leave the stored data intact.
 
 The list supports Ctrl/Shift multi-selection within the current collection. One
 selected journey opens its editor; several show a selection count and batch-action
