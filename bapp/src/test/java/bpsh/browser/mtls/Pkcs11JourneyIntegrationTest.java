@@ -141,7 +141,7 @@ class Pkcs11JourneyIntegrationTest {
             var journey = IntegrationFixtures.configured(base, base.authenticationUrl(), base.browser(), base.extraction(),
                     mtls("employee", List.of(TokenExtractor.origin(origin.url("/"))), root.resolve("ca.crt").toString()));
             var lifecycle = new java.util.concurrent.CopyOnWriteArrayList<bpsh.browser.BrowserSessionLauncher.Lifecycle>();
-            var launcher = new bpsh.browser.BrowserSessionLauncher(runtime, httpTransport, guard, Clock.systemUTC(), lifecycle::add);
+            var launcher = new bpsh.browser.BrowserSessionLauncher(runtime, IntegrationFixtures.browserResolver(), httpTransport, guard, Clock.systemUTC(), lifecycle::add);
             try (var recorder = new bpsh.browser.BrowserJourneyRecorder(launcher)) {
                 var identity = new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1);
                 var request = new bpsh.journey.JourneyRecording.Request(identity,

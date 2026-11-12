@@ -17,6 +17,13 @@ import bpsh.journey.SecretStore;
 import bpsh.authentication.session.AuthenticationCoordinator;
 import bpsh.authentication.session.CoordinatorFixtures;
 import bpsh.support.IntegrationFixtures;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.Page;
+import bpsh.journey.HttpAuthentication;
+import bpsh.journey.BrowserSetup;
+import bpsh.journey.JourneyRecording;
+import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import com.microsoft.playwright.BrowserType;
 import java.lang.reflect.Field;
 import java.net.URLClassLoader;
@@ -51,17 +58,8 @@ public class BrowserJourneyIntegrationTest {
             try (var values = SecretStore.Values.empty(); var session = launcher.open(identity, bpsh.journey.BrowserSetup.from(journey), values,
                     BrowserSessionLauncher.Visibility.HEADLESS, false, System.nanoTime() + TimeUnit.SECONDS.toNanos(30), () -> false, ignored -> {})) {
                 driver = session.driver();
-                var temporary = driver.getClass().getDeclaredField("temporary"); temporary.setAccessible(true);
-                owned = ((Path) temporary.get(driver)).toRealPath();
-                var commands = IntegrationFixtures.ownedBrowserCommandLines(driver).stream()
-                        .filter(command -> command.contains("--remote-debugging-pipe")).toList();
-                assertEquals(1, commands.size(), "Owned browser process metadata must expose its launch arguments");
-                String command = commands.getFirst();
-                var selected = java.util.regex.Pattern.compile("(?:^|\\s)(?:\"--user-data-dir=([^\"]+)\"|--user-data-dir=(\\S+))").matcher(command);
-                assertTrue(selected.find(), "Owned browser must declare a temporary user-data directory");
-                Path profile = Path.of(selected.group(1) == null ? selected.group(2) : selected.group(1)).toRealPath();
-                assertFalse(selected.find()); assertTrue(profile.startsWith(owned)); assertTrue(profiles.add(profile));
-                assertFalse(java.util.regex.Pattern.compile("(?:^|\\s|\")--no-sandbox(?:$|\\s|\")").matcher(command).find());
+                owned = IntegrationFixtures.driverTemporaryDirectory(driver);
+                assertTrue(profiles.add(IntegrationFixtures.ownedBrowserProfile(driver)));
 
             }
             assertTrue(driver.terminated()); assertFalse(Files.exists(owned), "The closed attempt must remove its owned temporary profile tree");
@@ -1036,4 +1034,206 @@ public class BrowserJourneyIntegrationTest {
             }
         }
     }
+    @org.junit.jupiter.api.io.TempDir Path isolationTemporary;
+    private static final String ISOLATION_PRIME="""
+        async () => {
+          localStorage.setItem('isolation-user','user-a');sessionStorage.setItem('isolation-user','user-a');
+          await new Promise((resolve,reject)=>{const r=indexedDB.open('isolation-user-a',1);
+            r.onupgradeneeded=()=>r.result.createObjectStore('identity');
+            r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result;
+              const tx=db.transaction('identity','readwrite');tx.objectStore('identity').put('user-a','account');
+              tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error)}});
+          await (await caches.open('isolation-user-a')).put('/cached-identity',new Response('user-a'));
+          await navigator.serviceWorker.register('/worker.js');await navigator.serviceWorker.ready;
+          return true;
+        }
+        """;
+    private static final String ISOLATION_SNAPSHOT="""
+        async () => {
+          const databases=(await indexedDB.databases()).map(d=>d.name).sort();
+          let databaseValue=null;
+          if(databases.includes('isolation-user-a')) databaseValue=await new Promise((resolve,reject)=>{
+            const request=indexedDB.open('isolation-user-a');request.onerror=()=>reject(request.error);
+            request.onsuccess=()=>{const db=request.result;const value=db.transaction('identity').objectStore('identity').get('account');
+              value.onsuccess=()=>{db.close();resolve(value.result??null)};value.onerror=()=>{db.close();reject(value.error)}};
+          });
+          const cached=await caches.match('/cached-identity');
+          const registrations=await navigator.serviceWorker.getRegistrations();
+          return {local:localStorage.getItem('isolation-user'),session:sessionStorage.getItem('isolation-user'),
+            databases,databaseValue,caches:(await caches.keys()).sort(),cacheValue:cached?await cached.text():null,
+            workers:registrations.length,activeWorkers:registrations.filter(r=>r.active?.state==='activated').length,
+            controlled:navigator.serviceWorker.controller!==null,
+            workerIdentity:navigator.serviceWorker.controller?await (await fetch('/worker-identity')).text():null};
+        }
+        """;
+    private static void seedControlState(Page page) {
+        assertEquals(true,page.evaluate(ISOLATION_PRIME));
+        page.waitForFunction("navigator.serviceWorker.controller?.state === 'activated'");
+    }
+    private static Object snapshotControlState(Page page) { return page.evaluate(ISOLATION_SNAPSHOT); }
+
+
+    @Test public void signedInPersistentProfileStaysIsolatedFromJourneysAndRecording() throws Exception {
+        try(var lab=IntegrationFixtures.httpAuthentication("BASIC",null);var state=IntegrationFixtures.http();
+            var values=new SecretStore.Values(null,Map.of(),"bravo-password".toCharArray())) {
+            state.route("/state",e->IntegrationFixtures.respond(e,200,"text/html","<title>Owned isolation fixture</title>"));
+            state.route("/worker.js",e->IntegrationFixtures.respond(e,200,"application/javascript",
+                    "self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname==='/worker-identity')e.respondWith(new Response('user-a'))});"));state.start();
+            var ready=runtime.acquire(System.nanoTime()+TimeUnit.SECONDS.toNanos(60),()->false);
+            var driver=PlaywrightDriverAdapter.open(ready,System.nanoTime()+TimeUnit.MINUTES.toNanos(3),()->false);
+            try(driver) {
+                var profile=isolationTemporary.resolve("owned-control-profile");
+                try(var control=driver.playwright().chromium().launchPersistentContext(profile,
+                        new BrowserType.LaunchPersistentContextOptions().setExecutablePath(bpsh.support.IntegrationFixtures.browserExecutable())
+                                .setHeadless(true).setChromiumSandbox(true).setTimeout(30000)
+                                .setHttpCredentials("user-a","alpha-password").setArgs(List.of("--no-proxy-server")))) {
+                    var controlLogin=control.newPage();controlLogin.navigate(lab.url("/login").toString());
+                    controlLogin.locator("#user").fill("user-a");controlLogin.locator("#submit").click();
+                    assertTrue(controlLogin.locator("#signed-in").isVisible());
+                    assertTrue(control.cookies().stream().anyMatch(c->c.name.equals("app-session")&&c.value.equals("session-user-a")));
+                    var controlState=control.newPage();controlState.navigate(state.url("/state").toString());
+                    assertEmptyState(controlState);
+                    assertThrows(AssertionError.class,()->assertSeededState(controlState),"Unseeded data must fail the positive-state oracle");
+                    seedControlState(controlState);assertSeededState(controlState);Object originalState=snapshotControlState(controlState);
+                    var originalCookies=cookieValues(control);
+                    assertContentMutationIsDetected(controlState,originalState);
+                    assertThrows(AssertionError.class,()->assertEmptyState(controlState),"Reusing A must fail the fresh-state witness");
+                    assertEquals(Map.of("user","user-a","protocol","BASIC"),controlLogin.evaluate("async ()=>(await fetch('/whoami')).json()"));
+
+                    var base=accountB(lab.url("/login"));var identity=new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT,base.id(),1);
+                    var launcher=new BrowserSessionLauncher(runtime, bpsh.support.IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC());
+                    // Verify absence before navigation, then inspect the same origins while the control is still alive.
+                    try(var fresh=launcher.open(identity,BrowserSetup.from(base),values,BrowserSessionLauncher.Visibility.HEADLESS,
+                            false,System.nanoTime()+TimeUnit.SECONDS.toNanos(60),()->false,ignored->{})) {
+                        assertTrue(fresh.context().cookies().isEmpty(),"A fresh attempt must not inherit the control profile cookie");
+                        var page=fresh.context().newPage();page.navigate(state.url("/state").toString());assertEmptyState(page);
+                        page.navigate(lab.url("/login").toString());assertTrue(page.locator("#user").isVisible());
+                        assertTrue(fresh.context().cookies().stream().noneMatch(c->c.name.equals("app-session")));
+                    }
+                    assertControlUnchanged(control,controlLogin,controlState,originalState,originalCookies,driver);
+                    assertEquals("session-user-b",run(base,values).token());
+                    assertControlUnchanged(control,controlLogin,controlState,originalState,originalCookies,driver);
+
+                    var completed=new CompletableFuture<JourneyRecording.Result>();
+                    try(var recorder=new BrowserJourneyRecorder(launcher,BrowserSessionLauncher.Visibility.HEADLESS,(context,controlAction)->{
+                        assertTrue(context.cookies().stream().noneMatch(c->c.name.equals("app-session")),"Recording must not inherit A or the previous B login");
+                        var page=context.pages().getFirst();page.navigate(state.url("/state").toString());assertEmptyState(page);page.navigate(lab.url("/login").toString());page.locator("#user").fill("user-b");page.locator("#submit").click();
+                        assertTrue(page.locator("#signed-in").isVisible());controlAction.stop();
+                    })) {
+                        var request=new JourneyRecording.Request(identity,new JourneyRecording.Stamp(identity.key(),1,UUID.randomUUID()),BrowserSetup.from(base));
+                        recorder.start(request,values.copy(),event->{
+                            if(event.state()==JourneyRecording.State.REVIEW)completed.complete(event.result());
+                            if(event.state()==JourneyRecording.State.CLOSED)completed.completeExceptionally(new AssertionError("Recording closed without review"));
+                        });
+                        try(var recorded=completed.get(60,TimeUnit.SECONDS)) {
+                            assertTrue(recorded.complete(),()->recorded.problems().toString());assertFalse(recorded.candidates().isEmpty());
+                            var replay=new JourneyDefinition(base.id(),base.displayName(),base.alias(),base.authenticationUrl(),false,
+                                    recorded.candidates().stream().map(JourneyRecording.Candidate::step).toList(),base.browser(),base.extraction(),
+                                    base.injection(),base.cache(),null,base.httpAuthentication(),null);
+                            assertEquals("session-user-b",run(replay,values).token());
+                        }
+                    }
+                    assertControlUnchanged(control,controlLogin,controlState,originalState,originalCookies,driver);
+                    // A later independent attempt must also start clean after B completed and its resources were closed.
+                    try(var fresh=launcher.open(identity,BrowserSetup.from(base),values,BrowserSessionLauncher.Visibility.HEADLESS,
+                            false,System.nanoTime()+TimeUnit.SECONDS.toNanos(60),()->false,ignored->{})) {
+                        assertTrue(fresh.context().cookies().isEmpty());var page=fresh.context().newPage();
+                        page.navigate(state.url("/state").toString());assertEmptyState(page);
+                    }
+                    assertControlUnchanged(control,controlLogin,controlState,originalState,originalCookies,driver);
+                    for (boolean cancelled : List.of(false, true)) {
+                        assertAttemptCleanup(launcher,identity,BrowserSetup.from(base),values,cancelled);
+                        assertControlUnchanged(control,controlLogin,controlState,originalState,originalCookies,driver);
+                    }
+                    assertEquals(0,lab.leakedDirectives.get());
+                    assertTrue(lab.observations.stream().anyMatch(o->o.user().equals("user-a")&&o.path().equals("/login")&&o.method().equals("POST")));
+                    assertEquals(3,lab.observations.stream().filter(o->o.user().equals("user-b")&&o.path().equals("/login")&&o.method().equals("POST")).count());
+                }
+            }
+            assertTrue(driver.terminated(),"The control must terminate its owned driver");
+        }
+    }
+    private static JourneyDefinition accountB(java.net.URI login) { return account(login,"user-b"); }
+    private static JourneyDefinition account(java.net.URI login,String user) {
+        return new JourneyDefinition(UUID.randomUUID(),"Isolated "+user,"isolated-"+user,login,false,
+                List.of(step(AuthStep.Type.INPUT,"#user",user),step(AuthStep.Type.CLICK,"#submit",null)),
+                new JourneyDefinition.Browser(true,null,30000,3000),
+                new JourneyDefinition.CookieExtraction(java.net.URI.create(login.getScheme()+"://"+login.getAuthority()+"/"),"app-session",null,"/"),
+                JourneyDefinition.Injection.perToken(List.of()),new JourneyDefinition.Cache(1800,10),null,
+                new HttpAuthentication(HttpAuthentication.Protocol.BASIC,user,"LAB","",Set.of(java.net.URI.create(login.getScheme()+"://"+login.getAuthority()+"/"))),null);
+    }
+    private static Map<String,String> cookieValues(BrowserContext context) {
+        var result=new TreeMap<String,String>();for(var cookie:context.cookies())result.put(cookie.domain+cookie.path+cookie.name,cookie.value);return result;
+    }
+    private static void assertSeededState(Page page) {
+        var state=(Map<?,?>)snapshotControlState(page);assertEquals("user-a",state.get("local"));assertEquals("user-a",state.get("session"));
+        assertEquals(List.of("isolation-user-a"),state.get("databases"));assertEquals(List.of("isolation-user-a"),state.get("caches"));
+        assertEquals("user-a",state.get("databaseValue"));assertEquals("user-a",state.get("cacheValue"));
+        assertEquals(1,((Number)state.get("workers")).intValue());assertEquals(1,((Number)state.get("activeWorkers")).intValue());assertEquals(true,state.get("controlled"));assertEquals("user-a",state.get("workerIdentity"));
+    }
+    private static void assertContentMutationIsDetected(Page page,Object original) {
+        page.evaluate("""
+            async () => { await new Promise((resolve,reject)=>{const r=indexedDB.open('isolation-user-a');
+              r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('identity','readwrite');
+                tx.objectStore('identity').put('mutated-account','account');tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error)}}); }
+            """);
+        var databaseMutation=(Map<?,?>)snapshotControlState(page);
+        assertEquals("mutated-account",databaseMutation.get("databaseValue"));
+        assertThrows(AssertionError.class,()->assertEquals(original,databaseMutation),"Same database name with changed record must fail the unchanged-state oracle");
+        seedControlState(page);assertEquals(original,snapshotControlState(page));
+        page.evaluate("async () => await (await caches.open('isolation-user-a')).put('/cached-identity',new Response('mutated-account'))");
+        var cacheMutation=(Map<?,?>)snapshotControlState(page);
+        assertEquals("mutated-account",cacheMutation.get("cacheValue"));
+        assertThrows(AssertionError.class,()->assertEquals(original,cacheMutation),"Same cache name with changed response must fail the unchanged-state oracle");
+        seedControlState(page);assertEquals(original,snapshotControlState(page));
+    }
+    private static void assertEmptyState(Page page) {
+        var state=(Map<?,?>)snapshotControlState(page);assertNull(state.get("local"));assertNull(state.get("session"));
+        assertEquals(List.of(),state.get("databases"));assertEquals(List.of(),state.get("caches"));assertEquals(0,((Number)state.get("workers")).intValue());assertEquals(0,((Number)state.get("activeWorkers")).intValue());
+        assertNull(state.get("databaseValue"));assertNull(state.get("cacheValue"));assertNull(state.get("workerIdentity"));assertEquals(false,state.get("controlled"));
+    }
+    private static void assertControlUnchanged(BrowserContext context,Page login,Page state,Object originalState,
+            Map<String,String> originalCookies,PlaywrightDriverAdapter.Session driver) {
+        assertFalse(driver.terminated());assertFalse(login.isClosed());assertEquals(originalCookies,cookieValues(context));
+        assertEquals(originalState,snapshotControlState(state));
+        assertEquals(Map.of("user","user-a","protocol","BASIC"),login.evaluate("async ()=>(await fetch('/whoami')).json()"));
+    }
+    private static void assertAttemptCleanup(BrowserSessionLauncher launcher,JourneyDefinition.Identity identity,BrowserSetup setup,SecretStore.Values values,boolean cancel) throws Exception {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean(); Path owned; PlaywrightDriverAdapter.Session driver;
+        try (var session = launcher.open(identity,setup,values,BrowserSessionLauncher.Visibility.HEADLESS,false,
+                System.nanoTime()+TimeUnit.SECONDS.toNanos(30),cancelled::get,ignored->{})) {
+            driver=session.driver();owned=IntegrationFixtures.driverTemporaryDirectory(driver);IntegrationFixtures.ownedBrowserProfile(driver);
+            var page=session.context().newPage();
+            if (cancel) { cancelled.set(true); assertThrows(com.microsoft.playwright.PlaywrightException.class,()->page.waitForTimeout(10000)); }
+            else assertThrows(com.microsoft.playwright.PlaywrightException.class,()->page.navigate("http://127.0.0.1:1/unavailable"));
+        }
+        assertTrue(driver.terminated());assertFalse(Files.exists(owned),"Failure/cancellation must remove only its owned profile root");
+    }
+
+    @Test public void concurrentAttemptsKeepAccountsAndProfilesSeparate() throws Exception {
+        try(var lab=IntegrationFixtures.httpAuthentication("BASIC",null);var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var barrier=new java.util.concurrent.CyclicBarrier(2);var profiles=java.util.concurrent.ConcurrentHashMap.<Path>newKeySet();
+            var launcher=new BrowserSessionLauncher(runtime,IntegrationFixtures.browserResolver(),httpTransport,guard,Clock.systemUTC());
+            var results=new java.util.ArrayList<java.util.concurrent.Future<String>>();
+            for(String user:List.of("user-a","user-b")) results.add(executor.submit(()->{
+                var journey=account(lab.url("/login"),user);var identity=new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT,journey.id(),1);
+                Path owned;PlaywrightDriverAdapter.Session driver;String token;
+                try(var values=new SecretStore.Values(null,Map.of(),(user.equals("user-a")?"alpha-password":"bravo-password").toCharArray());
+                    var session=launcher.open(identity,BrowserSetup.from(journey),values,BrowserSessionLauncher.Visibility.HEADLESS,false,
+                            System.nanoTime()+TimeUnit.SECONDS.toNanos(60),()->false,ignored->{})) {
+                    driver=session.driver();owned=IntegrationFixtures.driverTemporaryDirectory(driver);
+                    assertTrue(profiles.add(IntegrationFixtures.ownedBrowserProfile(driver)));assertTrue(session.context().cookies().isEmpty());
+                    barrier.await(20,TimeUnit.SECONDS);
+                    var page=session.context().newPage();page.navigate(lab.url("/login").toString());page.locator("#user").fill(user);page.locator("#submit").click();
+                    assertTrue(page.locator("#signed-in").isVisible());
+                    assertEquals(Map.of("user",user,"protocol","BASIC"),page.evaluate("async ()=>(await fetch('/whoami')).json()"));
+                    token=session.context().cookies().stream().filter(cookie->cookie.name.equals("app-session")).findFirst().orElseThrow().value;
+                }
+                assertTrue(driver.terminated());assertFalse(Files.exists(owned));return token;
+            }));
+            assertEquals("session-user-a",results.get(0).get(60,TimeUnit.SECONDS));assertEquals("session-user-b",results.get(1).get(60,TimeUnit.SECONDS));
+            assertEquals(2,profiles.size());assertEquals(0,lab.leakedDirectives.get());
+        }
+    }
+
 }

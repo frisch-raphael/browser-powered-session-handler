@@ -97,6 +97,21 @@ public final class IntegrationFixtures {
     public static Path browserExecutable() throws bpsh.authentication.AuthenticationFailure {
         return browserResolver().resolve(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30), () -> false).executable();
     }
+    /** Reads the private temporary root only from this test's already-owned driver. */
+    public static Path driverTemporaryDirectory(bpsh.browser.runtime.PlaywrightDriverAdapter.Session driver) throws Exception {
+        var field = driver.getClass().getDeclaredField("temporary"); field.setAccessible(true); return ((Path) field.get(driver)).toRealPath();
+    }
+    /** Independently observes the real browser profile and sandbox arguments within an owned process tree. */
+    public static Path ownedBrowserProfile(bpsh.browser.runtime.PlaywrightDriverAdapter.Session driver) throws Exception {
+        var commands = ownedBrowserCommandLines(driver).stream().filter(command -> command.contains("--remote-debugging-pipe")).toList();
+        assertEquals(1, commands.size(), "The owned browser must expose its launch arguments"); String command = commands.getFirst();
+        var selected = java.util.regex.Pattern.compile("(?:^|\\s)(?:\"--user-data-dir=([^\"]+)\"|--user-data-dir=(\\S+))").matcher(command);
+        assertTrue(selected.find(), "The owned browser must declare its temporary profile");
+        Path profile = Path.of(selected.group(1) == null ? selected.group(2) : selected.group(1)).toRealPath(); assertFalse(selected.find());
+        assertTrue(profile.startsWith(driverTemporaryDirectory(driver)));
+        assertFalse(java.util.regex.Pattern.compile("(?:^|\\s|\")--no-sandbox(?:$|\\s|\")").matcher(command).find());
+        return profile;
+    }
     /** Reads arguments only for native-job members or descendants of this test-owned driver. */
     public static List<String> ownedBrowserCommandLines(bpsh.browser.runtime.PlaywrightDriverAdapter.Session driver) throws Exception {
         if (!System.getProperty("os.name").startsWith("Windows")) {
@@ -108,7 +123,7 @@ public final class IntegrationFixtures {
         var members = job.getClass().getDeclaredField("members"); members.setAccessible(true);
         var identifiers = ((Map<?, ?>) members.get(job)).keySet().stream().map(value -> "ProcessId=" + ((Long) value).longValue()).toList();
         if (identifiers.isEmpty()) throw new AssertionError("The owned Windows job has no process witnesses.");
-        String script = "$commands=@(Get-CimInstance Win32_Process -Filter '" + String.join(" OR ", identifiers)
+        String script = "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$commands=@(Get-CimInstance Win32_Process -Filter '" + String.join(" OR ", identifiers)
                 + "' | Select-Object -ExpandProperty CommandLine);[Console]::Write((ConvertTo-Json -InputObject $commands -Compress))";
         Path shell = Path.of(System.getenv("SystemRoot"), "System32/WindowsPowerShell/v1.0/powershell.exe");
         Process observer = new ProcessBuilder(shell.toString(), "-NoProfile", "-NonInteractive", "-Command", script).redirectError(ProcessBuilder.Redirect.DISCARD).start();
