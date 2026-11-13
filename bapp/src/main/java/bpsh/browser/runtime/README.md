@@ -22,6 +22,12 @@ Verifies bundled platform assets and owns extraction, immutable cache publicatio
 
 BrowserRuntimeManager.java verifies manifests and members before publication. PlaywrightDriverAdapter.java confines sessions to their creating thread and terminates only owned processes.
 
+Windows containment failures retain only a closed operation, unsigned native
+error/wait result and deadline flag. A session attaches at most its first
+observation failure and first close failure to its existing lifecycle error;
+vendor messages, causes and suppression graphs are discarded. These diagnostics
+do not weaken termination checks or extend cleanup budgets.
+
 ## Side Effects
 
 Reads packaged resources, writes private caches/locks/temp files and starts the bundled Node driver.

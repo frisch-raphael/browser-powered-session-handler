@@ -59,6 +59,8 @@ public final class PlaywrightDriverAdapter {
         private final Path temporary, temporaryParent;
         private final WindowsBrowserJob windowsJob;
         private boolean jobObservationFailed;
+        /** Bounded fixed Windows operation/code attribution; no vendor throwable is retained. */
+        private final WindowsBrowserJob.Diagnostics jobDiagnostics = new WindowsBrowserJob.Diagnostics();
 
         /**
          * Binds a fully initialized pipe to its owning worker and existing watchdog.
@@ -108,7 +110,7 @@ public final class PlaywrightDriverAdapter {
         /** Keeps cleanup running after an observation error; successful termination is still required. */
         private void captureWindowsMembers() {
             if (windowsJob != null) try { windowsJob.captureMembers(); }
-            catch (IOException | RuntimeException failure) { jobObservationFailed = true; }
+            catch (IOException | RuntimeException failure) { jobObservationFailed = true; jobDiagnostics.observation(failure); }
         }
 
         /**
@@ -135,7 +137,7 @@ public final class PlaywrightDriverAdapter {
                 boolean jobTerminated = true;
                 if (windowsJob != null) {
                     try { windowsJob.close(end); }
-                    catch (IOException | RuntimeException failure) { jobTerminated = false; }
+                    catch (IOException | RuntimeException failure) { jobTerminated = false; jobDiagnostics.close(failure); }
                 }
                 children.forEach(PlaywrightDriverAdapter::terminate); if (process.isAlive()) terminate(process);
                 try {
@@ -149,6 +151,8 @@ public final class PlaywrightDriverAdapter {
                             && (windowsJob != null || children.stream().noneMatch(ProcessHandle::isAlive)) && watchdog.isTerminated();
                     cleanup(temporary, temporaryParent);
                     if (!terminated) throw setup("The owned browser processes did not finish closing.", "");
+                } catch (AuthenticationFailure failure) {
+                    jobDiagnostics.suppressOn(failure); throw failure;
                 } finally { if (interrupted) Thread.currentThread().interrupt(); }
             }
         }

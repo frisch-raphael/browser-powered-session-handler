@@ -15,6 +15,15 @@ final class JourneyValidationMessages {
      * @return Human-readable field/row guidance.
      */
     static String validationMessage(String message) {
+        var rule = java.util.regex.Pattern.compile("^controls\\.rules\\[([0-9]{1,2})]\\.([^:]+):\\s*(.*)$").matcher(message);
+        if (rule.matches()) {
+            String label = switch (rule.group(2)) {
+                case "url", "url.value" -> "URL"; case "url.type" -> "URL handling";
+                case "recovery.statusCode" -> "Failure status"; case "recovery.pattern" -> "Response text pattern";
+                case "proxyPort" -> "Proxy port"; default -> "Automatic rule";
+            };
+            return "Rule " + (Integer.parseInt(rule.group(1)) + 1) + ", " + label + ": " + rule.group(3);
+        }
         var step = java.util.regex.Pattern.compile("^steps\\[(\\d+)]\\.([^:]+):\\s*(.*)$").matcher(message);
         if (step.matches()) {
             String label = switch (step.group(2)) { case "selector" -> "Selector"; case "urlPattern" -> "URL pattern"; case "durationMs" -> "Duration"; case "value" -> "Text value"; case "state" -> "Condition"; case "checked" -> "State"; case "values" -> "Dropdown options"; case "key" -> "Enter key"; case "pageRef" -> "Page"; case "triggerStepId" -> "Opening step"; case "context" -> "Frame"; default -> "Setting"; };

@@ -61,6 +61,102 @@ class AutoSaveLoginTest {
         }
     }
 
+    @Test void rejectedAutomaticUrlRegexKeepsAppliedRulesAndShowsInlineGuidanceAtTheEditedUrl() throws Exception {
+        var h=harness();
+        try(var editor=h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT,false,false))) {
+            var dialogs=loginResults(h,editor);
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                var key=new bpsh.request.RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,JourneyRegistryTest.JOURNEY);
+                rules.setRules(List.of(new bpsh.request.RequestSettings.AutomaticRule(true,key,new bpsh.request.RequestSettings.Regex("/protected"),8081,
+                        new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null))));
+                editor.checks().get("enabled").setSelected(true);h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);var previous=editor.controls.snapshot();String disk=editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY);
+            var focus=java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");rules.prefix.setText("[");
+                h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);
+            assertSame(previous,editor.controls.snapshot());assertEquals(disk,editor.disk.get(ProjectStore.NATIVE_PROJECT_KEY));
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                var error=(JTextArea)rules.prefix.getClientProperty("validationMessage");
+                assertNotNull(error,"The automatic URL must own an inline validation surface.");
+                assertTrue(error.isVisible());assertTrue(error.getText().contains("RE2"));
+                assertFalse(error.getText().contains("["));assertFalse(error.getText().contains("controls.rules"));
+                assertEquals(error.getText(),rules.prefix.getAccessibleContext().getAccessibleDescription());
+                assertEquals(0,rules.table.getSelectedRow());assertSame(focus,java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner());
+                assertTrue(dialogs.results.isEmpty());assertEquals("[",rules.prefix.getText());
+                rules.prefix.setText("/corrected");assertFalse(error.isVisible());
+                h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);
+            assertEquals("/corrected",((bpsh.request.RequestSettings.Regex)editor.controls.snapshot().controls().rules().getFirst().url()).value());
+        }
+    }
+
+    @Test void queuedValidationFailureCannotMarkAReplacementAutomaticRuleDraft() throws Exception {
+        var h=harness();
+        try(var editor=h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT,false,false))) {
+            var key=new bpsh.request.RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,JourneyRegistryTest.JOURNEY);
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                rules.setRules(List.of(new bpsh.request.RequestSettings.AutomaticRule(true,key,new bpsh.request.RequestSettings.Regex("/valid"),null,
+                        new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null))));
+                editor.checks().get("enabled").setSelected(true);h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);var previous=editor.controls.snapshot();var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.ThreadPoolExecutor io=h.member(editor.ui,"io");
+            io.execute(()->{entered.countDown();try{release.await(5,java.util.concurrent.TimeUnit.SECONDS);}catch(InterruptedException stopped){Thread.currentThread().interrupt();}});
+            assertTrue(entered.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            try {
+                h.edt(()->{
+                    AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");rules.prefix.setText("private-old-expression[");
+                    h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+                    rules.prefix.setText("/new-draft");((Timer)h.member(editor.ui,"automaticDebounce")).stop();
+                });
+            }finally{release.countDown();}
+            awaitRuleIo(editor.ui);assertSame(previous,editor.controls.snapshot());
+            h.edt(()->{
+                AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                assertEquals("/new-draft",rules.prefix.getText());assertEquals(0,rules.table.getSelectedRow());
+                assertFalse(((JTextArea)rules.prefix.getClientProperty("validationMessage")).isVisible());
+                var scroll=(JScrollPane)SwingUtilities.getAncestorOfClass(JScrollPane.class,rules.table);
+                assertFalse(((JTextArea)scroll.getClientProperty("validationMessage")).isVisible());
+                h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+            });
+            awaitRuleIo(editor.ui);
+            assertEquals("/new-draft",((bpsh.request.RequestSettings.Regex)editor.controls.snapshot().controls().rules().getFirst().url()).value());
+        }
+    }
+
+    @Test void compilerGuidanceNeverEchoesTheInvalidUrlOrResponseExpression() throws Exception {
+        for(boolean response:List.of(false,true)) {
+            var h=harness();
+            try(var editor=h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT,false,false))) {
+                h.edt(()->{
+                    AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");
+                    var key=new bpsh.request.RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,JourneyRegistryTest.JOURNEY);
+                    rules.setRules(List.of(new bpsh.request.RequestSettings.AutomaticRule(true,key,new bpsh.request.RequestSettings.Regex("/valid"),null,
+                            new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.REGEX,null,"expired"))));
+                    editor.checks().get("enabled").setSelected(true);
+                    (response?rules.pattern:rules.prefix).setText("<html><img src='file:private-expression'>[");
+                    h.call(editor.ui,"saveControls",new Class<?>[]{boolean.class},false);
+                });
+                awaitRuleIo(editor.ui);
+                h.edt(()->{
+                    AutomaticRulesPanel rules=h.member(editor.ui,"automaticRules");var field=response?rules.pattern:rules.prefix;
+                    var error=(JTextArea)field.getClientProperty("validationMessage");assertTrue(error.isVisible());
+                    assertFalse(error.getText().contains("private-expression"));assertFalse(error.getText().contains("<html>"));
+                    assertFalse(error.getText().contains("controls.rules"));assertTrue(error.getText().contains("RE2"));
+                    assertEquals(error.getText(),field.getAccessibleContext().getAccessibleDescription());
+                });
+            }
+        }
+    }
+
     @Test void listenerExportsAreCoalescedOffEdtWithoutSavingOrStartingAuthentication() throws Exception {
         var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
         var exports=new java.util.concurrent.atomic.AtomicInteger();

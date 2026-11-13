@@ -127,6 +127,7 @@ public final class UiController {
     private long editorEpoch;
     private long selectionEpoch;
     private long editingScopeEpoch, controlsScopeEpoch;
+    private long controlsRevision;
     private JPanel journeyEditor;
     private JourneyKey editing;
     private JourneyDefinition.Identity editingIdentity;
@@ -1360,14 +1361,14 @@ public final class UiController {
      * @param waitingOnly True for budgets/capacity, false for automatic-injection selection and scope.
      */
     private void saveControls(boolean waitingOnly) {
-        if (!initialized) return; long captured = controlsScopeEpoch; long epoch = editorEpoch;
+        if (!initialized) return; long captured = controlsScopeEpoch, revision = controlsRevision, rulesRevision = automaticRules.revision();
         Map<String, String> raw = new LinkedHashMap<>(); fields.forEach((name, field) -> raw.put(name, field.getText()));
         var selectedTools = tools.entrySet().stream().filter(e -> e.getValue().isSelected()).map(Map.Entry::getKey).toList();
         var selectedPolicy = (RequestSettings.RequestPolicy) requestPolicy.getSelectedItem();
         boolean enabled = checks.get("enabled").isSelected();
         List<RequestSettings.AutomaticRule> rules;
         try { rules = waitingOnly || !enabled ? applied.snapshot().controls().rules() : automaticRules.snapshot(); }
-        catch (IllegalArgumentException ex) { controlSaveFailed(waitingOnly, ex); return; }
+        catch (IllegalArgumentException ex) { controlSaveFailed(waitingOnly, ex, revision, rulesRevision, captured); return; }
         var job = new Job(null, () -> { try {
             checkEpoch(JourneyDefinition.Scope.PROJECT, captured);
             var current = applied.snapshot().controls();
@@ -1377,8 +1378,8 @@ public final class UiController {
             if (cfg.cycleTimeoutMs() < Math.max(cfg.requestWaitTimeoutMs(), cfg.attemptTimeoutMs())) throw new IllegalArgumentException("Total login timeout must cover the request wait and login attempt timeout.");
             var doc = registry.document(JourneyDefinition.Scope.PROJECT);
             try (var edited = registry.prepareEdit(JourneyDefinition.Scope.PROJECT, doc.journeys(), cfg)) { persist(JourneyDefinition.Scope.PROJECT, edited); }
-        } catch (Exception | LinkageError error) { controlSaveFailed(waitingOnly, error); } });
-        try { io.execute(job); } catch (RuntimeException error) { job.discard(); controlSaveFailed(waitingOnly, error); }
+        } catch (Exception | LinkageError error) { controlSaveFailed(waitingOnly, error, revision, rulesRevision, captured); } });
+        try { io.execute(job); } catch (RuntimeException error) { job.discard(); controlSaveFailed(waitingOnly, error, revision, rulesRevision, captured); }
     }
     /**
      * Displays validated applied project controls without saving or authenticating.
@@ -1947,12 +1948,15 @@ public final class UiController {
         area.getAccessibleContext().setAccessibleName(accessibleName); area.setVisible(false); return area;
     }
     /** Reports safe settings/storage guidance without changing the selected journey's status or event history. */
-    private void controlSaveFailed(boolean waiting, Throwable error) {
+    private void controlSaveFailed(boolean waiting, Throwable error, long revision, long rulesRevision, long scopeEpoch) {
         String safe = error instanceof ConfigurationException ? validationMessage(error.getMessage())
                 : error instanceof UserLibraryStore.LibraryException ? error.getMessage()
                 : error instanceof IllegalArgumentException || error instanceof IllegalStateException ? safeLocal(error) : "Settings could not be saved. Check storage access and retry.";
         diagnostics.state(null, new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION, safe));
-        ui(() -> showInvalidField(error.getMessage(), safe, false));
+        ui(() -> {
+            if (controlsRevision != revision || automaticRules.revision() != rulesRevision || controlsScopeEpoch != scopeEpoch) return;
+            showInvalidField(error.getMessage(), safe, false);
+        });
     }
 
 
@@ -1971,6 +1975,7 @@ public final class UiController {
      */
     private void showInvalidField(String message, String guidance, boolean focus) {
         if (message == null) return;
+        if (automaticRules.showInvalid(message, guidance, focus)) { if (focus) mainTabs.setSelectedIndex(1); return; }
         if (message.startsWith("formAuthentication")) {
             if (focus) selectWizard(WizardPage.SETUP);
             InlineValidation.show(checks.get("formAuthentication"), "Choose at least one authentication method.");
@@ -2129,6 +2134,7 @@ public final class UiController {
     /** @param waiting Whether this edit belongs to waiting settings rather than automatic-injection rules. */
     private void controlsEdited(boolean waiting) {
         if (!suppress && !closed) {
+            controlsRevision++;
             Timer timer = waiting ? settingsDebounce : automaticDebounce; if (timer != null) timer.restart();
         }
         refreshModes();

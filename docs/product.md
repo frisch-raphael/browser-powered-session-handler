@@ -196,6 +196,10 @@ Project controls use rulesVersion 1 with explicit typed url and nullable proxyPo
 members. Unsupported or unversioned saved rule arrays require a fresh Burp project;
 there is no silent migration or deletion of stored journeys. Invalid drafts and
 failed saves retain the last atomically applied controls and matching plan.
+Rule validation appears beside the relevant URL, status or response-pattern input.
+An error on another row appears at the rules group without changing selection or
+focus. Correcting the draft clears its feedback; delayed failures from older edits
+cannot mark a newer value invalid.
 
 ### Accepted Proxy DROP limitation
 

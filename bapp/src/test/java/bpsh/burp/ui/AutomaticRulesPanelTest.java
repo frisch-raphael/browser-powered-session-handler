@@ -13,6 +13,63 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Exercises visible list actions and incomplete rule edits on the Swing event thread. */
 class AutomaticRulesPanelTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"url.value","recovery.statusCode","recovery.pattern"})
+    void compilerPathsMarkOnlyTheirOwnedInputAndClearOnCorrection(String path) throws Exception {
+        SwingUtilities.invokeAndWait(()->{
+            var panel=new AutomaticRulesPanel();var key=new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,java.util.UUID.randomUUID());
+            panel.setRules(List.of(new RequestSettings.AutomaticRule(true,key,new RequestSettings.Regex("safe"),null,
+                    new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.BOTH,401,"expired"))));
+            String message="controls.rules[0]."+path+": enter a valid setting.";
+            String guidance=JourneyValidationMessages.validationMessage(message);
+            assertTrue(panel.showInvalid(message,guidance,false));
+            var target=path.equals("url.value")?panel.prefix:path.equals("recovery.statusCode")?panel.failureStatus:panel.pattern;
+            for(var input:List.of(panel.prefix,panel.failureStatus,panel.pattern)) {
+                var error=(JTextArea)input.getClientProperty("validationMessage");assertNotNull(error);
+                assertEquals(input==target,error.isVisible());
+            }
+            assertEquals(guidance,target.getAccessibleContext().getAccessibleDescription());
+            assertTrue(guidance.startsWith("Rule 1, "));assertFalse(guidance.contains("controls.rules"));
+            long revision=panel.revision();target.setText(path.equals("recovery.statusCode")?"403":"corrected");
+            assertTrue(panel.revision()>revision);assertFalse(((JTextArea)target.getClientProperty("validationMessage")).isVisible());
+        });
+    }
+
+    @Test void anotherRowsBackgroundErrorStaysAtTheGroupUntilTheUserSelectsIt() throws Exception {
+        SwingUtilities.invokeAndWait(()->{
+            var panel=new AutomaticRulesPanel();var first=new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,java.util.UUID.randomUUID());
+            var second=new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,java.util.UUID.randomUUID());
+            var recovery=new JourneyDefinition.Recovery(true,JourneyDefinition.RecoveryMode.BOTH,401,"expired");
+            panel.setRules(List.of(new RequestSettings.AutomaticRule(true,first,new RequestSettings.Regex("first"),null,recovery),
+                    new RequestSettings.AutomaticRule(true,second,new RequestSettings.Regex("second"),null,recovery)));
+            var changes=new java.util.concurrent.atomic.AtomicInteger();panel.onChange(changes::incrementAndGet);
+            panel.table.setRowSelectionInterval(1,1);long revision=panel.revision();var focus=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            String message="controls.rules[0].url.value: requires supported RE2 syntax.";
+            panel.showInvalid(message,JourneyValidationMessages.validationMessage(message),false);
+            var scroll=(JScrollPane)SwingUtilities.getAncestorOfClass(JScrollPane.class,panel.table);var group=(JTextArea)scroll.getClientProperty("validationMessage");
+            assertEquals(1,panel.table.getSelectedRow());assertSame(focus,KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner());
+            assertTrue(group.isVisible());assertTrue(group.getText().startsWith("Rule 1, URL:"));
+            assertFalse(((JTextArea)panel.prefix.getClientProperty("validationMessage")).isVisible());
+            panel.table.setRowSelectionInterval(0,0);assertFalse(group.isVisible());assertTrue(((JTextArea)panel.prefix.getClientProperty("validationMessage")).isVisible());
+            panel.showInvalid("controls.rules[1].recovery.pattern: enter a valid RE2 expression.","Rule 2, Response text pattern: enter a valid RE2 expression.",true);
+            assertEquals(1,panel.table.getSelectedRow());assertTrue(((JTextArea)panel.pattern.getClientProperty("validationMessage")).isVisible());
+            assertEquals(revision,panel.revision());assertEquals(0,changes.get());
+        });
+    }
+
+    @Test void validationGuidanceIsLiteralAndNeverRendersHtmlOrLoadsAnExpressionAsMarkup() throws Exception {
+        SwingUtilities.invokeAndWait(()->{
+            var panel=new AutomaticRulesPanel();var key=new RequestSettings.JourneySelection(JourneyDefinition.Scope.PROJECT,java.util.UUID.randomUUID());
+            panel.setRules(List.of(new RequestSettings.AutomaticRule(true,key,new RequestSettings.Regex("<html><b>private-expression</b>["),null,OrderedSessionHandlingTest.RECOVERY)));
+            String guidance="Use RE2 syntax; <b>this guidance is literal</b>.";
+            panel.showInvalid("controls.rules[0].url.value: requires supported RE2 syntax.",guidance,false);
+            var error=(JTextArea)panel.prefix.getClientProperty("validationMessage");
+            assertEquals(guidance,error.getText());assertNull(error.getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey));
+            assertEquals("Input error",error.getAccessibleContext().getAccessibleName());
+            assertEquals(guidance,panel.prefix.getAccessibleContext().getAccessibleDescription());
+            assertFalse(error.getText().contains("private-expression"));
+        });
+    }
     @Test void listenerRefreshPreservesMissingPortAndUnfinishedRegexWithoutSaving() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var panel=new AutomaticRulesPanel();var journey=CoordinatorFixtures.journey("first");

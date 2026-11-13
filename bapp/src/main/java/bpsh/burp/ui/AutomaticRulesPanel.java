@@ -52,6 +52,10 @@ final class AutomaticRulesPanel extends JPanel {
     private final JButton add, up, down, remove;
     private Runnable changed = () -> {};
     private boolean loading;
+    private long revision;
+    private enum Input { URL, STATUS, RESPONSE, GROUP }
+    private record Problem(int row, Input input, String guidance) {}
+    private Problem problem;
 
     /** Builds a theme-native list whose order is never changed by sorting. */
     AutomaticRulesPanel() {
@@ -70,7 +74,7 @@ final class AutomaticRulesPanel extends JPanel {
         var literal = new DefaultTableCellRenderer(); literal.putClientProperty("html.disable", true); table.setDefaultRenderer(Object.class, literal);
         table.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting() && !loading) populate(); });
         table.addMouseListener(new java.awt.event.MouseAdapter() { @Override public void mousePressed(java.awt.event.MouseEvent e) { table.setFocusable(true); table.requestFocusInWindow(); } });
-        var center = new JPanel(new BorderLayout(0, 12)); center.add(tableScroll, BorderLayout.NORTH);
+        var center = new JPanel(new BorderLayout(0, 12)); center.add(InlineValidation.wrap(tableScroll), BorderLayout.NORTH);
         var details = new JPanel(new BorderLayout(0, 8)); selected.putClientProperty("html.disable", true); details.add(selected, BorderLayout.NORTH);
         row("URL handling", urlMode, 0); row("URL", prefix, 1); row("", useRegex, 2); row("Proxy port", proxyPort, 3); row("", listenerStatus, 4); row("", detect, 5); row("Detect by", recoveryMode, 6); row("Failure status", failureStatus, 7); row("RE2 expression", pattern, 8);
         var stretch = new GridBagConstraints(); stretch.gridy = 9; stretch.weighty = 1; detail.add(Box.createVerticalGlue(), stretch);
@@ -140,10 +144,46 @@ final class AutomaticRulesPanel extends JPanel {
     }
     /** Populates persisted rules without saving or starting authentication. */
     void setRules(List<RequestSettings.AutomaticRule> rules) {
+        invalidateValidation();
         loading = true;
         try { rows.clear(); for (var r : rules) rows.add(new Draft(r.enabled(), r.journey(), mode(r.url()), r.url() instanceof RequestSettings.Prefix p ? p.value().toString() : r.url() instanceof RequestSettings.Regex regex ? regex.value() : "", r.recovery().enabled(), r.recovery().mode(), r.recovery().statusCode() == null ? "401" : r.recovery().statusCode().toString(), r.recovery().pattern() == null ? "" : r.recovery().pattern(), r.url() instanceof RequestSettings.Regex, r.proxyPort())); model.fireTableDataChanged(); if (!rows.isEmpty()) table.setRowSelectionInterval(0, 0); }
         finally { loading = false; }
         refresh(); populate();
+    }
+    /** Captures the exact local draft generation without exposing field values. Selection does not change it. */
+    long revision() { return revision; }
+    /** Attributes safe compiler guidance without selecting another row during background validation. */
+    boolean showInvalid(String message, String guidance, boolean focus) {
+        if (message == null) return false;
+        int row = -1; Input input = Input.GROUP;
+        var path = java.util.regex.Pattern.compile("^controls\\.rules\\[([0-9]{1,2})]\\.([^:]+)(?=:|$)").matcher(message);
+        var local = java.util.regex.Pattern.compile("^Rule ([1-9][0-9]?): ").matcher(message);
+        if (path.find()) {
+            row = Integer.parseInt(path.group(1)); String field = path.group(2);
+            input = field.equals("url") || field.startsWith("url.") ? Input.URL
+                    : field.equals("recovery.statusCode") ? Input.STATUS : field.equals("recovery.pattern") ? Input.RESPONSE : Input.GROUP;
+        } else if (local.find()) {
+            row = Integer.parseInt(local.group(1)) - 1;
+            input = message.contains("failure status") ? Input.STATUS : Input.URL;
+        } else if (!message.startsWith("controls.rules")) return false;
+        problem = new Problem(row, input, guidance);
+        if (focus && row >= 0 && row < rows.size()) table.setRowSelectionInterval(row, row);
+        refreshValidation();
+        if (focus) { var target = problemInput(); if (target != null) InlineValidation.focus(target); }
+        return true;
+    }
+    private JComponent problemInput() {
+        if (problem == null || problem.row() != table.getSelectedRow()) return null;
+        JComponent input = switch (problem.input()) { case URL -> prefix; case STATUS -> failureStatus; case RESPONSE -> pattern; case GROUP -> null; };
+        return input != null && input.isVisible() ? input : null;
+    }
+    private void refreshValidation() {
+        InlineValidation.clear(prefix); InlineValidation.clear(pattern); InlineValidation.clear(tableScroll); validateFailureStatus();
+        if (problem != null) InlineValidation.show(problemInput() == null ? tableScroll : problemInput(), problem.guidance());
+    }
+    private void invalidateValidation() {
+        revision++; problem = null;
+        for (var input : List.of(prefix, failureStatus, pattern, tableScroll)) InlineValidation.clear(input);
     }
     /** Captures every row in visible order; incomplete active fields reject the whole autosave. */
     List<RequestSettings.AutomaticRule> snapshot() {
@@ -169,12 +209,13 @@ final class AutomaticRulesPanel extends JPanel {
     private void addSelected() {
         var o = (Option) available.getSelectedItem(); if (o == null || rows.size() >= 64) return;
         rows.add(new Draft(true, o.key(), Mode.BURP_SCOPE, "", true, JourneyDefinition.RecoveryMode.STATUS_CODE, "401", "", false, null));
+        invalidateValidation();
         model.fireTableDataChanged(); table.setRowSelectionInterval(rows.size() - 1, rows.size() - 1); refresh(); changed.run();
     }
     /** Removes the selected rule, retaining the saved journey itself. */
-    private void removeSelected() { int i = table.getSelectedRow(); if (i < 0) return; rows.remove(i); model.fireTableDataChanged(); if (!rows.isEmpty()) table.setRowSelectionInterval(Math.min(i, rows.size() - 1), Math.min(i, rows.size() - 1)); refresh(); populate(); changed.run(); }
+    private void removeSelected() { int i = table.getSelectedRow(); if (i < 0) return; rows.remove(i); invalidateValidation(); model.fireTableDataChanged(); if (!rows.isEmpty()) table.setRowSelectionInterval(Math.min(i, rows.size() - 1), Math.min(i, rows.size() - 1)); refresh(); populate(); changed.run(); }
     /** Moves the selected rule one position without sorting or changing its identity. */
-    private void move(int delta) { int i = table.getSelectedRow(), target = i + delta; if (i < 0 || target < 0 || target >= rows.size()) return; java.util.Collections.swap(rows, i, target); model.fireTableDataChanged(); table.setRowSelectionInterval(target, target); refresh(); changed.run(); }
+    private void move(int delta) { int i = table.getSelectedRow(), target = i + delta; if (i < 0 || target < 0 || target >= rows.size()) return; java.util.Collections.swap(rows, i, target); invalidateValidation(); model.fireTableDataChanged(); table.setRowSelectionInterval(target, target); refresh(); changed.run(); }
     /** Captures edits without allowing a partial rule to mutate applied controls. */
     private void edited() {
         if (loading) return; int i = table.getSelectedRow(); if (i < 0) return; var d = rows.get(i);
@@ -190,6 +231,7 @@ final class AutomaticRulesPanel extends JPanel {
                 failureStatus.setText("401");
         } finally { loading = false; }
         rows.set(i, new Draft(d.enabled(), d.journey(), (Mode) urlMode.getSelectedItem(), prefix.getText(), detect.isSelected(), (JourneyDefinition.RecoveryMode) recoveryMode.getSelectedItem(), failureStatus.getText(), pattern.getText(), useRegex.isSelected(), proxyPort.getSelectedItem() instanceof Port port ? port.value() : null));
+        invalidateValidation();
         model.fireTableRowsUpdated(i, i); conditional(); changed.run();
     }
     /** Displays the selected rule without invoking autosave. */
@@ -200,7 +242,7 @@ final class AutomaticRulesPanel extends JPanel {
         conditional(); refreshButtons();
     }
     /** Shows only fields used by the selected matching and expiration modes. */
-    private void conditional() { visible(prefix, urlMode.getSelectedItem() == Mode.SINGLE_URL); visible(useRegex, urlMode.getSelectedItem() == Mode.SINGLE_URL); prefix.setToolTipText(useRegex.isSelected() ? "Regex matched anywhere in the URL." : "Match the beginning of the request URL, for example https://app.example/api/."); visible(recoveryMode, detect.isSelected()); visible(failureStatus, detect.isSelected() && recoveryMode.getSelectedItem() != JourneyDefinition.RecoveryMode.REGEX); visible(pattern, detect.isSelected() && recoveryMode.getSelectedItem() != JourneyDefinition.RecoveryMode.STATUS_CODE); validateFailureStatus(); revalidate(); }
+    private void conditional() { visible(prefix, urlMode.getSelectedItem() == Mode.SINGLE_URL); visible(useRegex, urlMode.getSelectedItem() == Mode.SINGLE_URL); prefix.setToolTipText(useRegex.isSelected() ? "Regex matched anywhere in the URL." : "Match the beginning of the request URL, for example https://app.example/api/."); visible(recoveryMode, detect.isSelected()); visible(failureStatus, detect.isSelected() && recoveryMode.getSelectedItem() != JourneyDefinition.RecoveryMode.REGEX); visible(pattern, detect.isSelected() && recoveryMode.getSelectedItem() != JourneyDefinition.RecoveryMode.STATUS_CODE); refreshValidation(); revalidate(); }
     /** Shows required/range guidance without moving focus or replacing unfinished input. */
     private void validateFailureStatus() {
         if (loading) return;
@@ -229,7 +271,7 @@ final class AutomaticRulesPanel extends JPanel {
     /** Returns a literal label while retaining unavailable saved references. */
     private String label(RequestSettings.JourneySelection key) { var o = options.get(key); return o == null ? "Unavailable journey" : o.label(); }
     /** Adds a native labeled field in the detail grid. */
-    private void row(String name, JComponent input, int y) { var label = new JLabel(name); label.setLabelFor(input); input.putClientProperty("ruleLabel", label); var c = new GridBagConstraints(); c.gridy = y; c.insets = new Insets(4, 0, 4, 8); c.anchor = GridBagConstraints.WEST; detail.add(label, c); c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; detail.add(input == failureStatus ? InlineValidation.wrap(input, this::validateFailureStatus) : input, c); }
+    private void row(String name, JComponent input, int y) { var label = new JLabel(name); label.setLabelFor(input); input.putClientProperty("ruleLabel", label); var c = new GridBagConstraints(); c.gridy = y; c.insets = new Insets(4, 0, 4, 8); c.anchor = GridBagConstraints.WEST; detail.add(label, c); c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; detail.add(input == failureStatus ? InlineValidation.wrap(input, this::validateFailureStatus) : input == prefix || input == pattern ? InlineValidation.wrap(input) : input, c); }
     /** Updates both a field and its caption. */
     private static void visible(JComponent field, boolean show) { InlineValidation.visible(field, show); ((JLabel) field.getClientProperty("ruleLabel")).setVisible(show); }
     /** Builds wrapping, literal non-editable guidance. */
@@ -244,6 +286,6 @@ final class AutomaticRulesPanel extends JPanel {
         @Override public Class<?> getColumnClass(int c) { return c == 0 ? Boolean.class : String.class; }
         @Override public boolean isCellEditable(int r, int c) { return c == 0; }
         @Override public Object getValueAt(int r, int c) { var d = rows.get(r); return switch (c) { case 0 -> d.enabled(); case 1 -> label(d.journey()); case 2 -> d.mode() == Mode.SINGLE_URL ? (d.regex() ? "Regex: " : "Prefix: ") + d.prefix() : d.mode() == Mode.ALL_REQUESTS ? "All requests" : "Burp target scope"; case 3 -> d.port() == null ? "Any listener" : d.port().toString(); default -> !d.detect() ? "Detection off" : d.recovery() == JourneyDefinition.RecoveryMode.STATUS_CODE ? "HTTP " + d.status() : d.recovery() == JourneyDefinition.RecoveryMode.REGEX ? "Response text" : "HTTP " + d.status() + " or response text"; }; }
-        @Override public void setValueAt(Object value, int r, int c) { if (c != 0) return; var d = rows.get(r); rows.set(r, new Draft(Boolean.TRUE.equals(value), d.journey(), d.mode(), d.prefix(), d.detect(), d.recovery(), d.status(), d.pattern(), d.regex(), d.port())); fireTableRowsUpdated(r, r); changed.run(); }
+        @Override public void setValueAt(Object value, int r, int c) { if (c != 0) return; var d = rows.get(r); rows.set(r, new Draft(Boolean.TRUE.equals(value), d.journey(), d.mode(), d.prefix(), d.detect(), d.recovery(), d.status(), d.pattern(), d.regex(), d.port())); invalidateValidation(); fireTableRowsUpdated(r, r); changed.run(); }
     }
 }
