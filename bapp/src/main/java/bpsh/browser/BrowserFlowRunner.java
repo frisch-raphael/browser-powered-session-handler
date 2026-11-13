@@ -109,10 +109,25 @@ public final class BrowserFlowRunner {
                 AuthenticationFailure.Cause.CONFIGURATION, "This journey has incomplete or invalid settings.", "Review the journey settings, then test login.");
         try (SecretStore.Values values = supplied.copy()) {
             validateSecrets(journey, values);
-            try (var session = launcher.open(identity, BrowserSetup.from(journey), values, BrowserSessionLauncher.Visibility.CONFIGURED,
-                    explicitRecovery, deadlineNanos, cancelled, observer)) {
+            var session = launcher.open(identity, BrowserSetup.from(journey), values, BrowserSessionLauncher.Visibility.CONFIGURED,
+                    explicitRecovery, deadlineNanos, cancelled, observer);
+            AuthenticationFailure primary = null;
+            try {
                 BrowserRuntimeManager.observed(observer, AuthenticationStage.AUTHENTICATING);
                 return execute(identity, journey, values, session, deadlineNanos, cancelled);
+            } catch (AuthenticationFailure failure) { primary = failure; throw failure; }
+            catch (RuntimeException | LinkageError error) {
+                try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.LIFECYCLE, deadlineNanos, cancelled); }
+                catch (AuthenticationFailure stopped) { primary = stopped; throw stopped; }
+                primary = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.UNKNOWN,
+                        "The browser could not complete the login.");
+                throw primary;
+            } finally {
+                try { session.close(); }
+                catch (AuthenticationFailure cleanup) {
+                    if (primary == null) throw cleanup;
+                    primary.recordIncompleteCleanup();
+                }
             }
         } catch (AuthenticationFailure ex) { throw ex; }
         catch (Exception ex) {

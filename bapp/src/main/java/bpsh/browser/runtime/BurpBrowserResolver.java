@@ -55,11 +55,11 @@ public final class BurpBrowserResolver {
     public static Environment currentEnvironment() {
         String platform = BrowserRuntimeManager.hostPlatform();
         Path home = Path.of(System.getProperty("user.home")); var paths = new ArrayList<Path>(); var known = new ArrayList<Path>();
-        ProcessHandle.current().info().command().ifPresent(value -> addPath(paths, value));
         String[] arguments = ProcessHandle.current().info().arguments().orElse(new String[0]);
         for (int i = 0; i + 1 < arguments.length; i++) if (arguments[i].equals("-jar")) addPath(paths, arguments[i + 1]);
-        for (String value : System.getProperty("java.class.path", "").split(java.io.File.pathSeparator)) if (value.toLowerCase(Locale.ROOT).endsWith(".jar")) addPath(paths, value);
-        addPath(paths, System.getProperty("java.home", ""));
+        if (paths.isEmpty()) for (String value : System.getProperty("java.class.path", "").split(java.io.File.pathSeparator))
+            if (value.toLowerCase(Locale.ROOT).endsWith(".jar")) addPath(paths, value);
+        ProcessHandle.current().info().command().ifPresent(value -> addPath(paths, value));
         if (platform.equals("windows-x64")) {
             var parents = new ArrayList<Path>();
             addPath(parents, System.getenv("LOCALAPPDATA") == null ? home.resolve("AppData/Local/Programs").toString() : Path.of(System.getenv("LOCALAPPDATA"), "Programs").toString());
@@ -81,18 +81,28 @@ public final class BurpBrowserResolver {
      */
     static Environment environment(String platform, Path home, List<Path> processPaths, List<Path> known) {
         var active = new LinkedHashSet<Path>();
-        for (Path hint : processPaths.stream().limit(MAX_ROOTS).toList()) {
-            if (!hint.isAbsolute()) hint = hint.toAbsolutePath();
-            String name = hint.getFileName() == null ? "" : hint.getFileName().toString().toLowerCase(Locale.ROOT);
-            if (name.matches("burpsuite[^/]*\\.jar") && Files.isRegularFile(hint)) addCanonical(active, hint.getParent());
-            Path cursor = Files.isDirectory(hint) ? hint : hint.getParent();
-            for (int i = 0; cursor != null && i < 6; i++, cursor = cursor.getParent()) {
-                String part = cursor.getFileName() == null ? "" : cursor.getFileName().toString().toLowerCase(Locale.ROOT);
-                if (part.startsWith("burp") && (Files.isDirectory(cursor.resolve("burpbrowser")) || hasBurpJar(cursor))) addCanonical(active, cursor);
-                if (part.startsWith("burp") && part.endsWith(".app")) addCanonical(active, cursor.resolve("Contents/Resources/app"));
-            }
+        var hints = processPaths.stream().limit(MAX_ROOTS).map(Path::toAbsolutePath).toList();
+        for (Path hint : hints) if (name(hint).matches("burpsuite[^/]*\\.jar") && Files.isRegularFile(hint))
+            addCanonical(active, applicationRoot(platform, hint));
+        // A borrowed JVM (including java.home inside another edition) is not
+        // evidence of this application's installation. Actual application JARs win.
+        if (active.isEmpty()) for (Path hint : hints) {
+            String name = name(hint);
+            if (name.startsWith("burp") && (Files.isRegularFile(hint) && !name.endsWith(".jar")
+                    || name.endsWith(".app") && Files.isDirectory(hint))) addCanonical(active, applicationRoot(platform, hint));
         }
         return new Environment(platform, List.copyOf(active), known.stream().limit(MAX_ROOTS).toList());
+    }
+    /** @param path Metadata path. @return Lowercase basename without inspecting ancestors. */
+    private static String name(Path path) { return path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(Locale.ROOT); }
+    /** @param platform Target. @param application Actual application JAR or launcher. @return Its installation, never a JVM ancestor. */
+    private static Path applicationRoot(String platform, Path application) {
+        if (platform.equals("macos-x64")) {
+            Path cursor = application;
+            for (int i = 0; cursor != null && i < 6; i++, cursor = cursor.getParent())
+                if (name(cursor).startsWith("burp") && name(cursor).endsWith(".app")) return cursor.resolve("Contents/Resources/app");
+        }
+        return application.getParent();
     }
     /** Resolves a fresh external executable within the caller's unchanged attempt budget.
      * @param deadlineNanos Original monotonic deadline. @param cancelled Attempt cancellation.
@@ -193,11 +203,6 @@ public final class BurpBrowserResolver {
     private static void addPath(List<Path> paths, String value) { if (value != null && !value.isEmpty()) try { paths.add(Path.of(value)); } catch (InvalidPathException ignored) { /* unavailable hint */ } }
     /** @param roots Canonical root accumulator. @param root Installation hint. */
     private static void addCanonical(Set<Path> roots, Path root) { try { if (Files.isDirectory(root)) roots.add(root.toRealPath()); } catch (IOException | SecurityException ignored) { /* unavailable hint */ } }
-    /** @param root Immediate installation hint. @return Whether a known Burp JAR identifies this root. */
-    private static boolean hasBurpJar(Path root) {
-        try (var files = Files.newDirectoryStream(root, "burpsuite*.jar")) { return files.iterator().hasNext(); }
-        catch (IOException | SecurityException ignored) { return false; }
-    }
     /** @param cause Safe typed cause. @param message Fixed non-user-data problem. @return Sanitized prerequisite failure. */
     private static AuthenticationFailure failure(AuthenticationFailure.Cause cause, String message) {
         return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, cause, message,

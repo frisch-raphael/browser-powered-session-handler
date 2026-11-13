@@ -23,6 +23,34 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Establishes shared-cycle and reservation policy with controlled clocks; no hardware claims. */
 public class AuthenticationCoordinatorTest {
+    @Test void failedLaunchCleanupReachesTheCallerAndEventLog() throws Exception {
+        try (var f = new Fixture(RequestSettings.Controls.defaults())) {
+            f.fail.set(bpsh.browser.BrowserCleanupFixtures.failedLaunch(CoordinatorFixtures.failure(AuthenticationFailure.Cause.ASSET_MISSING)));
+            var ticket = f.acquire(0); f.clock.runWorker();
+            assertTrue(CoordinatorFixtures.error(ticket).getMessage().contains("could not finish closing"));
+            assertTrue(f.coordinator.events().snapshot(f.entry(0).identity().key()).stream()
+                    .anyMatch(event -> event.message().contains("could not finish closing")));
+        }
+    }
+
+    @Test void cancelledAttemptStillReportsCleanupWhenTheWorkerReturnsLate() throws Exception {
+        try (var secrets = new SecretStore()) {
+            var registry = new JourneyWorkspace(secrets); var journey = CoordinatorFixtures.journey("cleanup");
+            CoordinatorFixtures.load(registry, List.of(journey)); var clock = new CoordinatorFixtures.ManualRuntime();
+            var owner = new AtomicReference<AuthenticationCoordinator>();
+            var failure = bpsh.browser.BrowserCleanupFixtures.failedLaunch(CoordinatorFixtures.failure(AuthenticationFailure.Cause.CANCELLED));
+            try (var coordinator = new AuthenticationCoordinator(registry, RequestSettings.Controls.defaults(), clock, (entry, recovery, deadline, cancelled) -> {
+                owner.get().cancelAuthentication(entry.identity()); throw failure;
+            }, entry -> null)) {
+                owner.set(coordinator); var entry = registry.snapshot().resolve("cleanup");
+                var ticket = coordinator.acquire(List.of(entry)); clock.runWorker();
+                assertEquals(AuthenticationFailure.Cause.CANCELLED, CoordinatorFixtures.error(ticket).reason());
+                assertTrue(coordinator.events().snapshot(entry.identity().key()).stream()
+                        .anyMatch(event -> event.message().contains("could not finish closing")), "late cleanup must have an independent event");
+                assertNull(coordinator.peek(entry.identity()));
+            }
+        }
+    }
     @Test void immediateAcquisitionStartsSharedWorkWithoutRetainingWaitersAndThenUsesCache() throws Exception {
         try (var f = new Fixture(RequestSettings.Controls.defaults())) {
             for (int n = 0; n < 50; n++) {

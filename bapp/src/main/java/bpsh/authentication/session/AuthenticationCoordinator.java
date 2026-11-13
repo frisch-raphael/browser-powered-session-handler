@@ -505,6 +505,10 @@ public final class AuthenticationCoordinator implements AutoCloseable {
         synchronized (lock) {
             cycle.setupStage = null;
             running--; activeWorkers.remove(cycle.state.entry.identity().key());
+            // Cancellation revokes publication before the owner finishes cleanup. Report that
+            // independent lifecycle outcome even when this cycle has already been detached.
+            if (error != null && error.cleanupIncomplete())
+                event(cycle.state.entry, JourneyEventLog.Level.ERROR, AuthenticationFailure.cleanupProblem());
             if (!cancelled(cycle) && cycle.state.cycle == cycle) {
                 if (cycle.deadline - runtime.nanos() <= 0 && error == null) error = failure(AuthenticationFailure.Cause.TIMEOUT, "The total login timeout was reached.", "");
                 if (error == null) try {

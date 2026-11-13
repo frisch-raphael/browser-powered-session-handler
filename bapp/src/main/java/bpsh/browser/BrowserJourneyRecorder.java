@@ -146,6 +146,7 @@ public final class BrowserJourneyRecorder implements JourneyRecording {
 
         void execute() {
             BrowserSessionLauncher.Session session = null; boolean completed = false; Problem failure = null;
+            boolean cleanupIncomplete = false;
             boolean preparing = true;
             preparationDeadline = Math.min(deadline, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(preparationMs));
             preparationExpires.set(preparationDeadline);
@@ -219,6 +220,7 @@ public final class BrowserJourneyRecorder implements JourneyRecording {
                 completed = !cancelled.get() && !closed.get() && fatal.get() == null;
             } catch (AuthenticationFailure error) {
                 failure = network == null ? problem(error) : problem(network);
+                cleanupIncomplete = error.cleanupIncomplete();
             } catch (RuntimeException error) {
                 failure = network != null ? problem(network) : fatal.get() != null ? fatal.get()
                         : new Problem(Field.GENERAL, "The browser could not finish recording. Record the login again.");
@@ -232,17 +234,22 @@ public final class BrowserJourneyRecorder implements JourneyRecording {
                 operationDeadline.set(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(STOP_MS)); stopDeadline.set(Long.MAX_VALUE);
                 if (adapter != null) adapter.close();
                 if (session != null) try { session.close(); }
-                catch (AuthenticationFailure error) { if (compiler != null && completed) compiler.incomplete(error.getMessage()); else if (failure == null) failure = problem(error); }
+                catch (AuthenticationFailure error) { cleanupIncomplete = true; }
                 pending.forEach(item -> item.event().close()); pending.clear(); sources.clear(); frames.clear(); previousFrames.clear(); pendingBytes = 0;
             }
+            Problem cleanupProblem = cleanupIncomplete ? new Problem(Field.GENERAL, AuthenticationFailure.cleanupProblem()) : null;
+            if (cleanupIncomplete && compiler != null && completed) compiler.incomplete(AuthenticationFailure.cleanupProblem());
             if (completed && compiler != null && !cancelled.get() && !closed.get()) {
                 review = compiler.freeze(request.stamp(), () -> active.compareAndSet(this, null));
-                if (cancelled.get() || closed.get()) { review.close(); event(State.CLOSED, null, null); }
+                if (cancelled.get() || closed.get()) { review.close(); event(State.CLOSED, null, cleanupProblem); }
                 else event(State.REVIEW, review, null);
             } else {
                 if (compiler != null) compiler.close(); active.compareAndSet(this, null);
                 if (System.nanoTime() >= deadline && !cancelled.get() && !closed.get()) failure = new Problem(Field.GENERAL, "Recording stopped after 30 minutes. Record the login again.");
-                event(State.CLOSED, null, cancelled.get() || closed.get() ? null : failure);
+                if (cancelled.get() || closed.get()) failure = cleanupProblem;
+                else if (cleanupIncomplete) failure = failure == null ? cleanupProblem
+                        : new Problem(failure.field(), failure.message() + " " + AuthenticationFailure.cleanupProblem());
+                event(State.CLOSED, null, failure);
             }
         }
 
@@ -346,7 +353,7 @@ public final class BrowserJourneyRecorder implements JourneyRecording {
             case SECURITY_DEVICE -> Field.SECURITY_DEVICE; case MTLS_PIN -> Field.PIN; case CERTIFICATE -> Field.CLIENT_CERTIFICATE;
             case TRUSTED_CA -> Field.TRUSTED_CA; case HTTP_AUTHENTICATION -> Field.HTTP_AUTHENTICATION; case HTTP_PASSWORD -> Field.HTTP_PASSWORD; case BROWSER_EXECUTABLE -> Field.BROWSER_EXECUTABLE; default -> Field.GENERAL;
         };
-        return new Problem(field, failure.getMessage());
+        return new Problem(field, failure.recovery().isBlank() ? failure.problem() : failure.problem() + " " + failure.recovery());
     }
     @Override public void close() {
         if (!closed.compareAndSet(false, true)) return;

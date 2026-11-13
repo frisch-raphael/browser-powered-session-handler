@@ -47,6 +47,19 @@ public final class AuthenticationFailure extends Exception {
     /** Safe input identity, with an optional zero-based credential row. */
     public record InputTarget(Input input, Integer credential) {}
     private final InputTarget input;
+    private volatile boolean cleanupIncomplete;
+
+    /** Fixed independent lifecycle outcome; never includes native output, paths or raw causes. */
+    public static String cleanupProblem() { return "The browser session could not finish closing."; }
+    /** Records an idempotent bounded outcome while the resource owner unwinds a failed operation. */
+    public void recordIncompleteCleanup() { cleanupIncomplete = true; }
+    /** @return Whether the owner could not confirm complete cleanup, independently of the primary failure. */
+    public boolean cleanupIncomplete() { return cleanupIncomplete; }
+    @Override public String getMessage() { return super.getMessage() + (cleanupIncomplete ? " " + cleanupProblem() : ""); }
+    private AuthenticationFailure preservingCleanup(AuthenticationFailure copy) {
+        if (cleanupIncomplete) copy.recordIncompleteCleanup();
+        return copy;
+    }
 
     /**
      * Creates a safe failure with optional HTTP retry metadata, without attaching a raw cause.
@@ -124,24 +137,24 @@ public final class AuthenticationFailure extends Exception {
     /**
      * Attributes an established safe outcome to its actual failed cycle, preserving classification.
      * @param identity Known failing journey generation, never guessed from the current UI selection.
-     * @return Independently immutable failure with no raw exception cause.
+     * @return Independently attributed failure with bounded cleanup metadata and no raw exception cause.
      */
-    public AuthenticationFailure forJourney(JourneyDefinition.Identity identity) { return new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, Objects.requireNonNull(identity), step, input); }
+    public AuthenticationFailure forJourney(JourneyDefinition.Identity identity) { return preservingCleanup(new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, Objects.requireNonNull(identity), step, input)); }
     /** @return Safe action attribution when the failed operation is known. */
     public Step step() { return step; }
     /** @param step Established action identity. @return Same failure with safe action attribution preserved. */
-    public AuthenticationFailure atStep(Step step) { return new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step, input); }
+    public AuthenticationFailure atStep(Step step) { return preservingCleanup(new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step, input)); }
     /** @return Positively identified configuration input, or null for service/lifecycle failures. */
     public InputTarget input() { return input; }
     /** @param field Input established by the operation. @return Same outcome carrying no user-entered input text. */
-    public AuthenticationFailure atInput(Input field) { return new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step, new InputTarget(Objects.requireNonNull(field), null)); }
+    public AuthenticationFailure atInput(Input field) { return preservingCleanup(new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step, new InputTarget(Objects.requireNonNull(field), null))); }
     /** @param index Exact credential collector's zero-based position. @return Same failure attributed to that collector. */
     public AuthenticationFailure forCredential(int index) {
-        return new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step,
-                new InputTarget(input == null ? Input.CAPTURE_SOURCE : input.input(), index));
+        return preservingCleanup(new AuthenticationFailure(phase, reason, problem, recovery, httpStatus, retryAfter, journey, step,
+                new InputTarget(input == null ? Input.CAPTURE_SOURCE : input.input(), index)));
     }
     /** @param guidance Safe recovery instructions. @return Same classified outcome and attribution with updated guidance. */
-    public AuthenticationFailure withRecovery(String guidance) { return new AuthenticationFailure(phase, reason, problem, guidance, httpStatus, retryAfter, journey, step, input); }
+    public AuthenticationFailure withRecovery(String guidance) { return preservingCleanup(new AuthenticationFailure(phase, reason, problem, guidance, httpStatus, retryAfter, journey, step, input)); }
     /**
      * Returns concrete correction or recovery guidance.
      *
@@ -165,7 +178,7 @@ public final class AuthenticationFailure extends Exception {
      *
      * @return Whether the observation is positively temporary, before shared PIN/budget checks.
      */
-    public boolean retryable() { return reason == Cause.TRANSPORT || reason == Cause.TEMPORARY_SERVICE; }
+    public boolean retryable() { return !cleanupIncomplete && (reason == Cause.TRANSPORT || reason == Cause.TEMPORARY_SERVICE); }
 
     /**
      * Orders established failures when an attempt has several observations and no valid token.

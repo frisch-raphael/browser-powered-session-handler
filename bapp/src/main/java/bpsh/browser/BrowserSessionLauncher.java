@@ -144,24 +144,23 @@ public final class BrowserSessionLauncher {
         /** Closes context, browser, driver and transport before revoking ownership of their traffic. */
         @Override public void close() throws AuthenticationFailure {
             owner(); if (closed) return; closed = true;
-            AuthenticationFailure failure = null;
-            AuthenticationFailure protocolFailure = null;
+            boolean failed = false, protocolFailed = false;
             if (driver != null) driver.beginCleanup();
             for (AutoCloseable resource : new AutoCloseable[]{context, browser, driver, transport, trafficLease}) {
                 if (resource == null) continue;
                 try { resource.close(); }
                 catch (Exception | LinkageError error) {
-                    AuthenticationFailure safe = error instanceof AuthenticationFailure classified ? classified
-                            : new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
-                                    "The browser session could not finish closing.");
-                    if (resource == context || resource == browser) {
-                        if (protocolFailure == null) protocolFailure = safe; else protocolFailure.addSuppressed(safe);
-                    } else if (failure == null) failure = safe; else failure.addSuppressed(safe);
+                    if (resource == context || resource == browser) protocolFailed = true;
+                    else failed = true;
                 }
             }
             if (browser != null && driver != null && driver.terminated()) browser.closed();
-            else if (protocolFailure != null) { if (failure == null) failure = protocolFailure; else failure.addSuppressed(protocolFailure); }
-            if (failure != null) throw failure;
+            else if (protocolFailed) failed = true;
+            if (failed) {
+                var failure = new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.UNKNOWN,
+                        "Browser cleanup was incomplete.");
+                failure.recordIncompleteCleanup(); throw failure;
+            }
         }
     }
 
@@ -255,7 +254,7 @@ public final class BrowserSessionLauncher {
     }
 
     private static void closeAfterFailure(Session session, AuthenticationFailure primary) {
-        try { session.close(); } catch (AuthenticationFailure cleanup) { primary.addSuppressed(cleanup); }
+        try { session.close(); } catch (AuthenticationFailure cleanup) { primary.recordIncompleteCleanup(); }
     }
 
     private static Browser startBrowser(PlaywrightDriverAdapter.Session driver, BrowserType.LaunchOptions options,

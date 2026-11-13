@@ -47,6 +47,34 @@ class BurpBrowserResolverTest {
         var environment = BurpBrowserResolver.environment("windows-x64", temporary, List.of(temporary.resolve("Java/jdk/bin/java.exe")), List.of());
         assertTrue(environment.activeInstallations().isEmpty());
     }
+    @Test void borrowedBurpRuntimeCannotSupplyAnotherEditionsBrowser() throws Exception {
+        Path current = Files.createDirectory(temporary.resolve("BurpSuiteCommunity"));
+        Path jar = Files.writeString(current.resolve("burpsuite_community.jar"), "current application");
+        Path other = temporary.resolve("BurpSuitePro"); browser(other, "156.0.0.0/chrome.exe");
+        Path java = other.resolve("jre/bin/java.exe"); Files.createDirectories(java.getParent()); Files.writeString(java, "borrowed runtime");
+        for (var hints : List.of(List.of(java, jar, other.resolve("jre")), List.of(jar, java, other.resolve("jre")))) {
+            var environment = BurpBrowserResolver.environment("windows-x64", temporary, hints, List.of(other));
+            assertEquals(List.of(current.toRealPath()), environment.activeInstallations());
+            var selected = new BurpBrowserResolver(environment, () -> "", path -> true);
+            assertEquals(AuthenticationFailure.Cause.ASSET_MISSING,
+                    assertThrows(AuthenticationFailure.class, () -> selected.resolve(deadline(), () -> false)).reason());
+        }
+    }
+    @Test void currentApplicationBrowserWinsOverBorrowedRuntimeEdition() throws Exception {
+        Path current = temporary.resolve("BurpSuiteCommunity"); Path expected = browser(current, "156.0.0.0/chrome.exe");
+        Path jar = Files.writeString(current.resolve("burpsuite_community.jar"), "current application");
+        Path other = temporary.resolve("BurpSuitePro"); browser(other, "157.0.0.0/chrome.exe");
+        Path java = other.resolve("jre/bin/java.exe"); Files.createDirectories(java.getParent()); Files.writeString(java, "borrowed runtime");
+        var environment = BurpBrowserResolver.environment("windows-x64", temporary, List.of(java, jar, other.resolve("jre")), List.of(other));
+        var selected = new BurpBrowserResolver(environment, () -> "", path -> true);
+        assertEquals(expected, selected.resolve(deadline(), () -> false).executable());
+    }
+    @Test void runtimeInsideBurpDoesNotIdentifyTheRunningApplication() throws Exception {
+        Path other = temporary.resolve("BurpSuitePro"); browser(other, "157.0.0.0/chrome.exe");
+        Path java = other.resolve("jre/bin/java.exe"); Files.createDirectories(java.getParent()); Files.writeString(java, "borrowed runtime");
+        var environment = BurpBrowserResolver.environment("windows-x64", temporary, List.of(java, other.resolve("jre")), List.of(other));
+        assertTrue(environment.activeInstallations().isEmpty());
+    }
     @Test void multipleKnownInstallsRequireSelection() throws Exception {
         Path first = temporary.resolve("BurpSuitePro"), second = temporary.resolve("BurpSuiteCommunity");
         browser(first, "145.0.0.0/chrome.exe"); browser(second, "156.0.0.0/chrome.exe");

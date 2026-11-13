@@ -16,6 +16,34 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Startup failures must release the recording worker and report a terminal result to its dialog. */
 class BrowserJourneyRecorderTest {
+    @Test void recordingFailureStillReportsTheFailedSessionClose() throws Exception {
+        verifyFailedClose(false);
+    }
+
+    @Test void recordingCancellationStillReportsTheFailedSessionClose() throws Exception {
+        verifyFailedClose(true);
+    }
+
+    private void verifyFailedClose(boolean cancel) throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        try (var recorder = new BrowserJourneyRecorder((request, values, visibility, deadline, cancelled, stage) -> {
+            entered.countDown();
+            if (cancel) while (!cancelled.getAsBoolean()) Thread.onSpinWait();
+            try { return BrowserCleanupFixtures.failingSession(); }
+            catch (Exception error) { throw new AssertionError(error); }
+        }, BrowserSessionLauncher.Visibility.HEADLESS, (context, control) -> {}, 1000)) {
+            var finished = new CompletableFuture<JourneyRecording.Event>();
+            var control = recorder.start(request(), SecretStore.Values.empty(), event -> {
+                if (event.state() == JourneyRecording.State.CLOSED) finished.complete(event);
+            });
+            assertTrue(entered.await(3, TimeUnit.SECONDS));
+            if (cancel) control.cancel();
+            var result = finished.get(3, TimeUnit.SECONDS);
+            assertNotNull(result.problem(), "cleanup failure must survive cancellation");
+            assertTrue(result.problem().message().contains("could not finish closing"), result.problem().message());
+            assertFalse(result.problem().message().contains("PRIVATE_CLOSE_CANARY"));
+        }
+    }
     @Test void browserSelectionFailureRetainsTheSettingsLocation() throws Exception {
         try (var recorder = new BrowserJourneyRecorder((request, values, visibility, deadline, cancelled, stage) -> {
             throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.ASSET_MISSING,
