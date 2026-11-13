@@ -25,3 +25,8 @@ publishers, and supplies a safe event sink plus read-only inspection snapshots.
 Routine connection reuse remains available in inspection snapshots but does not enter the event sink on every request or redirect. Fresh handshakes and failures remain events. Neither owner acquires credentials, opens connections or retains raw messages.
 
 ChallengePolicy is independent of AuthorizationPolicy. ESTABLISHED_ONLY permits one application transmission without a challenge resend; recent acceptance does not prove the next pooled socket is authenticated. HttpIdentityManager warms the DIRECT pool with a body-free/header-free HEAD for the exact destination, single-flight per selection/epoch/origin, bounded to eight active operations and 128 two-second cooldown records. Clear/edit/unload cancel stale work. Explicit tests retain fresh TEST scopes.
+
+HttpCapacityException identifies only a transient refusal before delivery admission.
+Challenge-enabled Burp delivery may retry this admission within its original
+deadline and pinned selection; it never retries an application exchange. Native
+worker admission remains owned until the worker exits, including cancellation.

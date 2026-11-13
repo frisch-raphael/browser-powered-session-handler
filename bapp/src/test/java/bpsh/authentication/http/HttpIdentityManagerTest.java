@@ -18,6 +18,20 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HttpIdentityManagerTest {
+    @Test void activeIdentityLimitIsATypedPredispatchCapacityRefusal() throws Exception {
+        var entries=java.util.stream.IntStream.range(0,33).mapToObj(i->{var base=entry();var d=base.definition();return new JourneyCatalog.Entry(base.identity(),
+                new JourneyDefinition(d.id(),d.displayName(),"account-"+i,d.authenticationUrl(),false,d.steps(),d.browser(),null,d.injection(),d.cache(),null,d.httpAuthentication(),null));}).toList();
+        var indexed=new java.util.HashMap<bpsh.journey.JourneyKey,JourneyCatalog.Entry>();entries.forEach(e->indexed.put(e.identity().key(),e));
+        var aliases=new java.util.HashMap<String,List<bpsh.journey.JourneyKey>>();entries.forEach(e->aliases.put(e.definition().canonicalAlias(),List.of(e.identity().key())));
+        var leases=new java.util.ArrayList<HttpAuthenticationService.Delivery>();
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->new JourneyCatalog.Snapshot(indexed,aliases,Set.of()),secrets,factory((spec,values,recovery,end)->new Fake()))) {
+            try {
+                for(int i=0;i<32;i++)leases.add(manager.admit(manager.select(entries.get(i)),deadline()).get(2,TimeUnit.SECONDS));
+                var failure=assertThrows(java.util.concurrent.ExecutionException.class,()->manager.admit(manager.select(entries.get(32)),deadline()).get(2,TimeUnit.SECONDS));
+                assertInstanceOf(HttpCapacityException.class,failure.getCause());
+            } finally {leases.forEach(HttpAuthenticationService.Delivery::close);}
+        }
+    }
     private static final URI ORIGIN=URI.create("https://example.test");
     private static JourneyCatalog.Entry entry() {
         UUID id=UUID.randomUUID();

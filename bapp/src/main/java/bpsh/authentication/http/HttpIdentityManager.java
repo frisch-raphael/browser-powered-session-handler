@@ -69,13 +69,15 @@ public final class HttpIdentityManager implements AutoCloseable {
         return !closed && catalog.snapshot().isCurrent(selection.entry().identity()) &&
                 epochs.getOrDefault(selection.entry().identity().key(),0L)==selection.epoch();
     }
+    /** Checks both the saved generation and the cache-clear epoch before queued delivery. */
+    public boolean isCurrent(Selection selection) {return current(selection);}
     /** Selection is captured before dependent credential waits; body allocation follows this admission. */
     public CompletableFuture<HttpAuthenticationService.Delivery> admit(Selection selection,long deadline) {
         return reserve(selection,deadline,false,false);
     }
     private CompletableFuture<HttpAuthenticationService.Delivery> reserve(Selection selection,long deadline,boolean fresh,boolean recovery) {
         var result=new CompletableFuture<HttpAuthenticationService.Delivery>();
-        if(pending.incrementAndGet()>64) {pending.decrementAndGet();return CompletableFuture.failedFuture(new IOException("HTTP identity waiting capacity is exhausted."));}
+        if(pending.incrementAndGet()>64) {pending.decrementAndGet();return CompletableFuture.failedFuture(new HttpCapacityException());}
         result.whenComplete((value,error)->pending.decrementAndGet());
         Scope scope;
         synchronized(this) {
@@ -93,7 +95,7 @@ public final class HttpIdentityManager implements AutoCloseable {
                     var idle=scopes.values().stream().filter(candidate->candidate.waiting.isEmpty() && candidate.leases.isEmpty() && candidate.service.isDone()
                             && !candidate.service.isCompletedExceptionally() && candidate.service.join().isIdle())
                             .min(Comparator.comparingLong(candidate->candidate.lastUse));
-                    if(idle.isEmpty()) {result.completeExceptionally(new IOException("Too many HTTP identities are active."));return result;}
+                    if(idle.isEmpty()) {result.completeExceptionally(new HttpCapacityException());return result;}
                     Scope retired=idle.get();scopes.remove(retired.identity,retired);retired.retire();
                 }
                 scope=new Scope(entry.identity());Scope created=scope;
@@ -115,7 +117,7 @@ public final class HttpIdentityManager implements AutoCloseable {
                     scopes.remove(entry.identity(),created);tests.remove(created);created.service.completeExceptionally(error);
                 }
             }
-            if(scope.waiting.size()>=16) {result.completeExceptionally(new IOException("This identity has too many waiting requests."));return result;}
+            if(scope.waiting.size()>=HttpAuthenticationService.MAX_ADMITTED_DELIVERIES) {result.completeExceptionally(new HttpCapacityException());return result;}
             scope.lastUse=System.nanoTime();scope.waiting.add(result);
         }
         Scope selected=scope;

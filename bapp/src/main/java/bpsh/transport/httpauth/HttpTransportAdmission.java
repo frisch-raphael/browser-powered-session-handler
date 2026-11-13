@@ -18,7 +18,7 @@ final class HttpTransportAdmission {
     private int admitted;
     synchronized Permit acquire(Object scope) throws IOException {
         int local=scopes.getOrDefault(scope,0);
-        if(admitted>=64 || local>=16)throw new IOException("HTTP authentication delivery capacity is exhausted.");
+        if(admitted>=64 || local>=bpsh.authentication.http.HttpAuthenticationService.MAX_ADMITTED_DELIVERIES)throw new bpsh.authentication.http.HttpCapacityException();
         admitted++;scopes.put(scope,local+1);return new Permit(scope);
     }
     synchronized int admitted() {return admitted;}

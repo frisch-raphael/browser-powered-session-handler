@@ -625,7 +625,7 @@ public final class UiController {
     private void updateRequestPolicyHelp() {
         String explanation = requestPolicy.getSelectedItem() == RequestSettings.RequestPolicy.DO_NOT_WAIT
                 ? "If authentication is missing, send the original request unchanged and run login in the background. Later requests use the credentials. NTLM uses an authenticated connection when available; it does not negotiate for this request."
-                : "If authentication is missing, wait for login to finish, up to the request wait timeout. NTLM signs in when needed and reuses authenticated connections.";
+                : "If authentication is missing, wait for login to finish, up to the request wait timeout. NTLM signs in when needed and reuses authenticated connections. HTTP authentication and client-certificate requests also wait when busy. If capacity or the timeout prevents sending, BPSH returns 503 without sending the request unauthenticated.";
         String help = explanation + "\n\nWhen all matching authentication is ready, a valid cached token or cookie is added immediately."
                 + "\n\nThis policy applies only to automatic handling. Explicit BPSH tags always wait for login.";
         requestPolicyHelp.setText(help); requestPolicyHelp.setCaretPosition(0);

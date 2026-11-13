@@ -50,6 +50,10 @@ final class AutomaticHttpAuthentication {
             return Result.continueWith(handle.marked(),notes);
         } catch(AuthenticationFailure|RuntimeException|LinkageError error) {
             if(plan!=null)plan.close();
+            if(proxy && plan!=null && plan.controls.requestPolicy()==RequestSettings.RequestPolicy.WAIT_FOR_LOGIN &&
+                    error instanceof AuthenticationFailure safe && (safe.phase()==AuthenticationFailure.Phase.QUEUE ||
+                            safe.reason()==AuthenticationFailure.Cause.STALE || safe.reason()==AuthenticationFailure.Cause.CLOSED))
+                return processor.stopped(request,notes,context.exchange(),plan.selection.entry().definition().canonicalAlias(),safe);
             return processor.failed(request,notes,context.exchange(),null,plan!=null && plan.dispatched.get(),
                     error instanceof AuthenticationFailure safe?safe:unknown());
         }
@@ -88,12 +92,9 @@ final class AutomaticHttpAuthentication {
         int bytes=request.toByteArray().length();
         if(bytes>NativeTagParser.MAX_OUTPUT_BYTES)throw configuration("The automatic authenticated request exceeds the 4 MiB message ceiling.","Reduce the request size or send it without this automatic rule.");
         var keys=new ArrayList<JourneyKey>();keys.add(transport.identity().key());captures.forEach(source->keys.add(source.entry().identity().key()));
-        var admission=processor.capacity.admit(applied.controls(),keys,4L*bytes+(16L<<20));
-        try {
-            var clean=HttpRequest.httpRequest(request.httpService(),ByteArray.byteArray(request.toByteArray().getBytes()));
-            long deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(applied.controls().requestWaitTimeoutMs());
-            return new Pending(clean,identities.select(transport),List.copyOf(captures),applied.controls(),admission,deadline,context);
-        } catch(RuntimeException|LinkageError error) {admission.close();throw error;}
+        var clean=HttpRequest.httpRequest(request.httpService(),ByteArray.byteArray(request.toByteArray().getBytes()));
+        long deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(applied.controls().requestWaitTimeoutMs());
+        return new Pending(clean,identities.select(transport),List.copyOf(captures),applied.controls(),List.copyOf(keys),deadline,context);
     }
 
     private final class Pending implements DeferredRequestDelivery.Plan {
@@ -101,16 +102,17 @@ final class AutomaticHttpAuthentication {
         private final HttpIdentityManager.Selection selection;
         private final List<NativeTagResolver.Automatic> captures;
         private final RequestSettings.Controls controls;
-        private final RequestCapacity.Lease admission;
+        private final List<JourneyKey> keys;
+        private volatile RequestCapacity.Lease admission;
         private final long deadline;
         private final RequestRuleMatcher.Context context;
         private final AtomicBoolean released=new AtomicBoolean(),dispatched=new AtomicBoolean();
         private volatile NativeTagResolver.Operation acquisition;
         private volatile DeferredRequestDelivery.Handle handle;
         Pending(HttpRequest clean,HttpIdentityManager.Selection selection,List<NativeTagResolver.Automatic> captures,
-                RequestSettings.Controls controls,RequestCapacity.Lease admission,long deadline,RequestRuleMatcher.Context context) {
+                RequestSettings.Controls controls,List<JourneyKey> keys,long deadline,RequestRuleMatcher.Context context) {
             this.clean=clean;this.selection=selection;this.captures=captures;this.controls=controls;
-            this.admission=admission;this.deadline=deadline;this.context=context;
+            this.keys=keys;this.deadline=deadline;this.context=context;
         }
         @Override public HttpRequest clean(){return clean;}
         @Override public ToolType tool(){return context.exchange().family()==AuthTrafficGuard.Family.PROXY?ToolType.PROXY:null;}
@@ -120,10 +122,15 @@ final class AutomaticHttpAuthentication {
             try {
                 if(released.get() || closed.get())throw unavailable();
                 boolean wait=controls.requestPolicy()==RequestSettings.RequestPolicy.WAIT_FOR_LOGIN;
+                var granted=processor.capacity.admitHttp(controls,keys,4L*clean.toByteArray().length()+(16L<<20),deadline,
+                        ()->released.get() || closed.get() || !identities.isCurrent(selection));
+                admission=granted;
+                if(released.get()) {granted.close();throw unavailable();}
                 var target=java.net.URI.create(clean.url());
                 boolean ready=wait || identities.hasRecentAuthentication(selection,target);
                 if(!ready)warm(target);
                 acquisition=resolver.resolveAutomatic(clean.toByteArray().getBytes(),captures,wait);
+                if(released.get()) {acquisition.close();throw unavailable();}
                 var resolved=acquisition.future().get(Math.max(1,deadline-System.nanoTime()),TimeUnit.NANOSECONDS);
                 if(!ready) {
                     appendNote(notes,"Journey "+selection.entry().definition().canonicalAlias()+": HTTP authentication was requested in the background; this request continues unchanged.");
@@ -132,7 +139,7 @@ final class AutomaticHttpAuthentication {
                 var framed=HttpAuthenticationDirective.prepare(resolved.commit());
                 byte[] request=selection.entry().definition().httpAuthenticationEnabled()?framed.request():framed.applicationAuthorizationRequest();
                 var sent=delivery.deliverResolved(clean,notes,selection,request,deadline,admission,()->{
-                    if(released.get() || closed.get() || System.nanoTime()>=deadline)throw new AuthenticationFailure(
+                    if(released.get() || closed.get() || !identities.isCurrent(selection) || System.nanoTime()>=deadline)throw new AuthenticationFailure(
                             AuthenticationFailure.Phase.LIFECYCLE,AuthenticationFailure.Cause.STALE,"This automatic authentication delivery is no longer current.");
                     resolved.validate();
                 },()->dispatched.set(true),
@@ -145,18 +152,28 @@ final class AutomaticHttpAuthentication {
                 }
                 return new Result(clean,sent.annotations(),null,sent.response());
             } catch(InterruptedException error) {
-                Thread.currentThread().interrupt();return processor.failed(clean,notes,exchange,selection.entry(),dispatched.get(),
+                Thread.currentThread().interrupt();return failed(notes,exchange,
                         new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,AuthenticationFailure.Cause.CANCELLED,"Automatic request authentication was interrupted."));
             } catch(ExecutionException error) {
-                return processor.failed(clean,notes,exchange,selection.entry(),dispatched.get(),error.getCause() instanceof AuthenticationFailure safe?safe:unknown());
+                return failed(notes,exchange,error.getCause() instanceof AuthenticationFailure safe?safe:
+                        error.getCause() instanceof bpsh.authentication.http.HttpCapacityException?new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
+                                AuthenticationFailure.Cause.CAPACITY,"HTTP authentication delivery capacity is exhausted.","Retry after active requests finish."):
+                        error.getCause() instanceof java.util.concurrent.TimeoutException?new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
+                                AuthenticationFailure.Cause.TIMEOUT,"Automatic HTTP authentication exceeded its request deadline."):unknown());
             } catch(java.util.concurrent.TimeoutException error) {
-                return processor.failed(clean,notes,exchange,selection.entry(),dispatched.get(),new AuthenticationFailure(
+                return failed(notes,exchange,new AuthenticationFailure(
                         AuthenticationFailure.Phase.QUEUE,AuthenticationFailure.Cause.TIMEOUT,"Automatic request authentication exceeded its request deadline."));
             } catch(AuthenticationFailure|RuntimeException|LinkageError error) {
-                return processor.failed(clean,notes,exchange,selection.entry(),dispatched.get(),error instanceof AuthenticationFailure safe?safe:unknown());
+                return failed(notes,exchange,error instanceof AuthenticationFailure safe?safe:unknown());
             } finally {
                 var marker=handle;if(marker!=null)marker.close();else close();
             }
+        }
+        private Result failed(Annotations notes,RequestExchange exchange,AuthenticationFailure error) {
+            if(!dispatched.get() && controls.requestPolicy()==RequestSettings.RequestPolicy.WAIT_FOR_LOGIN &&
+                    (error.phase()==AuthenticationFailure.Phase.QUEUE || error.reason()==AuthenticationFailure.Cause.STALE || error.reason()==AuthenticationFailure.Cause.CLOSED || !identities.isCurrent(selection)))
+                return processor.unavailableResponse(clean,notes,exchange,selection.entry(),error);
+            return processor.failed(clean,notes,exchange,selection.entry(),dispatched.get(),error);
         }
         private void warm(java.net.URI target) {
             var configured=selection.entry().definition().authenticationUrl();
@@ -165,7 +182,7 @@ final class AutomaticHttpAuthentication {
         }
         @Override public void close() {
             if(!released.compareAndSet(false,true))return;
-            var operation=acquisition;try {if(operation!=null)operation.close();}finally {admission.close();}
+            var operation=acquisition;try {if(operation!=null)operation.close();}finally {var lease=admission;if(lease!=null)lease.close();}
         }
     }
 }

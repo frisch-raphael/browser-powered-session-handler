@@ -75,12 +75,22 @@ public final class HttpAuthenticationDelivery {
             var headers = new java.util.ArrayList<bpsh.authentication.http.HttpAuthenticationService.Header>();
             for (var header : request.headers()) headers.add(new bpsh.authentication.http.HttpAuthenticationService.Header(header.name(), header.value()));
             boolean dispatched=false;
-            var opening = httpIdentities.admit(selection, deadline);
             bpsh.authentication.http.HttpAuthenticationService.Delivery deliveryLease;
-            try { deliveryLease = opening.get(); }
-            catch (InterruptedException interrupted) {
-                opening.thenAccept(bpsh.authentication.http.HttpAuthenticationService.Delivery::close);
-                opening.cancel(true); throw interrupted;
+            while(true) {
+                validate.check();
+                long left=deadline-System.nanoTime();
+                if(left<=0)throw new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,AuthenticationFailure.Cause.TIMEOUT,
+                        "The request deadline expired while waiting for native HTTP authentication capacity.","Retry after active requests finish.");
+                var opening=httpIdentities.admit(selection,deadline);
+                try {deliveryLease=opening.get();break;}
+                catch(InterruptedException interrupted) {
+                    opening.thenAccept(bpsh.authentication.http.HttpAuthenticationService.Delivery::close);
+                    opening.cancel(true);throw interrupted;
+                } catch(ExecutionException failure) {
+                    if(!(failure.getCause() instanceof bpsh.authentication.http.HttpCapacityException) ||
+                            challengePolicy!=bpsh.authentication.http.HttpAuthenticationService.ChallengePolicy.CHALLENGE)throw failure;
+                    java.util.concurrent.TimeUnit.NANOSECONDS.sleep(Math.min(left,50_000_000L));
+                }
             }
             try(var admitted=deliveryLease;
                 var builder=httpIdentities.bodies().builder(bpsh.authentication.http.HttpAuthenticationService.Request.MAX_BODY_BYTES)) {

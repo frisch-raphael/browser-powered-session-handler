@@ -109,6 +109,14 @@ public final class SessionRequestProcessor {
         var notice=diagnostics.request(exchange, alias(error, selected), error, false);
         return Result.continueWith(request, annotate(notes, notice));
     }
+    /** Keeps a Wait-for-login capacity failure local instead of provoking a server authentication challenge. */
+    Result unavailableResponse(HttpRequest request,Annotations notes,RequestExchange exchange,JourneyCatalog.Entry selected,AuthenticationFailure error) {
+        var notice=diagnostics.unavailableResponse(exchange,alias(error,selected),error);
+        String body="BPSH did not send this request because authentication was cancelled or its capacity/deadline was exhausted. Check the request notes and retry when ready.\n";
+        String wire="HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nRetry-After: 1\r\nContent-Length: "+body.length()+"\r\n\r\n"+(request.method().equalsIgnoreCase("HEAD")?"":body);
+        var response=burp.api.montoya.http.message.responses.HttpResponse.httpResponse(ByteArray.byteArray(wire.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        return new Result(request,annotate(notes,notice),null,response);
+    }
     /** @param request Failed original. @param notes Host notes. @param exchange Actual request reference. @param alias Safe journey alias. @param error Safe failure. @return Required stop with diagnostic attribution. */
     Result stopped(HttpRequest request, Annotations notes, RequestExchange exchange, String alias, AuthenticationFailure error) {
         var notice=diagnostics.request(exchange,alias,error,true);

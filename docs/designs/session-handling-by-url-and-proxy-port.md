@@ -432,13 +432,13 @@ global `RequestToBeSentAction` also offers response spoofing. Current public
 and [global action documentation](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/http/handler/RequestToBeSentAction.html)
 show the same distinction. A Proxy request carrying the explicit directive is
 deferred unchanged; the global operation consumes the directive and resolves
-its dependent capture tags once. Automatic transport uses DeferredRequestDelivery from the final Proxy listener context to Global. A plan pins HttpIdentityManager.Selection (generation and invalidation epoch), request bytes/service, policy, deadline and admission. Exact marked bytes, destination and source tool are checked before a one-time claim; alias changes cannot choose another account.
+its dependent capture tags once. Automatic transport uses DeferredRequestDelivery from the final Proxy listener context to Global. A plan pins HttpIdentityManager.Selection (generation and invalidation epoch), request bytes/service, policy and deadline. Active delivery admission is acquired at Global. Exact marked bytes, destination and source tool are checked before a one-time claim; alias changes cannot choose another account.
 
 Before committing ordinary output, shared validation must prevent captured data
 or automatic header injection from creating an HTTP-authentication
 directive or owned-traffic marker that a later callback would interpret as a
 new command. Report such output through the existing atomic tagged/ordinary
-failure policy. Capture-only preparation uses no processed marker. Trusted automatic transport and recovery share the existing guard's one-use replay marker, never a synthetic BPSP directive. Plans retain at most 256 requests and 32 MiB total clean-plus-marked bytes, with a 4 MiB clean-message ceiling and the original request deadline. Expiry, cancellation, completion and unload release markers and admission, including when another handler drops the request before Global. Invalid, altered, expired or reused markers stop at Global. Before native dispatch an automatic setup failure can continue unchanged; after dispatch retain the actual response or stop without forwarding the original again.
+failure policy. Capture-only preparation uses no processed marker. Trusted automatic transport and recovery share the existing guard's one-use replay marker, never a synthetic BPSP directive. Plans retain at most 256 requests and 32 MiB total clean-plus-marked bytes, with a 4 MiB clean-message ceiling and the original request deadline. Expiry, cancellation, completion and unload release markers and admission, including when another handler drops the request before Global. Invalid, altered, expired or reused markers stop at Global. Before native dispatch an automatic setup failure can continue unchanged, except Wait-for-login HTTP capacity/deadline/cancellation failures: Global returns a local 503 and Proxy handoff overflow drops the request; after dispatch retain the actual response or stop without forwarding the original again.
 
 ### Share recovery across independent callback families
 

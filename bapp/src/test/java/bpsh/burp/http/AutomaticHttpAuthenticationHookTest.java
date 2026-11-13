@@ -17,6 +17,99 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AutomaticHttpAuthenticationHookTest {
+    @ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void transientNativeAdmissionRefusalsNeverResendTheApplicationPost(boolean clearDuringAdmission) throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();var admissions=new java.util.concurrent.atomic.AtomicInteger();var sent=new java.util.concurrent.atomic.AtomicInteger();
+        var clear=new java.util.concurrent.atomic.AtomicReference<Runnable>(()->{});
+        var origin=java.net.URI.create("http://example.test");var allocator=new bpsh.authentication.http.HttpMessageBody.Allocator(1024);
+        var factory=new bpsh.authentication.http.HttpTransportFactory() {
+            public bpsh.authentication.http.HttpMessageBody.Allocator bodies(){return allocator;}public void close(){}
+            public java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService> open(ScopeSpec spec,bpsh.journey.SecretStore.Values values,long deadline) {
+                return java.util.concurrent.CompletableFuture.completedFuture(new bpsh.authentication.http.HttpAuthenticationService() {
+                    public boolean isOpen(){return true;}public void close(){}
+                    public Delivery admit(long end) throws java.io.IOException {
+                        if(admissions.incrementAndGet()<=3) {if(clearDuringAdmission)clear.get().run();throw new bpsh.authentication.http.HttpCapacityException();}
+                        return IntegrationFixtures.httpDelivery(request->{sent.incrementAndGet();return java.util.concurrent.CompletableFuture.completedFuture(
+                                new Response(200,List.of(),IntegrationFixtures.httpBody(new byte[0]),new bpsh.authentication.http.HttpAuthenticationEvidence(HttpAuthentication.Protocol.NTLM_V2,bpsh.authentication.http.HttpAuthenticationEvidence.Status.ACCEPTED)));});
+                    }
+                });
+            }
+        };
+        try(var fixture=new NativeTagPipelineTest.Fixture()) {
+            CoordinatorFixtures.load(fixture.registry,List.of(definition(HttpAuthentication.Protocol.NTLM_V2,"user-a",origin)));
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,factory);var host=hooks.new Host(fixture,null,identities,origin)) {
+                clear.set(()->identities.invalidate(fixture.registry.snapshot().resolve("user-a").identity()));
+                var defaults=RequestSettings.Controls.defaults();host.selectedTool=burp.api.montoya.core.ToolType.REPEATER;
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(fixture.registry.snapshot().resolve("user-a"),null)),defaults.tools(),5000,30000,60000,64,16)));
+                var result=host.handler.handleHttpRequestToBeSent(host.request("POST /perform HTTP/1.1\r\nHost: example.test\r\nContent-Length: 7\r\n\r\npayload",1,true));
+                assertEquals("SPOOF_RESPONSE",result.action().name());assertEquals(clearDuringAdmission?503:200,host.spoofResponse.statusCode());
+                assertEquals(clearDuringAdmission?0:1,sent.get());assertEquals(clearDuringAdmission?1:4,admissions.get());
+            }
+        }
+    }
+    @Test void waitPolicyDoesNotForwardAProxyRequestWhenDeferredPublicationIsFull() throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();var origin=java.net.URI.create("http://example.test");
+        try(var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime()) {
+            CoordinatorFixtures.load(fixture.registry,List.of(definition(HttpAuthentication.Protocol.NTLM_V2,"user-a",origin)));
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,runtime);var host=hooks.new Host(fixture,null,identities,origin)) {
+                var defaults=RequestSettings.Controls.defaults();host.selectedTool=burp.api.montoya.core.ToolType.PROXY;
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(fixture.registry.snapshot().resolve("user-a"),8081)),defaults.tools(),15000,30000,60000,64,16)));
+                for(int i=0;i<256;i++)assertEquals("CONTINUE",host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest)host.request("GET /whoami HTTP/1.1\r\nHost: example.test\r\n\r\n",i,true)).action().name());
+                var result=host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest)host.request("GET /whoami HTTP/1.1\r\nHost: example.test\r\n\r\n",257,true));
+                assertEquals("DROP",result.action().name());
+            }
+        }
+    }
+    @Test void aProxyBurstWaitsForHttpCapacityInsteadOfSendingUnauthenticatedRequests() throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();
+        try(var lab=IntegrationFixtures.httpAuthentication("NTLM_V2",null);var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime();
+            var workers=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var d=definition(HttpAuthentication.Protocol.NTLM_V2,"user-a",lab.url("/"));CoordinatorFixtures.load(fixture.registry,List.of(d));
+            try(var values=new bpsh.journey.SecretStore.Values(null,java.util.Map.of(),"alpha-password".toCharArray())) {fixture.secrets.put(new bpsh.journey.JourneyKey(JourneyDefinition.Scope.PROJECT,d.id()),values);}
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,runtime);var host=hooks.new Host(fixture,null,identities,lab.url("/"))) {
+                var defaults=RequestSettings.Controls.defaults();
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(fixture.registry.snapshot().resolve("user-a"),8081)),defaults.tools(),15000,30000,60000,64,16)));
+                host.selectedTool=burp.api.montoya.core.ToolType.PROXY;
+                var published=new java.util.concurrent.CountDownLatch(64);
+                var results=new java.util.ArrayList<java.util.concurrent.Future<String>>();
+                try {
+                    for(int i=0;i<64;i++) {final int id=i;results.add(workers.submit(()->{
+                        var proxy=host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest)host.request("GET /held HTTP/1.1\r\nHost: "+lab.url("/").getAuthority()+"\r\n\r\n",id,true));
+                        published.countDown();
+                        return host.handler.handleHttpRequestToBeSent(host.request(new String(proxy.request().toByteArray().getBytes(),StandardCharsets.ISO_8859_1),1000+id,true)).action().name();
+                    }));}
+                    assertTrue(published.await(5,java.util.concurrent.TimeUnit.SECONDS),"Proxy callbacks must not wait for transport capacity before publishing their Global plan.");
+                    lab.releaseResponse.complete(null);
+                    for(var result:results)assertEquals("SPOOF_RESPONSE",result.get(20,java.util.concurrent.TimeUnit.SECONDS),"Wait for login must not forward excess requests without authentication.");
+                    assertEquals(64,lab.observations.size());
+                    assertTrue(lab.observations.stream().allMatch(o->o.user().equals("user-a")));
+                } finally {lab.releaseResponse.complete(null);results.forEach(f->f.cancel(true));}
+            }
+        }
+    }
+
+    @Test void waitPolicyCapacityDeadlineReturns503WithoutSendingTheOriginal() throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();
+        try(var lab=IntegrationFixtures.httpAuthentication("NTLM_V2",null);var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime();
+            var worker=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var d=definition(HttpAuthentication.Protocol.NTLM_V2,"user-a",lab.url("/"));CoordinatorFixtures.load(fixture.registry,List.of(d));
+            try(var values=new bpsh.journey.SecretStore.Values(null,java.util.Map.of(),"alpha-password".toCharArray())) {fixture.secrets.put(new bpsh.journey.JourneyKey(JourneyDefinition.Scope.PROJECT,d.id()),values);}
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,runtime);var host=hooks.new Host(fixture,null,identities,lab.url("/"))) {
+                var defaults=RequestSettings.Controls.defaults();var entry=fixture.registry.snapshot().resolve("user-a");
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(entry,null)),defaults.tools(),15000,30000,60000,2,1)));
+                host.selectedTool=burp.api.montoya.core.ToolType.REPEATER;
+                var first=worker.submit(()->host.handler.handleHttpRequestToBeSent(host.request("GET /held HTTP/1.1\r\nHost: "+lab.url("/").getAuthority()+"\r\n\r\n",1,true)));
+                try {
+                    long until=System.nanoTime()+5_000_000_000L;while(lab.observations.isEmpty() && System.nanoTime()<until)Thread.sleep(10);
+                    assertEquals(1,lab.observations.size());
+                    host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(entry,null)),defaults.tools(),1000,30000,60000,2,1)));
+                    var result=host.handler.handleHttpRequestToBeSent(host.request("GET /whoami HTTP/1.1\r\nHost: "+lab.url("/").getAuthority()+"\r\n\r\n",2,true));
+                    assertEquals("SPOOF_RESPONSE",result.action().name());assertEquals(503,host.spoofResponse.statusCode());
+                    assertNull(host.spoofResponse.headerValue("WWW-Authenticate"));assertEquals(1,lab.observations.size());
+                } finally {lab.releaseResponse.complete(null);first.get(5,java.util.concurrent.TimeUnit.SECONDS);}
+            }
+        }
+    }
     @Test void correctingHttpDomainRetiresTheFailedAutomaticPoolWithoutManualCacheClear() throws Exception {
         var hooks=new NativeTagPipelineTest().new ProductionHooks();
         try(var lab=IntegrationFixtures.httpAuthentication("NTLM_V2",null);var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime()) {
@@ -283,7 +376,7 @@ class AutomaticHttpAuthenticationHookTest {
                     CoordinatorFixtures.load(fixture.registry,List.of(reassigned));
                 } else identities.invalidate(selected.identity());
                 var result=host.handler.handleHttpRequestToBeSent(host.request(new String(proxy.request().toByteArray().getBytes(),StandardCharsets.ISO_8859_1),1001,true));
-                assertEquals("CONTINUE",result.action().name());assertArrayEquals(raw.getBytes(StandardCharsets.ISO_8859_1),result.request().toByteArray().getBytes());
+                assertEquals("SPOOF_RESPONSE",result.action().name());assertEquals(503,host.spoofResponse.statusCode());
                 assertEquals(0,lab.requests.size());assertEquals(0,fixture.attempts);
             }
         }

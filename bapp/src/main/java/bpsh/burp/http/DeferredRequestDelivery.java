@@ -50,19 +50,24 @@ final class DeferredRequestDelivery implements AutoCloseable {
         if(stopped || closed.get() || left<=0)throw SessionRequestProcessor.unavailable();
         int bytes=plan.clean().toByteArray().length();
         if(bytes>NativeTagParser.MAX_OUTPUT_BYTES || plans.size()>=maxPlans || 2L*bytes>maxBytes-retained)
-            throw SessionRequestProcessor.configuration("The deferred authentication delivery capacity is exhausted.","Reduce request size or concurrency and retry.");
+            throw capacity();
         var lease=guard.beginReplay();
         try {
             var clean=plan.clean();String agent=lease.decorate(clean.headerValue("User-Agent"));
             var marked=clean.hasHeader("User-Agent")?clean.withUpdatedHeader("User-Agent",agent):clean.withAddedHeader("User-Agent",agent);
             int weight=Math.addExact(bytes,marked.toByteArray().length());
-            if(weight>maxBytes-retained)throw SessionRequestProcessor.configuration("The deferred authentication delivery byte budget is exhausted.","Reduce request size or concurrency and retry.");
+            if(weight>maxBytes-retained)throw capacity();
             var handle=new Handle(plan,lease,marked,deadline,weight);
             plans.put(lease.key(),handle);retained+=weight;
             try { handle.expiration=expiry.schedule(handle::close,left,TimeUnit.NANOSECONDS); }
             catch(RuntimeException error) { handle.close();throw SessionRequestProcessor.unavailable(); }
             return handle;
         } catch(AuthenticationFailure|RuntimeException|LinkageError error) {lease.close();throw error;}
+    }
+
+    private static AuthenticationFailure capacity() {
+        return new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,AuthenticationFailure.Cause.CAPACITY,
+                "The deferred authentication delivery capacity or byte budget is exhausted.","Reduce request size or concurrency and retry.");
     }
 
     /** Validates destination, exact marked bytes, permitted source and one-time claim before invoking the owner. */

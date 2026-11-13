@@ -200,6 +200,7 @@ class AutoSaveLoginTest {
                 assertEquals(bpsh.request.RequestSettings.RequestPolicy.WAIT_FOR_LOGIN, policy.getSelectedItem());
                 assertTrue(explanation.getText().contains("wait for login to finish"));
                 assertTrue(explanation.getText().contains("NTLM"));
+                assertTrue(explanation.getText().contains("503"),"Wait policy explains the local capacity/deadline outcome for HTTP authentication.");
                 policy.setSelectedItem(bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT);
                 assertTrue(explanation.getText().contains("send the original request unchanged"));
                 assertTrue(explanation.getText().contains("Later requests use the credentials"));

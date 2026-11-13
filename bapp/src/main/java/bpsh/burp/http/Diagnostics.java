@@ -62,6 +62,14 @@ public final class Diagnostics implements AutoCloseable {
         return new Notice(requestId, tagged, text);
     }
 
+    /** Reports a local response without claiming the request reached the origin or was forwarded. */
+    Notice unavailableResponse(RequestExchange requestId,String alias,AuthenticationFailure failure) {
+        String name=safeAlias(alias);
+        String text="BPSH returned 503 Service Unavailable without sending this request to the server. "+detail(name,failure);
+        emit(new Key(name,failure.phase(),failure.reason(),failure.problem(),failure.recovery(),"unavailable-response"),requestId+": "+text);
+        return new Notice(requestId,false,text);
+    }
+
     /**
      * Reports a background cycle/recovery condition without claiming that an application request failed.
      * @param alias Current safe alias, or null when unavailable.

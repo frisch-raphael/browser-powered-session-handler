@@ -7,6 +7,8 @@ import java.util.concurrent.CompletableFuture;
 
 /** One owned identity/attempt scope, shared by browser ingress and direct-request adapters. */
 public interface HttpAuthenticationService extends AutoCloseable {
+    /** Maximum concurrent deliveries admitted by one native identity scope. */
+    int MAX_ADMITTED_DELIVERIES = 16;
     interface Delivery extends AutoCloseable {
         CompletableFuture<Response> exchange(Request request);
         @Override void close();

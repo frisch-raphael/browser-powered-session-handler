@@ -153,8 +153,16 @@ Token response capture streams matching Chromium response bodies with a 1 MiB de
 Request admission defaults to 64 global and 16 per saved journey, with finite
 operator-adjustable values. The callback budget includes direct HTTP authentication
 through response delivery; Send immediately never waits for a pending login.
-Automatic capacity failures forward the original request with diagnostics;
-explicit requests fail closed. Request-copy reservations total at most 512 MiB
+Automatic HTTP authentication under **Wait for login** queues at the Global delivery
+boundary within the original request deadline, with at most 64 queued callbacks and
+active plus queued work sharing the configured global limit. Per-journey active
+work also respects the native scope ceiling of 16. Queued payload reservations
+share the 512 MiB copy budget; queued work reserves no transport body or socket.
+If capacity, cancellation or the deadline prevents dispatch, BPSH returns a local
+503 without a server authentication challenge. A full Proxy handoff buffer drops
+the request because that callback cannot supply a response. **Send immediately**
+and capture-only automatic capacity failures retain unchanged forwarding with
+diagnostics; explicit requests fail closed. Request-copy reservations total at most 512 MiB
 and charge four times message length plus 16 MiB for bounded header expansion, imposing
 a 124 MiB automatic-message ceiling.
 Automatic edits process headers separately and preserve body bytes. Recovery
