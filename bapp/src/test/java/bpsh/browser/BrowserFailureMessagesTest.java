@@ -157,7 +157,7 @@ class BrowserFailureMessagesTest {
                 new java.lang.reflect.InvocationTargetException(new UnsatisfiedLinkError("fixture-secret")))) {
             var driver = PlaywrightDriverAdapter.startupFailure(error, false);
             assertEquals(AuthenticationFailure.Cause.CONFIGURATION, driver.reason());
-            assertTrue(driver.getMessage().contains("runtime could not load"));
+            assertTrue(driver.getMessage().contains("Diagnostic:"));
             assertFalse(driver.getMessage().contains("fixture-secret")); assertNull(driver.getCause());
         }
     }

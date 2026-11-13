@@ -140,6 +140,13 @@ final class WindowsBrowserJob {
         static final Kernel KERNEL = Native.load("kernel32", Kernel.class);
     }
 
+    /** Initializes required Windows native support before a driver process can be started. */
+    static void initialize() throws IOException {
+        if (!Platform.isWindows()) return;
+        if (Native.POINTER_SIZE != 8) throw new Failure(Operation.UNSUPPORTED_PLATFORM, null, null, false);
+        java.util.Objects.requireNonNull(Binding.KERNEL);
+    }
+
     /** @param kernel Native boundary. @param handle Unnamed, attempt-owned job. */
     WindowsBrowserJob(Kernel kernel, Pointer handle) { this.kernel = kernel; this.handle = handle; }
 

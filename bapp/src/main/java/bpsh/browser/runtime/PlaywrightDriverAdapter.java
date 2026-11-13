@@ -172,12 +172,15 @@ public final class PlaywrightDriverAdapter {
         if (System.getenv("DEBUG") != null && System.getenv("DEBUG").contains("pw:channel"))
             throw setup("Playwright debug logging is enabled and could expose login values.", "Remove pw:channel from the DEBUG environment variable and restart Burp.");
         Process process = null; Path temporary = null; WindowsBrowserJob windowsJob = null;
+        DriverStartupFailures.Stage startupStage = DriverStartupFailures.Stage.NATIVE_SUPPORT;
         var children = java.util.concurrent.ConcurrentHashMap.<ProcessHandle>newKeySet();
         var cleanupDeadline = new java.util.concurrent.atomic.AtomicLong(Long.MAX_VALUE);
         ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "bpsh-driver-budget"); thread.setDaemon(true); return thread;
         });
         try {
+            WindowsBrowserJob.initialize();
+            startupStage = DriverStartupFailures.Stage.DRIVER_PROCESS;
             Path temporaryParent = Path.of(System.getProperty("java.io.tmpdir")).toRealPath();
             temporary = Files.createTempDirectory(temporaryParent, "bpsh-attempt-", BrowserRuntimeManager.privateAttributes(temporaryParent, true));
             Map<String, String> environment = new HashMap<>(environment(runtime));
@@ -188,7 +191,9 @@ public final class PlaywrightDriverAdapter {
             Files.readAttributes(runtime.driverEntryPoint(), BasicFileAttributes.class);
             if (!Files.isExecutable(runtime.nodeExecutable())) throw new java.nio.file.AccessDeniedException("Bundled Node is not executable.");
             builder.redirectError(ProcessBuilder.Redirect.DISCARD); process = builder.start();
+            startupStage = DriverStartupFailures.Stage.NATIVE_SUPPORT;
             windowsJob = WindowsBrowserJob.attach(process);
+            startupStage = DriverStartupFailures.Stage.PLAYWRIGHT_PROTOCOL;
             Process owned = process;
             watchdog.scheduleWithFixedDelay(() -> {
                 try {
@@ -213,12 +218,13 @@ public final class PlaywrightDriverAdapter {
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
             return new Session(process, playwright, connection, recordingTap, runtime, close, watchdog, temporary, children, cleanupDeadline, windowsJob);
         } catch (AuthenticationFailure ex) {
-            watchdog.shutdownNow(); closeJob(windowsJob); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent()); throw ex;
+            cleanupFailedStartup(process, windowsJob, temporary, watchdog, ex); throw ex;
         } catch (Exception | LinkageError ex) {
             boolean exited = process != null && !process.isAlive();
-            watchdog.shutdownNow(); closeJob(windowsJob); if (process != null) terminate(process); if (temporary != null) cleanup(temporary, temporary.getParent());
+            AuthenticationFailure failure = startupFailure(ex, exited, startupStage);
+            cleanupFailedStartup(process, windowsJob, temporary, watchdog, failure);
             AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadlineNanos, cancelled);
-            throw startupFailure(ex, exited);
+            throw failure;
         }
     }
 
@@ -228,9 +234,18 @@ public final class PlaywrightDriverAdapter {
      * @return Safe setup result.
      */
     public static AuthenticationFailure startupFailure(Throwable error, boolean exited) {
-        if (error instanceof LinkageError || error.getCause() instanceof LinkageError)
-            return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.CONFIGURATION,
-                    "The bundled driver runtime could not load.", "Reload the complete universal extension JAR, then try again.");
+        return startupFailure(error, exited, DriverStartupFailures.Stage.BROWSER_SESSION);
+    }
+
+    /** @param error Borrowed browser-session error. @return Safe loading diagnosis, or null when the evidence is unrelated. */
+    public static AuthenticationFailure loadingFailure(Throwable error) {
+        return DriverStartupFailures.classify(error, DriverStartupFailures.Stage.BROWSER_SESSION);
+    }
+
+    /** @param error Borrowed startup failure. @param exited Observed process exit. @param stage Last entered startup operation. @return Redacted standalone failure. */
+    private static AuthenticationFailure startupFailure(Throwable error, boolean exited, DriverStartupFailures.Stage stage) {
+        AuthenticationFailure loading = DriverStartupFailures.classify(error, stage);
+        if (loading != null) return loading;
         var cause = error instanceof java.nio.file.AccessDeniedException ? AuthenticationFailure.Cause.CONFIGURATION
                 : error instanceof java.nio.file.NoSuchFileException ? AuthenticationFailure.Cause.ASSET_MISSING : AuthenticationFailure.Cause.UNKNOWN;
         String safe = cause == AuthenticationFailure.Cause.CONFIGURATION ? "Burp cannot execute the bundled browser driver."
@@ -239,6 +254,23 @@ public final class PlaywrightDriverAdapter {
         return new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, cause, safe,
                 cause == AuthenticationFailure.Cause.CONFIGURATION ? "Allow executable access to the browser cache."
                 : cause == AuthenticationFailure.Cause.ASSET_MISSING ? "Reload the complete universal extension JAR." : "");
+    }
+
+    /** Preserves the primary startup diagnosis if temporary-file cleanup also fails. */
+    private static void cleanupFailedStartup(Process process, WindowsBrowserJob job, Path temporary,
+            ScheduledExecutorService watchdog, AuthenticationFailure primary) {
+        try { watchdog.shutdownNow(); }
+        catch (RuntimeException failure) { primary.recordIncompleteCleanup(); }
+        if (!closeJob(job)) primary.recordIncompleteCleanup();
+        if (process != null) {
+            boolean interrupted = Thread.interrupted();
+            try { terminate(process); if (!process.waitFor(2, TimeUnit.SECONDS)) primary.recordIncompleteCleanup(); }
+            catch (InterruptedException stopped) { interrupted = true; primary.recordIncompleteCleanup(); }
+            catch (RuntimeException failure) { primary.recordIncompleteCleanup(); }
+            finally { if (interrupted) Thread.currentThread().interrupt(); }
+        }
+        if (temporary != null) try { cleanup(temporary, temporary.getParent()); }
+        catch (AuthenticationFailure | RuntimeException | LinkageError failure) { primary.recordIncompleteCleanup(); }
     }
 
     /**
@@ -273,9 +305,10 @@ public final class PlaywrightDriverAdapter {
     private static void terminate(ProcessHandle handle) { if (handle.isAlive()) handle.destroyForcibly(); }
 
     /** Releases an assigned Windows job on failed initialization before removing its private files. */
-    private static void closeJob(WindowsBrowserJob job) {
-        if (job != null) try { job.close(System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); }
-        catch (IOException | RuntimeException ignored) { /* Original initialization failure remains primary. */ }
+    private static boolean closeJob(WindowsBrowserJob job) {
+        if (job == null) return true;
+        try { job.close(System.nanoTime() + TimeUnit.SECONDS.toNanos(2)); return true; }
+        catch (IOException | RuntimeException | LinkageError ignored) { return false; }
     }
 
     /**

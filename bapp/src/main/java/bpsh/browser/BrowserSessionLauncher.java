@@ -240,14 +240,14 @@ public final class BrowserSessionLauncher {
         } catch (Exception | LinkageError error) {
             AuthenticationFailure failure;
             if (error instanceof AuthenticationFailure classified) failure = classified;
-            else if (error instanceof LinkageError) failure = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
-                    AuthenticationFailure.Cause.CONFIGURATION, "The bundled driver runtime could not load.",
-                    "Reload the complete universal extension JAR, then try again.");
             else {
-                try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled); }
-                catch (AuthenticationFailure stopped) { closeAfterFailure(session, stopped); throw stopped; }
-                failure = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.UNKNOWN,
-                        "The browser session could not start.");
+                failure = PlaywrightDriverAdapter.loadingFailure(error);
+                if (failure == null) {
+                    try { AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.SETUP, deadline, cancelled); }
+                    catch (AuthenticationFailure stopped) { closeAfterFailure(session, stopped); throw stopped; }
+                    failure = new AuthenticationFailure(AuthenticationFailure.Phase.SETUP, AuthenticationFailure.Cause.UNKNOWN,
+                            "The browser session could not start.");
+                }
             }
             closeAfterFailure(session, failure); throw failure;
         }
