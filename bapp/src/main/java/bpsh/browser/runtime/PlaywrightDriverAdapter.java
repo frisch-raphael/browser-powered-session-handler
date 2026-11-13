@@ -179,7 +179,7 @@ public final class PlaywrightDriverAdapter {
             Thread thread = new Thread(r, "bpsh-driver-budget"); thread.setDaemon(true); return thread;
         });
         try {
-            WindowsBrowserJob.initialize();
+            initializeNativeSupport();
             startupStage = DriverStartupFailures.Stage.DRIVER_PROCESS;
             Path temporaryParent = Path.of(System.getProperty("java.io.tmpdir")).toRealPath();
             temporary = Files.createTempDirectory(temporaryParent, "bpsh-attempt-", BrowserRuntimeManager.privateAttributes(temporaryParent, true));
@@ -271,6 +271,17 @@ public final class PlaywrightDriverAdapter {
         }
         if (temporary != null) try { cleanup(temporary, temporary.getParent()); }
         catch (AuthenticationFailure | RuntimeException | LinkageError failure) { primary.recordIncompleteCleanup(); }
+    }
+
+    /** Converts JNA's known plain Error as well as linkage errors, while leaving VM-fatal errors untouched. */
+    private static void initializeNativeSupport() throws IOException {
+        try { WindowsBrowserJob.initialize(); }
+        catch (Error error) {
+            if (error instanceof LinkageError || !NativeLoadReason.incompatibleVersionError(error)) throw error;
+            // Route the known plain Error through the existing cleanup/cancellation path.
+            var wrapper = new LinkageError("JNA native ABI initialization failed.");
+            wrapper.initCause(error); throw wrapper;
+        }
     }
 
     /**

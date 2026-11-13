@@ -38,6 +38,11 @@ final class DriverStartupFailures {
         if (stage == Stage.NATIVE_SUPPORT && contains(chain, IllegalCallerException.class))
             return failure(stage, "NATIVE_ACCESS", "Burp's Java runtime refused access while initializing Windows native support.",
                     "Check the native-access configuration of the Java runtime used to launch Burp.");
+        if (stage == Stage.NATIVE_SUPPORT && (contains(chain, UnsatisfiedLinkError.class)
+                || chain.stream().anyMatch(NativeLoadReason::incompatibleVersionError))) {
+            var detail = NativeLoadReason.observe(chain, NativeLoadReason.Settings.current());
+            return failure(stage, "NATIVE_LIBRARY" + (detail == NativeLoadReason.UNKNOWN ? "" : "_" + detail.name()), detail.problem, detail.recovery);
+        }
         if (contains(chain, UnsatisfiedLinkError.class))
             return failure(stage, "NATIVE_LIBRARY", "A native library required by the browser runtime could not load.",
                     "Check native-library loading restrictions and Java launch settings on this machine.");
