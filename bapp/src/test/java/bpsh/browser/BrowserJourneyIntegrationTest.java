@@ -203,7 +203,13 @@ public class BrowserJourneyIntegrationTest {
             origin.route("/sw.js",e->IntegrationFixtures.respond(e,200,"application/javascript","self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname==='/token')e.respondWith(fetch('/upstream'))})"));
             origin.route("/upstream",e->IntegrationFixtures.respond(e,200,"application/json","{\"access_token\":\"forwarded-token\",\"padding\":\""+"x".repeat(large?1048576:10)+"\"}"));origin.start();
             var journey=IntegrationFixtures.journey(origin,List.of());
-            if(large)assertTrue(assertThrows(AuthenticationFailure.class,()->run(journey,values)).getMessage().contains("extraction limit"));
+            if(large) {
+                var failure=assertThrows(AuthenticationFailure.class,()->run(journey,values));
+                assertEquals(AuthenticationFailure.Phase.EXTRACTION,failure.phase());
+                assertEquals(AuthenticationFailure.Cause.EXTRACTION,failure.reason());
+                assertTrue(failure.problem().contains("oversized Content-Length")
+                        ||failure.problem().contains("exceeds the extraction limit"),failure.getMessage());
+            }
             else assertEquals("forwarded-token",run(journey,values).token());
         }
     }
