@@ -101,6 +101,15 @@ class ProductionEvidenceTest {
         attempt.addProperty("closedContexts",0);attempt.addProperty("closedBrowsers",0);attempt.addProperty("contextClosed",false);attempt.addProperty("browserClosed",false);
         attempt.addProperty("failurePhase","EXTRACTION");attempt.addProperty("failureCause","CANCELLED");
         assertTrue(LabProductionEvidence.validFederationCapture(cancelled,forced),"Cancellation may destroy the owned pipe before graceful close notifications.");
+        var waiting=forced.deepCopy();var step=waiting.getAsJsonArray("attempts").get(0).getAsJsonObject();
+        step.addProperty("failurePhase","STEP");step.addProperty("failedStepNumber",6);step.addProperty("failedStepType","WAIT_SELECTOR");
+        assertTrue(LabProductionEvidence.validFederationCapture(cancelled,waiting),"The real publication checkpoint can cancel the required completion-selector wait.");
+        step.remove("failedStepType");assertFalse(LabProductionEvidence.validFederationCapture(cancelled,waiting));
+        step.addProperty("failedStepType","CLICK");assertFalse(LabProductionEvidence.validFederationCapture(cancelled,waiting));
+        step.addProperty("failedStepNumber",5);assertTrue(LabProductionEvidence.validFederationCapture(cancelled,waiting));
+        step.addProperty("failedStepNumber",4);step.addProperty("failedStepType","SECURE_INPUT");assertFalse(LabProductionEvidence.validFederationCapture(cancelled,waiting));
+        step.addProperty("failedStepNumber",6);step.addProperty("failedStepType","WAIT_SELECTOR");step.addProperty("failurePhase","EXTRACTION");
+        assertFalse(LabProductionEvidence.validFederationCapture(cancelled,waiting),"Step metadata must match a step-phase failure.");
         attempt.addProperty("alive",1);assertFalse(LabProductionEvidence.validFederationCapture(cancelled,forced),"Missing notifications require actual process-tree closure, never an assumed close.");
         attempt.addProperty("alive",0);attempt.addProperty("contextClosed",true);assertFalse(LabProductionEvidence.validFederationCapture(cancelled,forced),"Do not invent an SDK notification.");
     }

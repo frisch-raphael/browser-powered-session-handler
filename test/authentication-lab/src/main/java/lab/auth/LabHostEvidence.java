@@ -43,10 +43,10 @@ public final class LabHostEvidence {
     public static String configurationFingerprint(Path workspace) throws IOException {return LabProductionEvidence.configurationFingerprint(workspace,TASK);}
     static List<String> criticalOwners() {
         var owners=new ArrayList<String>();
-        for(String name:List.of("LabHostEvidence","LabHostScenarios","LabHostGuest","LabHostCoordinator","LabHostInputs","LabHostArtifactCache","LabHostVmTransport","LabHostGuiProtocol","LabHostMemory","LabHostObservations",
+        for(String name:List.of("LabHostEvidence","LabHostScenarios","LabHostGuest","LabHostCoordinator","LabHostInputs","LabHostArtifactCache","LabHostVmTransport","LabHostGuiProtocol","LabHostMemory","LabHostObservations","LabHostLinuxTemp","LabHostWindowsListeners",
                 "LabEvidence","LabProductionEvidence","ScenarioCatalog","RefreshBindings","LabJson","LabRun","LoginFlows","ControlledApplication","HttpAuthenticationFixture","FixtureIdentityStore"))
             owners.add("test/authentication-lab/src/main/java/lab/auth/"+name+".java");
-        for(String name:List.of("HostGuiBootstrap","HostGuiDriver","HostGuiSelectors","HostGuiRules","HostGuiProbe","HostGuiAssertions","HostGuiMessages","HostGuiDiagnostics","HostGuiPreferences","HostProbeShape"))
+        for(String name:List.of("HostGuiBootstrap","HostGuiDriver","HostGuiSelectors","HostGuiRules","HostGuiProbe","HostGuiAssertions","HostGuiMessages","HostGuiDiagnostics","HostGuiPreferences","HostProbeShape","HostGuiPointerTrace","HostLibraryOrigins","HostHeapDiagnostics","HostGuiHistory"))
             owners.add("test/authentication-lab/src/hostGui/java/lab/auth/gui/"+name+".java");
         owners.add("test/authentication-lab/src/hostProbe/java/lab/auth/HostProbeExtension.java");return List.copyOf(owners);
     }

@@ -463,9 +463,13 @@ browser login, recording and Basic/NTLM delivery and explains that an empty fiel
 means direct and Burp upstream-proxy settings are not inherited.
 
 Settings includes a native **Burp Browser** group with an editable executable,
-**Browse**, **Use automatic**, detected/selected location and persistent help about
-separate temporary sessions. The raw per-user selection stays visible even when
-invalid. Clearing it restores automatic discovery. File discovery runs on workers;
+**Browse**, **Restore automatic detection**, and persistent help about separate
+temporary sessions. Automatic detection displays its resolved path in the executable
+field without saving a manual override. Visible guidance distinguishes automatic
+detection from a custom executable; restoring automatic detection is disabled while
+already automatic. Editing or browsing selects a custom executable. The raw per-user
+selection stays visible even when invalid. Clearing it restores automatic discovery.
+File discovery runs on workers;
 stale results cannot overwrite a newer selection or unloaded UI. Paths render as
 literal text with plain accessible descriptions and the normal tooltip factory.
 The override is absent from journey/project exports and affects later attempts.

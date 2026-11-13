@@ -441,8 +441,10 @@ public final class LabProductionEvidence {
             if(attempts.size()!=count)return false;var contexts=new HashSet<Long>();var journeys=new HashSet<String>();
             for(int i=0;i<count;i++) {
                 var attempt=attempts.get(i).getAsJsonObject();boolean failed=(rejection||upstreamRejected)&&i==count-1||cancel;
+                boolean stepCancellation=cancel&&"STEP".equals(text(attempt,"failurePhase"));
                 var keys=new HashSet<>(Set.of("journeyId","contexts","closedContexts","contextId","contextIdentityObserved","contextClosed","browsers","closedBrowsers","browserClosed","osProcessClosureObserved","observedProcesses","drivers","alive"));
                 if(failed)keys.addAll(Set.of("failurePhase","failureCause"));
+                if(stepCancellation)keys.addAll(Set.of("failedStepNumber","failedStepType"));
                 if(!attempt.keySet().equals(keys)||number(attempt,"contexts")!=1||number(attempt,"browsers")!=1
                         ||number(attempt,"drivers")!=1||number(attempt,"alive")!=0||number(attempt,"observedProcesses")<2||number(attempt,"contextId")<1||!contexts.add(number(attempt,"contextId"))||!journeys.add(text(attempt,"journeyId")))return false;
                 UUID.fromString(text(attempt,"journeyId"));
@@ -453,8 +455,14 @@ public final class LabProductionEvidence {
                             !(closedContexts==1?trueFact(attempt,"contextClosed"):falseFact(attempt,"contextClosed"))||
                             !(closedBrowsers==1?trueFact(attempt,"browserClosed"):falseFact(attempt,"browserClosed")))return false;
                 }else if(closedContexts!=1||closedBrowsers!=1||!trueFact(attempt,"contextClosed")||!trueFact(attempt,"browserClosed"))return false;
-                if(failed&&(!text(attempt,"failureCause").equals(cancel?"CANCELLED":"EXTRACTION")||
-                        !text(attempt,"failurePhase").equals("EXTRACTION")))return false;
+                if(failed) {
+                    if(!text(attempt,"failureCause").equals(cancel?"CANCELLED":"EXTRACTION"))return false;
+                    if(stepCancellation) {
+                        // Only the broker's final submit/completion wait can overlap the independently observed publication checkpoint.
+                        long step=number(attempt,"failedStepNumber");String type=text(attempt,"failedStepType");
+                        if(!(step==5&&type.equals("CLICK")||step==6&&type.equals("WAIT_SELECTOR")))return false;
+                    }else if(!text(attempt,"failurePhase").equals("EXTRACTION"))return false;
+                }
             }
             if(browser||broker) {
                 var verifier=actual.getAsJsonObject("verifier");

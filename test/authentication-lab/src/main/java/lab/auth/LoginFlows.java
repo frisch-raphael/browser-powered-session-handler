@@ -316,9 +316,11 @@ public final class LoginFlows {
         if (route.equals("outputs") && exchange.getRequestMethod().equals("GET")) {
             synchronized (lease) {
                 lease.check();
-                if (!lease.loginCompleted || lease.current == null || !lease.marker.reveal().equals(ControlledApplication.cookies(exchange).get("LAB_FLOW")))
+                var cookies = ControlledApplication.cookies(exchange);
+                var outputs = lease.outputSessions.get(cookies.get("LAB_OUTPUT_SESSION"));
+                if (!lease.loginCompleted || lease.current == null || !lease.marker.reveal().equals(cookies.get("LAB_FLOW")) || outputs == null)
                     throw LabRun.error(401, "NOT_AUTHENTICATED");
-                ControlledApplication.json(exchange, 200, lease.responseOutputs);
+                ControlledApplication.json(exchange, 200, outputs);
             }
             return true;
         }
@@ -486,7 +488,12 @@ public final class LoginFlows {
         var body = new LinkedHashMap<String, Object>();
         if (faults.stream().noneMatch(f -> f.kind().equals("OMIT_OUTPUT") && f.role() == Role.B)) body.put("access_token", output.credential(Role.B).reveal());
         body.put("accountId", output.account()); body.put("issuanceId", output.id());
-        synchronized (lease) { lease.check(); lease.responseOutputs = Map.copyOf(body); }
+        synchronized (lease) {
+            lease.check();
+            String session = FixtureIdentityStore.randomSecret().reveal();
+            lease.outputSessions.put(session, Map.copyOf(body));
+            cookie(exchange, lease, "LAB_OUTPUT_SESSION", session, "HttpOnly; SameSite=Lax");
+        }
         if (variant(lease).equals("deep-link")) {
             cookie(exchange, lease, "LAB_B", output.credential(Role.B).reveal(), "HttpOnly; SameSite=Lax");
             ControlledApplication.redirect(exchange, 303, lease.endpoint("protected/b?view=details"));
@@ -525,7 +532,7 @@ public final class LoginFlows {
         cookieAt(exchange, name, value, "/cases/" + lease.id(), attributes);
     }
     private static void cookieAt(HttpExchange exchange, String name, String value, String path, String attributes) { exchange.getResponseHeaders().add("Set-Cookie", name + "=" + value + "; Path=" + path + "; " + attributes); }
-    private static String userField() { return "<input id=user name=username autocomplete=username>"; }
+    private static String userField() { return "<input id=user name=username autocomplete=username autofocus>"; }
     private static String passField() { return "<input id=pass name=password type=password autocomplete=current-password>"; }
     private static String form(URI action, String fields, String button) { return "<form id=login-form method=post action=\"" + escape(action.toString()) + "\">" + fields + "<button id=" + button + " type=submit>Continue</button></form>"; }
     static String escape(String value) { return value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;"); }

@@ -11,6 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class IngressSentinelTest {
     @TempDir Path directory;
+    @Test void preparedAuthorityRemainsValidAcrossYearsOfLocalTestRuns() throws Exception {
+        var ca = LabTls.prepare(directory.resolve("long-lived-ca"));
+        try (var input = java.nio.file.Files.newInputStream(ca.directory().resolve("ca.crt"))) {
+            var certificate = (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(input);
+            certificate.checkValidity(java.util.Date.from(java.time.Instant.now().plus(Duration.ofDays(3649))));
+        }
+    }
     @Test void validAndMalformedHttpBothCountBeforeAnyRouteParser() throws Exception {
         for (String input : new String[]{"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n", "malformed\u0000request"}) {
             try (var sentinel = new IngressSentinel(null); var socket = new Socket()) {

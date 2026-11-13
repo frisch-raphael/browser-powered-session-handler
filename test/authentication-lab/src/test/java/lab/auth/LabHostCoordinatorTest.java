@@ -37,6 +37,10 @@ class LabHostCoordinatorTest {
         String script=ownedRootCleanupScript(vm,root.toString(),id,nonce,99999999,1000);
         assertNotEquals(0,executeCleanup(script));assertTrue(Files.isDirectory(root));assertTrue(Files.exists(unrelated));
         owner.put("runNonce",nonce);Files.writeString(root.resolve("owner.json"),LabRun.JSON.toJson(owner));
+        Path longDirectory=root;
+        while(longDirectory.toString().length()<300)longDirectory=longDirectory.resolve("long-component-"+"x".repeat(45));
+        Files.createDirectories(longDirectory);Path longFile=Files.writeString(longDirectory.resolve("payload.txt"),"PRIVATE_LONG_PATH_CONTENT");
+        assertTrue(longDirectory.toString().length()>259);assertTrue(longFile.toString().length()>259);
         assertEquals(0,executeCleanup(script));assertFalse(Files.exists(root));assertEquals("PRIVATE_SENTINEL",Files.readString(unrelated));
     }
     private int executeCleanup(String script) throws Exception {

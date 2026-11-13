@@ -38,7 +38,7 @@ public final class LabTls {
     private static String pem(String kind, byte[] encoded) { return "-----BEGIN " + kind + "-----\n" + Base64.getMimeEncoder(64, new byte[]{10}).encodeToString(encoded) + "\n-----END " + kind + "-----\n"; }
     public static PreparedCa prepare(Path directory) throws Exception {
         Files.createDirectory(directory); LabRun.restrict(directory); var password = FixtureIdentityStore.randomSecret();
-        keytool(directory, password, "-genkeypair", "-alias", "ca", "-keyalg", "RSA", "-keysize", "2048", "-dname", "CN=AuthLab dedicated CA", "-validity", "7", "-ext", "BC=ca:true", "-keystore", "ca.p12");
+        keytool(directory, password, "-genkeypair", "-alias", "ca", "-keyalg", "RSA", "-keysize", "2048", "-dname", "CN=AuthLab dedicated CA", "-validity", "3650", "-ext", "BC=ca:true", "-keystore", "ca.p12");
         keytool(directory, password, "-exportcert", "-rfc", "-alias", "ca", "-keystore", "ca.p12", "-file", "ca.crt");
         LabRun.restrict(directory.resolve("ca.p12"));
         Path descriptor = directory.resolve("ca.json"); Files.writeString(descriptor, LabRun.JSON.toJson(Map.of("materialVersion", 1, "password", password.reveal(), "fingerprint", certificateHash(directory.resolve("ca.crt"))))); LabRun.restrict(descriptor);

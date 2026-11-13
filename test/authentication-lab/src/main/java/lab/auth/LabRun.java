@@ -242,7 +242,7 @@ public final class LabRun implements AutoCloseable {
         FreshPhase freshPhase;
         boolean primed, probeObserved, loginCompleted;
         FixtureIdentityStore.Issuance current;
-        Map<String, Object> responseOutputs = Map.of();
+        final Map<String, Map<String, Object>> outputSessions = new HashMap<>();
         final FixtureIdentityStore.Secret marker = FixtureIdentityStore.randomSecret();
         private CaseLease(String id, long generation) { this.id = id; this.generation = generation; }
         public String id() { return id; }
@@ -370,7 +370,7 @@ public final class LabRun implements AutoCloseable {
                 try { TimeUnit.NANOSECONDS.timedWait(this, remaining); }
                 catch (InterruptedException ex) { Thread.currentThread().interrupt(); throw error(504, "DEADLINE"); }
             }
-            closed = true; caseState = "CLOSED"; transactions.clear(); current = null; responseOutputs = Map.of(); identities.clear();
+            closed = true; caseState = "CLOSED"; transactions.clear(); current = null; outputSessions.clear(); identities.clear();
             }
         }
     }

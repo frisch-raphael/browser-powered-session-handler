@@ -12,10 +12,10 @@ import static lab.auth.LabJson.*;
 public final class LabHostGuiProtocol {
     private LabHostGuiProtocol() {}
     public static final Set<String> SAFE_LABELS=Set.of("Proxy","Repeater","Extensions","Browser Powered Session Handler",
-            "Test login","Next","Start Burp","Journeys","Session handling","Settings","Import journeys...","Loaded",
+            "Test login","Next","Start Burp","Journeys","Session handling","Settings","Import journeys...","Loaded","Extension loaded",
             "Intercept","HTTP history","Intercept is on","Intercept is off","Intercept on","Intercept off","Forward","Drop","Send","Raw","Pretty","Hex");
     public enum Operation { READY, IMPORT_JOURNEY, ENTER_SECRET, EDIT_RULES, OPEN_TOOL, COPY_TO_REPEATER,
-        SET_REPEATER_REQUEST, SET_REPEATER_NONCE, SEND_REPEATER, ASSERT_REPEATER_RESPONSE, TEST_LOGIN, SET_INTERCEPT, EDIT_INTERCEPTED_REQUEST,
+        SET_REPEATER_REQUEST, SET_REPEATER_NONCE, SEND_REPEATER, ASSERT_REPEATER_RESPONSE, TEST_LOGIN, TEST_BROWSER_LOGIN, RECORD_BROWSER_LOGIN, FINISH_BROWSER_RECORDING, BROWSER_SETTINGS, SET_INTERCEPT, EDIT_INTERCEPTED_REQUEST,
         FORWARD_INTERCEPTED_REQUEST, SET_PRODUCT_LOADED, CAPTURE_PROBE, ASSERT_UI, CLOSE }
     public enum ClaimState { NEW, COMPLETED, AMBIGUOUS }
     public record Session(UUID invocationId, String platform, UUID runNonce, String productSha256,
@@ -95,7 +95,7 @@ public final class LabHostGuiProtocol {
         require(ended>=began&&(!text(value,"outcome").equals("PASS")||ended<=command.deadlineEpochMs()),"GUI_RECEIPT_TIME");
         member(value.get("outcome"),"PASS","FAIL","BLOCKED","CANCELLED");require(text(value,"code").matches("[A-Z][A-Z0-9_]{0,79}"),"GUI_RECEIPT_CODE");
         var observed=object(value.get("observed"));
-        require(Set.of("ready","tool","enabled","imported","nonce","length","status","submitted","copied","forwarded","edited","closeRequested","counts","labels","secretEntered","loginResult","httpProtocol","rulesConfigured","validationRejected","captureCompleted","assertionObserved","assertionCode").containsAll(observed.keySet()),"GUI_OBSERVED_FIELDS");
+        require(Set.of("ready","tool","enabled","imported","nonce","length","status","submitted","copied","forwarded","edited","closeRequested","counts","labels","secretEntered","loginResult","httpProtocol","rulesConfigured","validationRejected","captureCompleted","assertionObserved","assertionCode","testUiConfirmed","nativeStart","loginTyped","initialStepsCleared","nativeStop","reviewReplaced","browserVersion","theme","size","width","inlineError","focused","noPopup","literalPath","controlsVisible","productSourceMatched").containsAll(observed.keySet()),"GUI_OBSERVED_FIELDS");
         for(var entry:observed.entrySet()) {
             String key=entry.getKey();JsonElement fact=entry.getValue();
             switch(key) {
@@ -104,7 +104,10 @@ public final class LabHostGuiProtocol {
                 case "loginResult" -> member(fact,"HTTP_AUTHENTICATED");
                 case "httpProtocol" -> member(fact,"BASIC","NTLM_V1","NTLM_V2");
                 case "assertionCode" -> member(fact,"URL_REGEX_INVALID","RECOVERY_PAUSED","LOGIN_FAILED","ORDINARY_UNCHANGED");
-                case "length" -> positive(fact);
+                case "browserVersion" -> require(text(fact).matches("[0-9]{1,9}(?:\\.[0-9]{1,9}){2,3}"),"GUI_BROWSER_VERSION");
+                case "theme" -> member(fact,"Light","Dark");
+                case "size" -> member(fact,"compact","wide");
+                case "width","length" -> positive(fact);
                 case "status" -> require(positive(fact)>=100&&positive(fact)<=599,"GUI_OBSERVED_STATUS");
                 case "counts" -> {var counts=object(fact);require(Set.of("password","text","button","table","tabs","other").containsAll(counts.keySet()),"GUI_OBSERVED_COUNTS");counts.entrySet().forEach(e->positive(e.getValue()));}
                 case "labels" -> require(SAFE_LABELS.containsAll(strings(fact)),"GUI_OBSERVED_LABELS");
@@ -153,7 +156,9 @@ public final class LabHostGuiProtocol {
             }
             case ASSERT_REPEATER_RESPONSE -> {object(intent,"nonce","status");nonce(intent);require(positive(intent.get("status"))>=100&&positive(intent.get("status"))<=599,"GUI_RESPONSE_STATUS");}
             case SET_REPEATER_REQUEST,EDIT_INTERCEPTED_REQUEST -> {object(intent,"nonce","inputSha256");nonce(intent);hash(intent.get("inputSha256"));}
-            case TEST_LOGIN -> {object(intent,"alias");alias(intent);}
+            case TEST_LOGIN,TEST_BROWSER_LOGIN,FINISH_BROWSER_RECORDING -> {object(intent,"alias");alias(intent);}
+            case RECORD_BROWSER_LOGIN -> {object(intent,"alias","secretRef");alias(intent);member(intent.get("secretRef"),"FORM_B");}
+            case BROWSER_SETTINGS -> {object(intent,"alias","theme","size");alias(intent);member(intent.get("theme"),"Light","Dark");member(intent.get("size"),"compact","wide");}
             case SET_INTERCEPT,SET_PRODUCT_LOADED -> {object(intent,"enabled");require(intent.get("enabled").isJsonPrimitive()&&intent.getAsJsonPrimitive("enabled").isBoolean(),"GUI_BOOLEAN");}
             case CAPTURE_PROBE -> {
                 String phase=member(intent.get("phase"),"RESET","EXPORT");
@@ -181,7 +186,9 @@ public final class LabHostGuiProtocol {
                 require(text(args,"previousNonce").matches("h[0-9a-f]{16}")&&!text(args,"previousNonce").equals(text(args,"nonce")),"GUI_PREVIOUS_NONCE");}
             case ASSERT_REPEATER_RESPONSE -> {object(args,"nonce","status");nonce(args);require(positive(args.get("status"))>=100&&positive(args.get("status"))<=599,"GUI_RESPONSE_STATUS");}
             case SET_REPEATER_REQUEST, EDIT_INTERCEPTED_REQUEST -> { object(args,"nonce","path"); nonce(args); inputPath(args,root); }
-            case TEST_LOGIN -> { object(args,"alias"); alias(args); }
+            case TEST_LOGIN,TEST_BROWSER_LOGIN,FINISH_BROWSER_RECORDING -> { object(args,"alias"); alias(args); }
+            case RECORD_BROWSER_LOGIN -> {object(args,"alias","secret");alias(args);member(args.get("secret"),"FORM_B");}
+            case BROWSER_SETTINGS -> {object(args,"alias","theme","size");alias(args);member(args.get("theme"),"Light","Dark");member(args.get("size"),"compact","wide");}
             case SET_INTERCEPT, SET_PRODUCT_LOADED -> {
                 object(args,"enabled"); require(args.get("enabled").isJsonPrimitive() && args.get("enabled").getAsJsonPrimitive().isBoolean(),"GUI_BOOLEAN");
             }

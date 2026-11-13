@@ -8,9 +8,12 @@ class HostGuiAssertionsTest {
         assertTrue(HostGuiAssertions.message("RECOVERY_PAUSED","Automatic recovery is paused after 1 attempt. Use Test login to retry."));
         assertFalse(HostGuiAssertions.message("RECOVERY_PAUSED","Automatic recovery is paused after 1 attempt."));
         assertFalse(HostGuiAssertions.message("RECOVERY_PAUSED","Login failed."));
-        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Invalid URL regex."));
-        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 1: Use supported RE2 syntax for the URL expression."));
-        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 1: Use supported RE2 syntax for the URL expression at position 2."));
+        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 1, URL: requires supported RE2 syntax."));
+        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 2, URL: requires supported RE2 syntax at position 0."));
+        assertTrue(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 64, URL: requires supported RE2 syntax at position 2."));
+        assertFalse(HostGuiAssertions.message("URL_REGEX_INVALID","Rule 1, Response text pattern: requires supported RE2 syntax."));
+        assertFalse(HostGuiAssertions.message("URL_REGEX_INVALID","controls.rules[0].url.value: requires supported RE2 syntax."));
+        assertFalse(HostGuiAssertions.message("URL_REGEX_INVALID","PRIVATE_INPUT requires supported RE2 syntax."));
         assertFalse(HostGuiAssertions.message("URL_REGEX_INVALID","Enter a URL."));
         assertThrows(HostGuiSelectors.Failure.class,()->HostGuiAssertions.message("UNSUPPORTED","success"));
     }

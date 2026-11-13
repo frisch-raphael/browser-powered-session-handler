@@ -43,6 +43,8 @@ The Linux VMX currently enables USB input (`usb.present`, `ehci.present`, and `k
 
 Use the extension JAR from the active worktree.
 
+For the normal Windows verification VM extension entry, use `C:\bpsh\browser-powered-session-handler-dev.jar`. Updating this stable VM copy is part of development delivery: after each verified build used for VM testing or handed to the user, overwrite that exact file directly from the active worktree's `bapp/build/libs/browser-powered-session-handler-dev.jar` and compare host/guest SHA-256 before refreshing Burp. Do not leave the stable copy stale when an isolated acceptance run uses its captured JAR under `C:\bpsh\host-tests\...\assets\<sha256>.jar`; record that run's exact captured path and checksum separately. The stable C: path is the documented path for manual Windows VM testing.
+
 Build before using Computer Use, including for extension refresh. After the build, refresh the existing extension by toggling its Loaded checkbox off and then on. Do not remove/re-add the extension. Disposable test drafts do not require preserving before an authorized refresh.
 
 ## Code structure
@@ -57,4 +59,15 @@ Show configuration and HTTP authentication errors inline beside the relevant inp
 
 Keep guest passwords, VMware encryption passwords and SSH private keys out of tracked files, tool output, reports and chat. Read credentials from their local files without echoing values. Desktop unlocking is one-time provisioning outside the unattended acceptance run.
 
-Windows credential sources: `C:\Users\Rapha\orca\vm-tests\bpsh-windows-20261106\guest-credentials.json` and `C:\Users\Rapha\orca\vm-tests\bpsh-windows-20261106\vm-encryption-private.json`. Linux SSH/transfer helper: `C:\Users\Rapha\orca\vm-tests\bpsh-linux-20261106\vm.py`. The Linux guest account is `tester`; password login is locked, so use the SSH helper.
+The Windows verification VM is configured for automatic sign-in as `tester`, with idle locking and display/sleep timeouts disabled for unattended tests. Its account password is retained for VMware guest operations. Autologon uses Microsoft's signed Sysinternals utility with the password stored as an LSA secret; do not write a plaintext `DefaultPassword` registry value. These settings apply only to the verification guest.
+
+Windows credential sources:
+
+- Guest sign-in: [guest-credentials.json](C:/Users/Rapha/orca/vm-tests/bpsh-windows-20261106/guest-credentials.json), with `username` and `password` fields.
+- VMware encryption: [vm-encryption-private.json](C:/Users/Rapha/orca/vm-tests/bpsh-windows-20261106/vm-encryption-private.json), with a `password` field.
+
+Linux SSH/transfer helper: `C:\Users\Rapha\orca\vm-tests\bpsh-linux-20261106\vm.py`. The Linux guest account is `tester`; password login is locked, so use the SSH helper.
+
+## Local federation test trust
+
+The dedicated federation CA is retained in this host account's Windows CurrentUser/Root store for repeated testing, as explicitly requested by the user. Its current certificate expires in November 2036; public certificate and installation metadata are under `test/authentication-lab/build/prepared/federation/ca/ca.crt` and `test/authentication-lab/build/prepared/federation/root-installation.json`. Do not remove this CA after ordinary test runs. The default authority lifetime is 3650 days, with short-lived server certificates generated automatically per run. Normal tests never install trust or change hosts mappings; see [Windows federation setup](test/authentication-lab/Windows-Federation-Setup.md). Keep the signing key and its password private.

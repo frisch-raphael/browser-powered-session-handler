@@ -121,14 +121,16 @@ public final class ProductionLabAdapter {
     public static LoginDefinition loginDefinition(LoginTarget target,List<String> roles,String account,String alias) throws Exception {
         return loginDefinition(target,roles,account,alias,"Controlled "+target.id,1800);
     }
-    /** The host run's 3600-second fixture lifetime exceeds this cache, avoiding incidental refresh during GUI recipes. */
+    /** Uses normal native browser timeouts for host forms; the 3600-second fixture lifetime exceeds this cache. */
     public static LoginDefinition hostLoginDefinition(LoginTarget target,String account,String alias) throws Exception {
         if(!target.id.equals("BROW.basic.json")||!List.of("user","user2").contains(account)
                 ||!java.util.Set.of("host_a","host_b","host_failure_a","host_failure_b").contains(alias))throw new IllegalArgumentException("Unprepared host form.");
         var built=loginDefinition(target,List.of("B","C1"),account,alias,"Host "+alias,3500);var definition=built.journey();
         URI start=URI.create(definition.authenticationUrl()+"&bpsh_host_journey="+alias);
+        var browser=new JourneyDefinition.Browser(definition.browser().headless(),definition.browser().proxy(),30_000,3_000,
+                definition.browser().ignoreHttpsErrors(),definition.browser().formAuthentication());
         return new LoginDefinition(new JourneyDefinition(definition.id(),definition.displayName(),definition.alias(),start,definition.rememberSecrets(),definition.steps(),
-                definition.browser(),definition.extraction(),definition.injection(),definition.cache(),definition.mtls(),definition.httpAuthentication(),definition.draft()),built.secureInput());
+                browser,definition.extraction(),definition.injection(),definition.cache(),definition.mtls(),definition.httpAuthentication(),definition.draft()),built.secureInput());
     }
     /** A native direct-HTTP identity, prepared without authenticating or exporting a password. */
     public static JourneyDefinition hostHttpDefinition(URI request,bpsh.journey.HttpAuthentication.Protocol protocol,String account,String alias) {

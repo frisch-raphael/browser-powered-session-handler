@@ -61,10 +61,20 @@ public class JourneyRegistryTest {
     @Test void hostExamplesUseTheNativeCodecWithBothAccountsProtocolsAndDeterministicHostCache() throws Exception {
         var target=new bpsh.support.ProductionLabAdapter.LoginTarget("BROW.basic.json",7,
                 URI.create("http://127.0.0.1:43123"),URI.create("http://127.0.0.1:43124"));
+        JourneyDefinition.Browser nativeDefaults;
+        try(var defaults=document(JourneyDocument.DocumentKind.EXPORT)) {
+            // The native fixture has browser:{}, so the codec supplies the omitted browser settings.
+            nativeDefaults=defaults.journeys().getFirst().browser();
+            assertEquals(30_000,nativeDefaults.navigationTimeoutMs());assertEquals(3_000,nativeDefaults.tokenWaitTimeoutMs());
+        }
         var definitions=new ArrayList<JourneyDefinition>();
         for(String suffix:List.of("a","b")) {
             String account=suffix.equals("a")?"user":"user2";
             var built=bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,account,"host_"+suffix);
+            assertTrue(built.journey().browser().headless());
+            assertEquals(nativeDefaults.navigationTimeoutMs(),built.journey().browser().navigationTimeoutMs());
+            assertEquals(nativeDefaults.tokenWaitTimeoutMs(),built.journey().browser().tokenWaitTimeoutMs());
+            assertNull(built.journey().browser().proxy());assertEquals(nativeDefaults.ignoreHttpsErrors(),built.journey().browser().ignoreHttpsErrors());
             assertEquals("generation=7&bpsh_host_journey=host_"+suffix,built.journey().authenticationUrl().getRawQuery());
             assertEquals(List.of("bearer","first"),((JourneyDefinition.CombinedExtraction)built.journey().extraction()).tokens().stream().map(JourneyDefinition.NamedExtraction::name).toList());
             assertTrue(built.journey().steps().stream().anyMatch(step->step.type()==AuthStep.Type.INPUT&&account.equals(step.value())));
@@ -76,8 +86,16 @@ public class JourneyRegistryTest {
                 assertNull(definition.extraction());definitions.add(definition);
             }
         }
-        assertEquals("generation=7",bpsh.support.ProductionLabAdapter.loginDefinition(target,List.of("B","C1"),"user","ordinary").journey().authenticationUrl().getRawQuery());
-        assertEquals("generation=7&bpsh_host_journey=host_failure_a",bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,"user","host_failure_a").journey().authenticationUrl().getRawQuery());
+        var ordinary=bpsh.support.ProductionLabAdapter.loginDefinition(target,List.of("B","C1"),"user","ordinary").journey();
+        assertEquals("generation=7",ordinary.authenticationUrl().getRawQuery());
+        assertEquals(new JourneyDefinition.Browser(true,null,5_000,1_500),ordinary.browser());
+        for(String suffix:List.of("a","b")) {
+            var failed=bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,suffix.equals("a")?"user":"user2","host_failure_"+suffix).journey();
+            assertEquals("generation=7&bpsh_host_journey=host_failure_"+suffix,failed.authenticationUrl().getRawQuery());
+            assertTrue(failed.browser().headless());assertEquals(nativeDefaults.navigationTimeoutMs(),failed.browser().navigationTimeoutMs());
+            assertEquals(nativeDefaults.tokenWaitTimeoutMs(),failed.browser().tokenWaitTimeoutMs());
+            assertEquals(new JourneyDefinition.Cache(3500,10),failed.cache());
+        }
         assertThrows(IllegalArgumentException.class,()->bpsh.support.ProductionLabAdapter.hostLoginDefinition(target,"user","PRIVATE_SENTINEL"));
         assertEquals(8,definitions.size());assertEquals(8,definitions.stream().map(JourneyDefinition::alias).distinct().count());
         for(var definition:definitions) {

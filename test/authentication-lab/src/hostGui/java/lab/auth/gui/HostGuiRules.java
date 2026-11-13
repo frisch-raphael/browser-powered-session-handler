@@ -61,7 +61,7 @@ final class HostGuiRules {
             var regex=checkBox("Use regex");if(!edt(regex::isSelected))throw new Failure("GUI_RULE_TEST_SETUP");
             driver.replace(text("URL"),"[");driver.until(this::hasError);return true;
         }
-        driver.productTab("Settings");
+        driver.phase("RULES_POLICY");driver.productTab("Settings");
         driver.combo(edt(()->(JComboBox<?>)field(driver.surface(),"Automatic handling policy")),spec.policy());
         stable(()->edt(()->comboKey(((JComboBox<?>)field(driver.surface(),"Automatic handling policy")).getSelectedItem()).equals(spec.policy())));
         driver.productTab("Session handling");set(checkBox("Automatically authenticate matching requests"),true);
@@ -72,15 +72,18 @@ final class HostGuiRules {
             driver.until(()->edt(()->table.getRowCount()==before-1));
         }
         for(var rule:spec.rules()) {
+            driver.phase("RULES_SELECT_JOURNEY");
             String name=driver.displayName(rule.alias());
             var available=edt(()->(JComboBox<?>)find(driver.surface(),c->c instanceof JComboBox<?> box&&
                     java.util.stream.IntStream.range(0,box.getItemCount()).anyMatch(i->name.equals(comboKey(box.getItemAt(i)))),true));
             driver.combo(available,name);int before=edt(table::getRowCount);
             driver.click(edt(()->find(driver.surface(),c->c instanceof AbstractButton&&named(c,"Add automatic journey"),true)));
             driver.until(()->edt(()->table.getRowCount()==before+1));driver.clickCell(table,before,edt(()->column(table,"Journey")));
-            driver.combo(combo("URL handling"),rule.mode());
-            if(rule.mode().equals("SINGLE_URL")){set(checkBox("Use regex"),rule.regex());driver.replace(text("URL"),rule.url());}
+            driver.phase("RULES_URL_MODE");driver.combo(combo("URL handling"),rule.mode());
+            if(rule.mode().equals("SINGLE_URL")){driver.phase("RULES_URL_TEXT");set(checkBox("Use regex"),rule.regex());driver.replace(text("URL"),rule.url());}
+            driver.phase("RULES_PROXY_PORT");
             driver.combo(combo("Proxy port"),rule.port()==null?"Any listener":rule.port().toString());
+            driver.phase("RULES_EXPIRY");
             set(checkBox("Detect expired sessions"),rule.detect());
             if(rule.detect()) {
                 driver.combo(combo("Detect by"),rule.detection());
@@ -92,13 +95,13 @@ final class HostGuiRules {
             boolean on=edt(()->Boolean.TRUE.equals(table.getValueAt(before,column(table,"On"))));
             if(on!=rule.enabled())driver.clickCell(table,before,edt(()->column(table,"On")));
         }
-        for(String tool:List.of("PROXY","REPEATER","EXTENSIONS","SCANNER","INTRUDER"))set(checkBox(tool),spec.tools().contains(tool));
+        driver.phase("RULES_TOOLS");for(String tool:List.of("PROXY","REPEATER","EXTENSIONS","SCANNER","INTRUDER"))set(checkBox(tool),spec.tools().contains(tool));
+        driver.phase("RULES_VERIFY");
         stable(()->rowsMatch(table,spec)&&!hasError());
         set(checkBox("Automatically authenticate matching requests"),spec.enabled());
         stable(()->rowsMatch(table,spec)&&edt(()->checkBox("Automatically authenticate matching requests").isSelected()==spec.enabled())&&!hasError());
         return false;
     }
-    static String comboKey(Object value){return value instanceof Enum<?> kind?kind.name():Objects.toString(value,"");}
     private JTable table(){return edt(()->(JTable)find(driver.surface(),c->c instanceof JTable t&&column(t,"Journey")>=0&&column(t,"URL scope")>=0,true));}
     private JCheckBox checkBox(String title){return edt(()->(JCheckBox)button(driver.surface(),title));}
     private JTextComponent text(String title){return edt(()->(JTextComponent)field(driver.surface(),title));}

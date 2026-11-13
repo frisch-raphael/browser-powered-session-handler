@@ -1,8 +1,8 @@
 # Real Burp acceptance implementation plan
 
-Status: EGM review concluded after authorized readiness repairs. Checkpoint A
-runner infrastructure passes its tests; checkpoint B GUI implementation is in
-progress. The complete acceptance suite is not qualified on either VM.
+Status: EGM review concluded after authorized readiness repairs. Runner tests and
+GUI primitive qualification pass on both VMs. Complete scenario acceptance is
+pending resolution of browser startup and HTTP-only Test login failures.
 
 ## Objective and execution policy
 
@@ -71,9 +71,17 @@ for observed UI state within finite deadlines, and fail with diagnostic evidence
 when an action cannot complete. Missing automation, a required manual action or
 conversational-agent intervention makes the run incomplete and blocks acceptance;
 an assisted run cannot substitute for this requirement. Do not automate OS
-authentication dialogs, weaken browser sandboxing or change system security
-settings to make a test pass. Document interactive desktop and installed-Burp
-prerequisites as one-time provisioning, then verify them before each run.
+authentication dialogs or weaken browser sandboxing. Acceptance execution must
+not change system security settings. The approved Linux VM baseline includes a
+reviewed AppArmor profile permitting sandbox user namespaces for the verified
+bundled Chromium. Install it only as one-time provisioning outside an acceptance
+invocation: scope the attachment to the configured verification root, an owned
+run leaf, the pinned bundle digest and exact browser executable. Record its
+approved hash, syntax check and loaded-profile proof; keep AppArmor and global
+namespace restrictions enabled. A browser-bundle update requires renewed profile
+review. Test runs never load profiles or change sysctls. Document interactive
+desktop and installed-Burp prerequisites alongside this Linux policy baseline,
+then verify them before each run.
 
 ## Alternatives considered
 
@@ -214,16 +222,40 @@ The guest root must be an absolute dedicated test directory, never a filesystem
 root, home directory, installed-Burp directory or published browser cache.
 
 Each guest creates a new invocation child directory, project, home, preferences,
-data and temp directory. Select three available loopback Proxy ports, then prove
+and data. Windows temp stays inside that child. Linux uses a fresh private
+`/tmp/bpsh-<13 hex characters>` directory, at most 23 characters, for JVM and
+browser temporary files: Chromium's Unix-domain sockets cannot use the deeply
+nested invocation path. Before allocation, publish a strict private
+`linux-temp-owner.json` inside the invocation root; an exclusive matching marker
+in the short directory binds its allocation, run, guest PID/start time and uid.
+Never reuse an existing directory. Select three available loopback Proxy ports, then prove
 the ports are actually bound by the owned Burp PID before dispatch. A race to
 bind is a failed attempt, not permission to connect to an unknown listener.
-Use a 2 GB maximum Burp heap on Linux and 4 GB on Windows; record actual VM memory
-and JVM settings. The Linux budget leaves room for native/UI/browser overhead
-and the existing session in the 6 GB guest; a larger test heap caused a kernel
-OOM kill during reload. Windows has 8 GB, and its reload exhausted a 2 GB Java
-heap. Never terminate an unrelated Burp session or change VM settings to make
+Windows uses a bounded numeric `netstat -ano -p tcp` observation in memory,
+checking the exact live PID/start identity throughout its ten-second query.
+Only exact loopback LISTENING rows qualify; wildcard listeners do not. Timeout,
+nonzero exit, malformed and oversized output have distinct fixed diagnostics;
+raw network tables are never retained.
+Use a 2 GiB maximum Burp heap on both Linux and Windows; record actual VM memory
+and JVM settings. This budget leaves room for native/UI/browser overhead in the
+existing guests. Qualify the universal JAR through five unload/reload cycles at
+this heap and retain complete RSS and GC observations. Never terminate an
+unrelated Burp session or change VM settings to make
 the test pass. Detect an owned Burp exit immediately and retain joined exit-code
 evidence rather than waiting for a missing GUI receipt.
+Optional private heap diagnosis may observe natural-GC management notifications
+with a 4096-event/1 MiB journal of fixed categories and numeric aggregate heap
+use before and after collection. It must not force collection, walk objects,
+dump the heap or change the bundled JVM. A major-GC notification does not itself
+prove full compaction or an object-retention cause. These observations and
+allowlisted JDK allocation stack identifiers never establish an acceptance pass.
+Private diagnosis may additionally summarize large-object sizes/counts from the
+existing bounded GC log, omitting region addresses, and sample loader stacks only
+after natural collections leave at least 1 GiB used. Stack samples are bounded
+to 32 records/256 KiB, four threads and four safe class/method identifiers each;
+they contain no thread names, source files, values or messages. Collector-local
+and native-log GC IDs must not be treated as the same namespace. Neither journal
+changes normalized memory evidence or proves object ownership.
 Report startup, browser initialization, each measured case and cleanup durations
 separately. No timing or memory guarantee is inferred from a warmed request.
 For browser initialization, retain a separate externally observed cold first-page
@@ -250,6 +282,11 @@ requires the guest process to have exited, rejects links/reparse points and boun
 tree enumeration. A root-owned `cleanup.json` records the joined session identity,
 guest PID/start time, `rootRemoved` and `COMPLETE|INCOMPLETE`. Missing ownership,
 live processes, unsupported entries or deletion failure leave cleanup incomplete.
+Linux cleanup validates both ownership markers and removes the short temporary
+tree before the invocation root, including coordinator recovery after the guest
+runner exits. Refuse links, hard-linked files, changed ownership, reused/live
+process identities and ambiguous partial allocation. Preserve the invocation
+descriptor on failure; an external tree left behind cannot yield COMPLETE.
 It also retains the measured monotonic cleanup `durationMs`; report timings must
 use that observation rather than an invented zero.
 The provisioned Linux adapter uses `/usr/bin/python3` only for this developer
@@ -277,7 +314,14 @@ Use one test-only JDK Swing/AWT adapter on both platforms. Launch the installed
 vendor JAR normally with `java -javaagent:<helper>=<owned-root> -jar <burpJar>`.
 Do not call `burp.StartBurp.main()` from a wrapper: that bypasses the vendor
 manifest startup attributes and can prevent tools from initializing. The agent's
-`premain` only starts the GUI worker. It registers no transformer and performs
+`premain` starts the GUI worker and retains public JDK Instrumentation solely
+for optional private library-origin diagnostics. A fixed list of public
+third-party class names may be matched against already loaded classes; inspect
+only public classloader/code-source metadata and, for one positively identified
+product Playwright loader, its already initiated classes. Emit bounded counts
+and HOST/HELPER/PRODUCT/OTHER/UNAVAILABLE categories, never code-source paths.
+Do not load or initialize classes for this diagnostic, inspect product internals
+or use it as authentication evidence. The agent registers no transformer and performs
 no class redefinition, private reflection or product method calls.
 
 The same helper is loaded as a normal Montoya probe extension. Reuse its public
@@ -289,6 +333,15 @@ table headers and ancestor context. Require one match, check showing/enabled,
 focus the owned window, act once, then locate the resulting state afresh. Never
 use obfuscated Burp class names, fixed screen coordinates or stale UI objects.
 Geometry obtained from the currently matched control is allowed for a real click.
+Verify that each pointer target is unobscured using the public mouse-position API;
+Java focus state alone cannot establish native foreground ownership. Make one
+public exposure request for normal targets even when Java reports focused. For a
+still-obscured normal target, allow at most one verified exposed title-bar activation
+gesture, with a bounded inset-based search excluding resize edges and window
+controls. Recompute and revalidate the target afterward. An obscured popup or
+unavailable safe activation point fails rather than clicking another application.
+Recheck deadline/cancellation before each new gesture, wheel event or key press;
+release already pressed input during cleanup.
 
 Initial qualification targets the installed English Burp Community 2026.10.1
 with bundled Java 26.0.2 on Windows 11 and Ubuntu 24.04 x64. A version change must
@@ -341,7 +394,13 @@ still forbidden after its original deadline; any late PASS remains invalid.
 Publish the primary fixed failure before optional screenshots, and bound
 diagnostic EDT queries to 250 ms. A diagnostic failure must not replace or suppress
 the primary outcome. The owner waits within that same finite grace for the
-private diagnostics-complete marker before teardown.
+private diagnostics-complete marker before teardown. Failure images render only
+an owned JVM window. Before readiness identifies the suite frame, retain fixed
+startup window/control categories and render a unique showing modal dialog or,
+otherwise, a unique showing frame. Ambiguity omits the image; never capture a
+different application's foreground pixels. Optional public button-model/action
+events distinguish pointer delivery from action generation without invoking or
+retrying an action. These observations never grant coverage.
 The guest writes private `gui-session.json` with exactly `version`,
 `invocationId`, `platform`, `runNonce`, `productSha256`, `helperSha256` and
 `root` (absolute owned invocation root). The bootstrap receives only that root
@@ -369,6 +428,17 @@ Allowed operations and typed arguments are:
 | `CAPTURE_PROBE` | Phase label enum; flush/reset or export a bounded passive capture to an owned relative output path. |
 | `ASSERT_UI` | Alias plus one fixed code (`URL_REGEX_INVALID`, `RECOVERY_PAUSED`, `LOGIN_FAILED`, `ORDINARY_UNCHANGED`). The unchanged-request code also requires its synthetic nonce: select that native Proxy history row and read its visible Notes outcome naming the selected journey. Return only the code/nonce and observed boolean, never note/secret values. |
 | `CLOSE` | No arguments; request normal owned Burp closure, with bounded process cleanup by the guest afterward. |
+
+History selection uses the nonce-bound row's read-only Method cell. Reveal an
+offscreen row with bounded real wheel input, then recheck its row identity,
+column and viewport before clicking. A missing/reordered nonce, unsafe cell or
+clipped Method column fails; never use the row-action dropdown as a substitute.
+Journey selection opens Setup before checking the visible enabled name field,
+so a remembered wizard page cannot prevent the subsequent Test-login gesture.
+Before pressing a control, allow at most four pointer-position observations for
+the same component/window while its layout settles. Only changed geometry may
+restart that pointer movement; ownership, popup, window and deadline failures
+remain fatal. Never retry an already issued gesture.
 
 Only provisioned startup Next/Start Burp/Continue Community actions and the
 known old-temporary-files dialog's `Leave` action may be automated outside these
@@ -618,6 +688,8 @@ the write boundary. Generated output globs below are never committed.
 | C | Create `HostGuiProbe.java`, `HostGuiAssertions.java`, `HostGuiMessages.java` and `HostProbeShape.java` under `test/authentication-lab/src/hostGui/java/lab/auth/gui`; create their matching tests under `test/authentication-lab/src/test/java/lab/auth/gui` | Keep passive capture, visible-feedback assertions, bounded request/response correlation and credential-free shape inspection in their owning helper classes. The driver dispatches real-input operations to these owners. |
 | B | Create `test/authentication-lab/src/main/java/lab/auth/LabHostArtifactCache.java` and `test/authentication-lab/src/test/java/lab/auth/LabHostArtifactCacheTest.java` | Two current-byte cache slots, captured-source verification, checked fresh deployment, cache-miss replacement and negative protocol tests. |
 | B | Create `test/authentication-lab/src/main/java/lab/auth/LabHostMemory.java` and `test/authentication-lab/src/test/java/lab/auth/LabHostMemoryTest.java`; modify `LabHostGuest.java` | Sample only the owned Burp PID's RSS every 200 ms, verify its start identity, bound private samples and retain a numeric summary for the universal-JAR memory qualification. A single owned Windows observer process may query public process memory; Linux reads its owned `/proc` status. Neither performs GUI input. |
+| B | Create `test/authentication-lab/src/main/java/lab/auth/LabHostLinuxTemp.java` and its mirrored test; modify `LabHostGuest.java`, `LabHostCoordinator.java`, `LabHostEvidence.java` | Own a short private Linux temp directory with strict persisted allocation identity and shared normal/recovery cleanup; include its implementation in the source inventory. |
+| B | Create `HostGuiPointerTrace.java`, `HostLibraryOrigins.java` under `test/authentication-lab/src/hostGui/java/lab/auth/gui` and their mirrored tests; modify `HostGuiBootstrap.java`, `HostGuiDriver.java`, `HostGuiDiagnostics.java` | Optional bounded private diagnosis of actual pointer delivery and already loaded public library origins; no extra input or authentication pass conditions. |
 | C | Create `test/authentication-lab/src/main/java/lab/auth/LabHostScenarios.java` and `LabHostObservations.java`; modify `LabHostGuest.java`, `LabRun.java`, `ControlledApplication.java`, `HttpAuthenticationFixture.java`, `FixtureIdentityStore.java` in that package | Extend the same guest owner with all fixed recipes, bounded independent observations and existing fixture reuse. Keep safe receiver shapes and their bounded journal in LabHostObservations. Reuse the fixture account owners for private GUI secret references. |
 | C | Modify `test/authentication-lab/src/main/java/lab/auth/LoginFlows.java` for its late-token checkpoint query and bounded host-only `/start` page-response event, with the relative scheduler in `LabRun.java` and targeted native lab tests | Keep fixture scheduling inside its existing owner and preserve the public catalog/control fault limits. The safe journey-alias event does not increment LOGIN attempts or change ordinary fixture behavior. |
 | C | Modify `test/authentication-lab/production-tests/bpsh/support/ProductionLabExamples.java`, `ProductionLabAdapter.java`, `bapp/gradle/auth-lab-production.gradle.kts`, `bapp/gradle/auth-lab-production.init.gradle`, `test/authentication-lab/src/main/resources/production-selection.json` | Host export mode and captured exporter deployment/audit; reuse actual production codec, no auth engine duplication. Register the new native-codec regression in the existing audited component selection. |

@@ -77,6 +77,7 @@ public final class LabHostCoordinator {
     }
     int execute(LabHostInputs.Plan plan, Map<String,LabHostInputs.Vm> vms, Path report, String stage,
                 AtomicBoolean cancelled,Path workspace) throws IOException, InterruptedException {
+        LabHostInputs.guestStage(plan.mode(),stage);
         Files.createDirectories(report);
         long began = System.currentTimeMillis();
         var context = new LinkedHashMap<String,Object>(); context.put("version",1); context.put("invocationId",plan.invocationId());
@@ -166,10 +167,18 @@ public final class LabHostCoordinator {
             if(results.stream().anyMatch(result->result.outcome()==outcome))return outcome;
         return results.isEmpty()||results.stream().anyMatch(result->result.cleanup()!=Cleanup.COMPLETE||!result.unattended())?Outcome.BLOCKED:Outcome.PASS;
     }
+    static void validateRuntimeReceipt(JsonObject receipt,String sha,String path,UUID invocation,String platform,UUID nonce,String helperSha) throws IOException {
+        LabHostBrowserRuntime.validate(receipt,sha,path);
+        try {
+            require(uuid(receipt.get("invocationId")).equals(invocation)&&text(receipt,"platform").equals(platform)
+                    &&uuid(receipt.get("runNonce")).equals(nonce)&&hash(receipt.get("helperSha256")).equals(helperSha),"HOST_FOREIGN_RUNTIME_RECEIPT");
+        }catch(RuntimeException invalid){throw new IOException("HOST_FOREIGN_RUNTIME_RECEIPT");}
+    }
     static boolean complete(List<String> intended, List<PlatformResult> results, String stage) {
         if (results.size()!=intended.size() || !results.stream().map(PlatformResult::platform).toList().equals(intended)) return false;
         return results.stream().allMatch(r -> r.outcome()==Outcome.PASS && r.cleanup()==Cleanup.COMPLETE && r.unattended()
-                && (stage.equals("primitives") || r.scenarios().keySet().equals(new HashSet<>(LabHostInputs.SCENARIOS))
+                && (stage.equals("browser-runtime") ? r.code().equals("BROWSER_RUNTIME_QUALIFIED")&&r.scenarios().isEmpty()
+                : stage.equals("primitives") || stage.equals("scenarios")&&r.scenarios().keySet().equals(new HashSet<>(LabHostInputs.SCENARIOS))
                 && r.scenarios().values().stream().allMatch(v -> v==Outcome.PASS)));
     }
 
@@ -190,10 +199,11 @@ public final class LabHostCoordinator {
                 if($s.version -ne 1 -or $s.invocationId -cne %s -or $s.runNonce -cne %s -or [long]$s.pid -ne %d -or [long]$s.startedEpochMs -ne %d){throw 'PROCESS'}
                 for($i=0;$i -lt 50 -and (Get-Process -Id %d -ErrorAction SilentlyContinue);$i++){Start-Sleep -Milliseconds 100}
                 if(Get-Process -Id %d -ErrorAction SilentlyContinue){throw 'ALIVE'}
-                $queue=New-Object 'System.Collections.Generic.Queue[System.IO.FileSystemInfo]';$queue.Enqueue((Get-Item -LiteralPath $r -Force));$count=0
+                $nativeRoot='\\\\?\\'+$r
+                $queue=New-Object 'System.Collections.Generic.Queue[System.IO.FileSystemInfo]';$queue.Enqueue([IO.DirectoryInfo]::new($nativeRoot));$count=0
                 while($queue.Count -gt 0){$entry=$queue.Dequeue();$count++;if($count -gt 100000 -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'TREE'};if($entry -is [IO.DirectoryInfo]){foreach($child in $entry.EnumerateFileSystemInfos()){$queue.Enqueue($child)}}}
-                Remove-Item -LiteralPath $r -Recurse -Force
-                if(Test-Path -LiteralPath $r){throw 'REMAINS'}
+                Remove-Item -LiteralPath $nativeRoot -Recurse -Force
+                if([IO.Directory]::Exists($nativeRoot) -or (Test-Path -LiteralPath $r)){throw 'REMAINS'}
                 """.formatted(LabHostVmTransport.powershellQuote(root),LabHostVmTransport.powershellQuote(vm.guestRoot()),LabHostVmTransport.powershellQuote(leaf),
                         LabHostVmTransport.powershellQuote(invocation.toString()),LabHostVmTransport.powershellQuote(nonce),
                         LabHostVmTransport.powershellQuote(invocation.toString()),LabHostVmTransport.powershellQuote(nonce),pid,started,pid,pid);
@@ -221,10 +231,12 @@ public final class LabHostCoordinator {
                 count=0;device=r.stat().st_dev
                 for directory,dirs,files in os.walk(r,followlinks=False):
                     for p in [pathlib.Path(directory),*(pathlib.Path(directory)/n for n in dirs+files)]:
-                        count+=1;mode=p.lstat();assert count<=100000 and mode.st_dev==device and not stat.S_ISLNK(mode.st_mode) and (stat.S_ISREG(mode.st_mode) or stat.S_ISDIR(mode.st_mode))
+                        count+=1;mode=p.lstat();assert count<=100000 and mode.st_uid==os.getuid() and mode.st_dev==device and not stat.S_ISLNK(mode.st_mode) and (stat.S_ISREG(mode.st_mode) or stat.S_ISDIR(mode.st_mode))
+                %s
+                cleanup_temp(root,invocation,nonce,pid,started,True)
                 shutil.rmtree(r);assert not r.exists()
                 BPSH_CLEANUP
-                """.formatted(values);
+                """.formatted(values,LabHostLinuxTemp.pythonFunctions());
     }
 
     private static final class RemoteExecution implements GuestExecution {
@@ -257,7 +269,7 @@ public final class LabHostCoordinator {
             guest.addProperty("taskPath",plan.taskPath()); guest.addProperty("configurationHash",plan.configurationHash());
             guest.addProperty("catalogRevision",plan.catalogRevision()); guest.addProperty("sourceRevision",plan.sourceRevision()); guest.addProperty("head",plan.head());
             guest.addProperty("guestRoot",root); guest.addProperty("java",vm.java());guest.addProperty("labJava",vm.labJava()); guest.addProperty("burpJar",vm.burpJar());
-            guest.addProperty("approvedPreferences",vm.approvedPreferences()); guest.addProperty("display",vm.display()); guest.addProperty("stage",stage.toUpperCase(Locale.ROOT));
+            guest.addProperty("approvedPreferences",vm.approvedPreferences()); guest.addProperty("display",vm.display()); guest.addProperty("stage",LabHostInputs.guestStage(plan.mode(),stage));
             var destinations=new HashMap<Path,String>();
             for (var artifact:plan.artifacts()) {
                 if(destinations.containsKey(artifact.path()))continue;
@@ -351,17 +363,36 @@ public final class LabHostCoordinator {
                 transport.get(vm,LabHostVmTransport.joinGuest(root,"report/"+name,vm.platform()),local,Duration.ofSeconds(30));
                 require(Files.size(local)==positive(entry.get("bytes"))&&sha256(local).equals(hash(entry.get("sha256"))),"HOST_EVIDENCE_CHANGED");
             }
+            if(stage.equals("browser-runtime")&&result.outcome()==Outcome.PASS) {
+                var runtime=read(report.resolve("browser-runtime.json"),65536);
+                String loaded=LabHostVmTransport.joinGuest(root,"assets/"+plan.product().sha256()+".jar",vm.platform());
+                validateRuntimeReceipt(runtime,plan.product().sha256(),loaded,plan.invocationId(),vm.platform(),UUID.fromString(nonce),plan.helper().sha256());
+                LabHostBrowserRuntime.validateNativeEvidence(runtime,report);
+            }
             writeNew(report.resolve("platform.json"),completion);
             retainFailureDiagnostics(vm,root,report,terminal.getParent());
             return cleanupRoot(vm,plan,root,report,nonce,result);
         }
         private void retainFailureDiagnostics(LabHostInputs.Vm vm,String root,Path report,Path privateDirectory) {
+            for(String journal:List.of("heap-gc-events.jsonl","heap-gc-sizes.jsonl","heap-loader-stacks.jsonl"))try {
+                Path directory=Files.createDirectories(privateDirectory.resolve("diagnostics"));
+                transport.get(vm,LabHostVmTransport.joinGuest(root,"gui/private-diagnostics/"+journal,vm.platform()),
+                        directory.resolve(journal),Duration.ofSeconds(10));
+            }catch(InterruptedException stopped){Thread.currentThread().interrupt();return;}
+            catch(IOException|RuntimeException unavailable){/* Optional bounded numeric journal never establishes acceptance. */}
             try(var files=Files.list(report)) {
                 var failures=files.filter(p->p.getFileName().toString().matches("gui-[0-9]{3,6}\\.json")).sorted().toList();
                 for(Path file:failures) {
-                    var receipt=read(file,65536);if(text(receipt,"outcome").equals("PASS"))continue;
+                    var receipt=read(file,65536);
+                    if(text(receipt,"outcome").equals("PASS")) {
+                        if(text(receipt,"operation").equals("BROWSER_SETTINGS"))try {
+                            String operation=uuid(receipt.get("operationId")).toString();Path directory=Files.createDirectories(privateDirectory.resolve("diagnostics"));
+                            transport.get(vm,LabHostVmTransport.joinGuest(root,"gui/private-diagnostics/"+operation+".png",vm.platform()),directory.resolve(operation+".png"),Duration.ofSeconds(10));
+                        }catch(IOException unavailable){/* Optional private appearance capture never establishes a passing result. */}
+                        continue;
+                    }
                     String operation=uuid(receipt.get("operationId")).toString();Path directory=Files.createDirectories(privateDirectory.resolve("diagnostics"));
-                    for(String suffix:List.of(".png",".controls.json",".loading-frames.json",".threads.json"))try {
+                    for(String suffix:List.of(".png",".controls.json",".signals.json",".loading-frames.json",".threads.json",".product-source.json"))try {
                         transport.get(vm,LabHostVmTransport.joinGuest(root,"gui/private-diagnostics/"+operation+suffix,vm.platform()),directory.resolve(operation+suffix),Duration.ofSeconds(10));
                     }catch(IOException unavailable){/* Optional private diagnostics never change the public result. */}
                     break;

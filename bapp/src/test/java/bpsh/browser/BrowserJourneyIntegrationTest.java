@@ -42,7 +42,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Exercises production browser ownership/extraction with actual bundled Chromium and local origins. */
+/** Exercises production browser ownership/extraction with the installed Burp Browser and local origins. */
 public class BrowserJourneyIntegrationTest {
     public static BrowserRuntimeManager runtime;
     public static Pkcs11IdentityManager identities;
@@ -830,6 +830,22 @@ public class BrowserJourneyIntegrationTest {
         }
     }
 
+    /** A trigger that never executes must retain its own error even when its expected popup deadline expires. */
+    public @Test void expectedPopupCannotReplaceItsFailedTriggerError() throws Exception {
+        try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
+            LoginFlows.noOutput(origin.owner, () -> {}).start();
+            var trigger = step(AuthStep.Type.CLICK, "#missing-trigger", null);
+            var steps = List.of(operation(AuthStep.Type.EXPECT_POPUP, null, new AuthStep.Popup("login-popup", trigger.id())), trigger);
+            var base = IntegrationFixtures.journey(origin, steps);
+            var journey = IntegrationFixtures.configured(base, base.authenticationUrl(),
+                    new JourneyDefinition.Browser(true, null, 1500, 100),
+                    new JourneyDefinition.CookieExtraction(origin.url("/"), "session", null, "/"), null);
+            var failure = assertThrows(AuthenticationFailure.class, () -> run(journey, values));
+            assertEquals(AuthenticationFailure.Cause.STEP_TIMEOUT, failure.reason());
+            assertEquals(trigger.id(), failure.step().id()); assertEquals(2, failure.step().number());
+        }
+    }
+
     public @Test void responseOnlyCaptureCanStillCompleteBeforeConfiguredSteps() throws Exception {
         try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
             LoginFlows.probeForm(origin.owner, "signed-in-token", null).start();
@@ -933,6 +949,37 @@ public class BrowserJourneyIntegrationTest {
             var ex = assertThrows(AuthenticationFailure.class, () -> runner.run(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, j.id(), 1), j, empty, false,
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(20), cancel::get));
             assertEquals(AuthenticationFailure.Cause.CANCELLED, ex.reason()); assertEquals(1, requests.get());
+        }
+    }
+
+    /** A watchdog pipe close during a required cookie step must retain cancellation attribution. */
+    public @Test void cancellationDuringRequiredSelectorWaitReturnsTypedCancellation() throws Exception {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread browserWorker = Thread.currentThread();
+        try (var origin = IntegrationFixtures.http(); var empty = SecretStore.Values.empty();
+             var observer = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            LoginFlows.noOutput(origin.owner, () -> {}).start();
+            var base = IntegrationFixtures.journey(origin, List.of(step(AuthStep.Type.WAIT_SELECTOR, "#never", null)));
+            var journey = IntegrationFixtures.configured(base, base.authenticationUrl(),
+                    new JourneyDefinition.Browser(true, null, 10000, 10000),
+                    new JourneyDefinition.CookieExtraction(origin.url("/"), "session", null, "/"), null);
+            var waiting = observer.submit(() -> {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+                while (System.nanoTime() < deadline) {
+                    boolean selectorWait = java.util.Arrays.stream(browserWorker.getStackTrace()).anyMatch(frame ->
+                            frame.getClassName().equals("com.microsoft.playwright.impl.LocatorImpl") && frame.getMethodName().equals("waitFor"));
+                    if (selectorWait) { cancelled.set(true); return true; }
+                    Thread.sleep(10);
+                }
+                return false;
+            });
+            try {
+                var failure = assertThrows(AuthenticationFailure.class, () -> runner.run(
+                        new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, journey.id(), 1), journey, empty, false,
+                        System.nanoTime() + TimeUnit.SECONDS.toNanos(20), cancelled::get));
+                assertTrue(waiting.get(2, TimeUnit.SECONDS), "Cancellation must occur inside the actual selector wait");
+                assertEquals(AuthenticationFailure.Cause.CANCELLED, failure.reason());
+            } finally { waiting.cancel(true); observer.shutdownNow(); assertTrue(observer.awaitTermination(2, TimeUnit.SECONDS)); }
         }
     }
 

@@ -24,8 +24,10 @@ or cleared. There is no bundled or downloaded browser fallback.
 
 Automatic discovery uses the running Burp installation when identifiable. If
 several installations are found, open **Settings > Burp Browser** and select the
-intended executable. An explicit selection is authoritative; **Use automatic**
-clears it. The selection is local to your Burp user preferences and is absent
+intended executable. Automatic detection displays the resolved executable path
+without saving a custom selection. Editing the path or using **Browse** selects a
+custom executable; **Restore automatic detection** clears that selection and is
+disabled while already automatic. The selection is local to your Burp user preferences and is absent
 from journey exports. A missing or invalid browser is reported beside this setting.
 
 On first authentication, bundled Node/driver files are verified and extracted to

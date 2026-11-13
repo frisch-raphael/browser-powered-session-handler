@@ -13,6 +13,36 @@ java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
 dependencyLocking { lockAllConfigurations() }
 val hostProbe = sourceSets.create("hostProbe")
 val hostGui = sourceSets.create("hostGui")
+val diagnosticSources = rootProject.fileTree("src/main/java") { include("bpsh/**/*.java") }
+val diagnosticResources = layout.buildDirectory.dir("generated/host-gui-diagnostics")
+val prepareHostDiagnosticLiterals = tasks.register("prepareHostDiagnosticLiterals") {
+    description = "Index authored source literals for value-free private failure diagnostics."
+    inputs.files(diagnosticSources).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(diagnosticResources)
+    doLast {
+        val tokens = Regex("""(?s)/\*.*?\*/|//[^\r\n]*|"(?:\\.|[^"\\\r\n])*" """.trim())
+        val literals = mutableListOf<Map<String, String>>()
+        diagnosticSources.files.sortedBy { it.path }.forEach { source ->
+            val text = source.readText(Charsets.UTF_8)
+            tokens.findAll(text).filter { it.value.startsWith('"') }.forEach { token ->
+                val value = runCatching { JsonSlurper().parseText(token.value) as? String }.getOrNull()
+                if (value != null && value.length in 24..512 && value.contains(' ') && value.none { it == '\n' || it == '\r' }) {
+                    val line = text.take(token.range.first).count { it == '\n' } + 1
+                    val column = token.range.first - text.lastIndexOf('\n', token.range.first)
+                    val location = source.relativeTo(rootProject.projectDir.parentFile).invariantSeparatorsPath + ":$line:$column"
+                    literals.add(mapOf("location" to location, "value" to value))
+                }
+            }
+        }
+        check(literals.isNotEmpty() && literals.size <= 10000) { "Diagnostic source literal inventory exceeds its bounds." }
+        val json = JsonOutput.toJson(mapOf("version" to 1, "literals" to literals))
+        check(json.toByteArray(Charsets.UTF_8).size <= 2 * 1024 * 1024) { "Diagnostic literal resource exceeds its bound." }
+        val output = diagnosticResources.get().file("lab/auth/gui/source-diagnostic-literals.json").asFile
+        output.parentFile.mkdirs(); output.writeText(json, Charsets.UTF_8)
+    }
+}
+hostGui.resources.srcDir(diagnosticResources)
+tasks.named(hostGui.processResourcesTaskName) { dependsOn(prepareHostDiagnosticLiterals) }
 hostGui.compileClasspath += sourceSets.main.get().output + configurations.getByName("runtimeClasspath")
 hostProbe.compileClasspath += hostGui.output + sourceSets.main.get().output + configurations.getByName("runtimeClasspath")
 sourceSets.test.get().compileClasspath += hostGui.output

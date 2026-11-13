@@ -5,6 +5,16 @@ import java.security.MessageDigest
 // Explicit host verification only. No task here is a dependency of ordinary check.
 val hostWorkspace = rootProject.projectDir.parentFile
 val hostInvocation = rootProject.extra["authLabInvocationId"].toString()
+// Another worktree task can build in the shared checkout while VM verification
+// prepares its captured artifacts. Keep doclint's generated files run-owned.
+val hostTaskRequested = gradle.startParameter.taskNames.any { it.substringAfterLast(':') in setOf("authLabHostTest", "authLabHostQualify") }
+val hostProfileRequested = gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "authLab" } &&
+        providers.gradleProperty("labProfiles").orNull == "burp-host"
+if (hostTaskRequested || hostProfileRequested) {
+    tasks.named<Javadoc>("verifyNativeDocumentation") {
+        destinationDir = project(":auth-lab").layout.buildDirectory.dir("host-runtime/$hostInvocation/native-docs").get().asFile
+    }
+}
 fun hostHash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 fun hostFileHash(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -29,7 +39,7 @@ listOf("authLabHostTest", "authLabHostQualify").forEach { taskName ->
             }
             val platform = providers.gradleProperty("hostPlatform").getOrElse("both")
             val stage = providers.gradleProperty("hostStage").getOrElse("scenarios")
-            check(platform in listOf("both", "windows", "linux") && stage in listOf("primitives", "scenarios")) { "Unknown host platform/stage." }
+            check(platform in listOf("both", "windows", "linux") && stage in listOf("primitives", "scenarios", "browser-runtime")) { "Unknown host platform/stage." }
             val supplied = providers.gradleProperty("hostVmConfig").orNull ?: error("Supply -PhostVmConfig=<repository-relative or absolute local JSON path>.")
             val config = File(supplied).let { if (it.isAbsolute) it else hostWorkspace.resolve(supplied) }.canonicalFile
             check(config.isFile) { "Create the ignored local host VM configuration during provisioning." }

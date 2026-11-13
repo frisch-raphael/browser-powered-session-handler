@@ -6,6 +6,85 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HostGuiSelectorsTest {
+    @Test void historyRowSelectionUsesTheReadOnlyMethodHeaderAfterColumnReordering() {
+        HostGuiSelectors.edt(()->{
+            var table=new JTable(new javax.swing.table.DefaultTableModel(new Object[][]{{"1 dropdown","localhost","GET","/synthetic-nonce"}},
+                    new Object[]{"#","Host","Method","URL"}){@Override public boolean isCellEditable(int row,int column){return false;}});
+            assertEquals(2,HostGuiSelectors.historySelectionColumn(table,0));assertEquals(-1,table.getSelectedRow());
+            table.moveColumn(2,0);assertEquals(0,HostGuiSelectors.historySelectionColumn(table,0));
+            assertEquals("GET",table.getValueAt(0,HostGuiSelectors.historySelectionColumn(table,0)));
+            table.moveColumn(0,3);assertEquals(3,HostGuiSelectors.historySelectionColumn(table,0));
+            assertEquals(-1,table.getSelectedRow());return true;
+        });
+    }
+    @Test void historySelectionNeverFallsBackToAnActionCellMissingAmbiguousOrEditableMethod() {
+        HostGuiSelectors.edt(()->{
+            var missing=new JTable(new javax.swing.table.DefaultTableModel(new Object[][]{{"1 dropdown","/synthetic-nonce"}},new Object[]{"#","URL"}){
+                @Override public boolean isCellEditable(int row,int column){return false;}});
+            assertEquals("GUI_HISTORY_METHOD_MISSING",assertThrows(HostGuiSelectors.Failure.class,()->HostGuiSelectors.historySelectionColumn(missing,0)).getMessage());
+            var duplicate=new JTable(new javax.swing.table.DefaultTableModel(new Object[][]{{"GET","POST","/synthetic-nonce"}},new Object[]{"Method","Method","URL"}){
+                @Override public boolean isCellEditable(int row,int column){return false;}});
+            assertEquals("GUI_HISTORY_METHOD_AMBIGUOUS",assertThrows(HostGuiSelectors.Failure.class,()->HostGuiSelectors.historySelectionColumn(duplicate,0)).getMessage());
+            var editable=new JTable(new Object[][]{{"GET","/synthetic-nonce"}},new Object[]{"Method","URL"});
+            assertEquals("GUI_HISTORY_METHOD_EDITABLE",assertThrows(HostGuiSelectors.Failure.class,()->HostGuiSelectors.historySelectionColumn(editable,0)).getMessage());
+            assertEquals("GUI_HISTORY_ROW_MISSING",assertThrows(HostGuiSelectors.Failure.class,()->HostGuiSelectors.historySelectionColumn(editable,-1)).getMessage());
+            assertEquals("GUI_HISTORY_ROW_MISSING",assertThrows(HostGuiSelectors.Failure.class,()->HostGuiSelectors.historySelectionColumn(editable,1)).getMessage());
+            return true;
+        });
+    }
+    private enum UrlChoice { BURP_SCOPE, ALL_REQUESTS, SINGLE_URL }
+    @Test void ownedComboPopupResolvesExactEnumItemWithoutKeyboardFocusOrModelMutation() {
+        HostGuiSelectors.edt(()->{
+            var combo=new JComboBox<>(UrlChoice.values());combo.setFocusable(false);
+            var popup=showingPopup(combo);var list=new JList<>(combo.getModel()){@Override public boolean isShowing(){return true;}};popup.add(list);
+            for(int i=0;i<UrlChoice.values().length;i++) {
+                var choice=HostGuiSelectors.comboChoice(popup,combo,UrlChoice.values()[i].name());
+                assertSame(list,choice.list());assertEquals(i,choice.row());
+            }
+            assertFalse(combo.isFocusable());assertSame(UrlChoice.BURP_SCOPE,combo.getSelectedItem());return true;
+        });
+    }
+    @Test void comboPopupRejectsForeignOwnershipMissingItemsAndDuplicateTargets() {
+        HostGuiSelectors.edt(()->{
+            var combo=new JComboBox<>(new String[]{"same","same"});var popup=showingPopup(combo);
+            popup.add(new JList<>(combo.getModel()){@Override public boolean isShowing(){return true;}});
+            assertEquals("GUI_CONTROL_AMBIGUOUS",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.comboChoice(popup,combo,"same")).getMessage());
+            assertEquals("GUI_CONTROL_MISSING",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.comboChoice(popup,combo,"missing")).getMessage());
+            assertEquals("GUI_POPUP_CONTEXT",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.comboChoice(popup,new JComboBox<>(),"same")).getMessage());return true;
+        });
+    }
+    @Test void fieldCaptionAndItsLabelledInputAreOneTargetWhileDistinctFieldsStayAmbiguous() {
+        HostGuiSelectors.edt(()->{
+            var panel=showingPanel();var password=new JPasswordField(){@Override public boolean isShowing(){return true;}};
+            var caption=new JLabel("Secure value"){@Override public boolean isShowing(){return true;}};
+            caption.setLabelFor(password);panel.add(caption);panel.add(password);
+            assertEquals("Secure value",password.getAccessibleContext().getAccessibleName());
+            assertSame(password,HostGuiSelectors.field(panel,"Secure value"));
+            var other=new JPasswordField(){@Override public boolean isShowing(){return true;}};
+            var otherCaption=new JLabel("Secure value"){@Override public boolean isShowing(){return true;}};
+            otherCaption.setLabelFor(other);panel.add(otherCaption);panel.add(other);
+            assertEquals("GUI_CONTROL_AMBIGUOUS",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.field(panel,"Secure value")).getMessage());return true;
+        });
+    }
+    @Test void fieldCaptionCannotTargetHiddenOrForeignInputsAndNamedStatusRemainsReadable() {
+        HostGuiSelectors.edt(()->{
+            var panel=showingPanel();var hidden=new JTextField();panel.add(hidden);
+            var caption=new JLabel("Value"){@Override public boolean isShowing(){return true;}};
+            caption.setLabelFor(hidden);panel.add(caption);
+            assertEquals("GUI_CONTROL_MISSING",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.field(panel,"Value")).getMessage());
+            var foreign=new JTextField(){@Override public boolean isShowing(){return true;}};caption.setLabelFor(foreign);
+            assertEquals("GUI_CONTROL_MISSING",assertThrows(HostGuiSelectors.Failure.class,
+                    ()->HostGuiSelectors.field(panel,"Value")).getMessage());
+            var status=new JLabel("Ready"){@Override public boolean isShowing(){return true;}};
+            status.setName("authlab.observation.status");panel.add(status);
+            assertSame(status,HostGuiSelectors.field(panel,"authlab.observation.status"));return true;
+        });
+    }
     @Test void customActionCaptionRequiresPublicMouseHandlingAndPreservesAmbiguity() {
         HostGuiSelectors.edt(()->{
             var panel=showingPanel();var caption=new JLabel("Send"){@Override public boolean isShowing(){return true;}};panel.add(caption);

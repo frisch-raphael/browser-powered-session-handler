@@ -101,7 +101,7 @@ A successful JSON login is `POST /cases/{id}/login/json?generation=N` with exact
 
 Use a fresh proof request carrying only the selected credential roles. An automatic cookie jar can otherwise add unrequired auth cookies to a bearer-only proof. The tests verify the returned identity and actual action counts, not just HTTP 200.
 
-Prepared forms cover username/password, two pages, hidden-token plus cookie CSRF, JavaScript submission and consent. Ordinary form completion exposes a session-bound `/outputs` JSON response for the real response selector; it cannot restore a deliberately omitted output. Redirect chains cover zero/one/three hops, separate origins, cookies required between hops, exact POST preservation for 307, GET conversion for 303, deep links and deliberate failures. The deep-link fixture carries its bearer in `LAB_B` before landing on the exact protected URL; that ordinary navigation does not supply an Authorization header. Its bearer is proved separately through a correctly formed protected request.
+Prepared forms cover username/password, two pages, hidden-token plus cookie CSRF, JavaScript submission and consent. Ordinary form completion exposes a session-bound `/outputs` JSON response for the real response selector. An opaque per-login cookie selects the exact emitted output map, so concurrent browsers keep their own accounts and deliberately omitted outputs remain absent. Missing, forged or cross-case sessions are rejected. Redirect chains cover zero/one/three hops, separate origins, cookies required between hops, exact POST preservation for 307, GET conversion for 303, deep links and deliberate failures. The deep-link fixture carries its bearer in `LAB_B` before landing on the exact protected URL; that ordinary navigation does not supply an Authorization header. Its bearer is proved separately through a correctly formed protected request.
 
 Cookie targets expose rotation, deletion, tuple ambiguity, path attributes and an IdP/client decoy on distinct `localhost`/`127.0.0.1` hosts. The decoy cannot authenticate at the client endpoint. Response-surface pages expose early/late/nested JSON, popup, frame, CORS and service-worker responses. The late response uses the private `late-token` gate. A missing worker produces no fallback token response.
 
@@ -254,6 +254,34 @@ Use the guest's installed Burp, a fresh project and its existing extension entry
 refresh with Loaded off/on. A previous build's VM result does not qualify the
 current artifact. Record the Burp/platform version, source identity, artifact
 hash, fixture run/case generations and independent server account/send evidence.
+
+For manual Windows VM checks, the extension entry uses
+`C:\bpsh\browser-powered-session-handler-dev.jar`. Update that exact file directly
+from the active worktree's `bapp/build/libs/browser-powered-session-handler-dev.jar`
+after each verified build used in a VM or delivered to the user. Compare SHA-256
+on the host and guest before toggling Loaded off/on:
+
+```powershell
+# Host, from the active repository:
+Get-FileHash .\bapp\build\libs\browser-powered-session-handler-dev.jar -Algorithm SHA256
+# Windows VM:
+Get-FileHash C:\bpsh\browser-powered-session-handler-dev.jar -Algorithm SHA256
+```
+
+The unattended runner uses an isolated captured copy under
+`C:\bpsh\host-tests\{invocation}-{nonce}\assets\{sha256}.jar` and records that
+exact path/hash in its plan. Its captured copy and the stable manual-test copy
+must contain the same delivered build; completing an isolated run does not
+replace the stable copy automatically.
+
+The Linux runner keeps invocation data under its configured verification root
+but uses a fresh private `/tmp/bpsh-<13 hex characters>` for JVM/browser temporary
+files, avoiding Chromium's Unix-domain socket path limit. Strict matching
+ownership records bind this short directory to the invocation and guest process.
+Normal cleanup and interrupted-run recovery remove it before the invocation root;
+ownership, links or live-process ambiguity makes cleanup incomplete. The approved
+targeted AppArmor profile is a provisioned VM prerequisite; runs do not change
+profiles, sysctls or browser sandboxing.
 
 Use the maintained lab's live browser examples and prepared protected requests.
 Configure existing Burp listeners on two distinct ports (for example 8081/8082),

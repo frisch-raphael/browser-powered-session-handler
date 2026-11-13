@@ -125,7 +125,10 @@ final class BrowserStepExecutor implements AutoCloseable {
                 while (end - System.nanoTime() > 0) { check(deadline, cancelled); pump(Math.min(50, Math.max(0.001, (end - System.nanoTime()) / 1_000_000.0))); }
             }
         }
-        } catch (com.microsoft.playwright.PlaywrightException error) { active(false); throw error; }
+        } catch (com.microsoft.playwright.PlaywrightException error) {
+            AuthenticationFailure.checkpoint(AuthenticationFailure.Phase.STEP, deadline, cancelled);
+            active(false); throw error;
+        }
         check(deadline, cancelled);
     }
 

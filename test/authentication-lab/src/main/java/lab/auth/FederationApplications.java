@@ -147,7 +147,7 @@ public final class FederationApplications implements AutoCloseable {
         synchronized(launch) {
             if(retired.get())throw new IOException("Federation case retired before child launch.");
             environment.handoff(origin.getPort());
-            var process=new ProcessBuilder(executable.toString(),"@"+arguments)
+            var process=new ProcessBuilder(executable.toString(),javaArgumentFile(arguments))
                     .redirectErrorStream(true).redirectOutput(log.toFile()).start();
             // Retain the actual Process before any fallible OS identity query, so cleanup still owns it.
             child=new Child(role,process,process.info().startInstant().orElse(null),process.info().command().orElse(null),directory,key,origin);children.add(child);
@@ -168,6 +168,14 @@ public final class FederationApplications implements AutoCloseable {
         }
         validateReadiness(child,"READY");
         if(retired.get())throw new IOException("Federation child readiness arrived after retirement.");
+    }
+
+    /** The JDK launcher's native argument-file reader needs Windows extended paths in deep worktrees. */
+    static String javaArgumentFile(Path arguments) {
+        String path=arguments.toAbsolutePath().normalize().toString();
+        if(System.getProperty("os.name").startsWith("Windows")&&!path.startsWith("\\\\?\\"))
+            path=path.startsWith("\\\\")?"\\\\?\\UNC\\"+path.substring(2):"\\\\?\\"+path;
+        return "@"+path;
     }
 
     private JsonObject validateReadiness(Child child,String state) throws Exception {

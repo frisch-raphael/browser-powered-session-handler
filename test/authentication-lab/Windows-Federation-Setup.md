@@ -2,6 +2,8 @@
 
 The federation tests use dedicated HTTPS certificates for four loopback names. Prepare current material for this checkout and independently verify its CA fingerprint before installing it. Normal tests do not install trust or modify the Windows hosts file.
 
+The dedicated test CA lasts 3650 days and is reused across runs. Each run generates short-lived server certificates under that authority. Keep the installed CA for repeated local testing; remove it when retiring the environment. Renewing an existing CA certificate still requires installing the renewed certificate, even when its private key stays the same.
+
 Open **PowerShell as Administrator using the same Windows account**, then run:
 
 ```powershell

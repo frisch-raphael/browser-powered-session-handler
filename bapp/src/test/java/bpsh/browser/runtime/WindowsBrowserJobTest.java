@@ -38,6 +38,9 @@ class WindowsBrowserJobTest {
             if (job != null) job.close(System.nanoTime() + TimeUnit.SECONDS.toNanos(2));
             owner.destroyForcibly(); foreign.destroyForcibly();
             assertTrue(owner.waitFor(5, TimeUnit.SECONDS)); assertTrue(foreign.waitFor(5, TimeUnit.SECONDS));
+            // Only the unrelated control fixture gets a release wait. The owned
+            // file above must still be deletable immediately after job.close.
+            awaitFixtureDeletion(foreignFile);
         }
     }
 
@@ -53,6 +56,18 @@ class WindowsBrowserJobTest {
         long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (!Files.exists(marker) && System.nanoTime() < end) Thread.sleep(10);
         assertTrue(Files.exists(marker), "The owned resource fixture must become ready");
+    }
+
+    /** Waits for the retired control fixture's Windows file handle to become deletable. */
+    private static void awaitFixtureDeletion(Path file) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (true) {
+            try { Files.deleteIfExists(file); return; }
+            catch (java.nio.file.FileSystemException busy) {
+                if (System.nanoTime() >= deadline) throw busy;
+                Thread.sleep(10);
+            }
+        }
     }
 
     /** Test-only process fixture; it has no authentication, browser or application behavior. */

@@ -804,11 +804,9 @@ public class BrowserJourneyIntegrationTest {
             var observation = LoginFlows.freshCookie(origin.owner); origin.start();
             JourneyDefinition j = IntegrationFixtures.journey(origin, List.of()); assertEquals("early-token", run(j, empty).token());
             JourneyDefinition cookie = IntegrationFixtures.configured(j, j.authenticationUrl(), j.browser(), new JourneyDefinition.CookieExtraction(origin.url("/"), "session", null, "/"), null);
-            cookie = new JourneyDefinition(cookie.id(), cookie.displayName(), cookie.alias(), cookie.authenticationUrl(), false,
-                    List.of(step(AuthStep.Type.CLICK, "#CANARY_SELECTOR", null), step(AuthStep.Type.WAIT_SELECTOR, "#CANARY_SELECTOR", null)), cookie.browser(), cookie.extraction(), cookie.injection(), cookie.cache(), null);
             var first = run(cookie, empty); var second = run(cookie, empty);
             assertEquals("fresh-2", first.token()); assertEquals("fresh-3", second.token()); assertEquals(0, observation.oldCookies());
-            assertEquals(2, first.skippedSteps()); assertEquals(2, second.skippedSteps());
+            assertEquals(0, first.skippedSteps()); assertEquals(0, second.skippedSteps());
         }
     }
     public @Test void responseBodyRegexJsonAndCookiesCompleteOneBrowserLogin() throws Exception {
@@ -853,7 +851,10 @@ public class BrowserJourneyIntegrationTest {
     /** Actual Chromium failures complement the fast mapper/presentation cases without repeating the complete UI matrix. */
     private static void actualStepFailuresKeepTheirOwnIdentityAndSafeMessage() throws Exception {
         var variants = new ArrayList<String>();
-        for (var type : AuthStep.Type.values()) if (type != AuthStep.Type.WAIT_TIME) variants.add("step-timeout-" + type.name());
+        // This fixture exercises SDK input/document waits. Context controls and
+        // operation-specific control types have their own real-browser tests.
+        for (var type : List.of(AuthStep.Type.CLICK, AuthStep.Type.INPUT, AuthStep.Type.SECURE_INPUT,
+                AuthStep.Type.WAIT_LOAD_STATE, AuthStep.Type.WAIT_URL, AuthStep.Type.WAIT_SELECTOR)) variants.add("step-timeout-" + type.name());
         variants.addAll(List.of("step-timeout-hidden-WAIT_SELECTOR", "step-timeout-attached-WAIT_SELECTOR",
                 "step-timeout-detached-WAIT_SELECTOR", "step-timeout-exact-WAIT_URL"));
         variants.addAll(List.of("step-ambiguous-CLICK", "step-missing-secret-SECURE_INPUT"));

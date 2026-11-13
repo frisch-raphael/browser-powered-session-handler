@@ -58,6 +58,16 @@ public final class HostGuiSelectors {
     public static Component button(Container root,String title) {
         return find(root,c->c instanceof AbstractButton&&title.equals(label(c)),true);
     }
+    public static String comboKey(Object value) {return value instanceof Enum<?> kind?kind.name():Objects.toString(value,"");}
+    record ComboChoice(JList<?> list,int row) {}
+    /** Reads the visible list owned by this exact combo, including nonfocusable combos. */
+    static ComboChoice comboChoice(JPopupMenu popup,JComboBox<?> invoker,String value) {
+        if(popup.getInvoker()!=invoker||!popup.isShowing())throw new Failure("GUI_POPUP_CONTEXT");
+        var list=(JList<?>)find(popup,c->c instanceof JList<?>,true);
+        var rows=new ArrayList<Integer>();for(int i=0;i<list.getModel().getSize();i++)
+            if(value.equals(comboKey(list.getModel().getElementAt(i))))rows.add(i);
+        return new ComboChoice(list,unique(rows));
+    }
     /** Custom toolbar controls can expose their caption as a label on a mouse-handling container. */
     public static Component actionControl(Container root,String title) {
         var candidates=new ArrayList<Component>();var seen=Collections.newSetFromMap(new IdentityHashMap<Component,Boolean>());
@@ -119,6 +129,16 @@ public final class HostGuiSelectors {
     public static int column(JTable table,String title) {
         for(int i=0;i<table.getColumnCount();i++)if(title.equals(table.getColumnName(i)))return i;return -1;
     }
+    /** Selects a history row through its neutral public Method cell, never a row-action/menu column. */
+    static int historySelectionColumn(JTable table,int row) {
+        if(row<0||row>=table.getRowCount())throw new Failure("GUI_HISTORY_ROW_MISSING");
+        var matches=new ArrayList<Integer>();
+        for(int column=0;column<table.getColumnCount();column++)if("Method".equals(table.getColumnName(column)))matches.add(column);
+        if(matches.size()!=1)throw new Failure(matches.isEmpty()?"GUI_HISTORY_METHOD_MISSING":"GUI_HISTORY_METHOD_AMBIGUOUS");
+        int column=matches.getFirst();
+        if(table.isCellEditable(row,column))throw new Failure("GUI_HISTORY_METHOD_EDITABLE");
+        return column;
+    }
     /** Reads the underlying public model, whose full filename is not its truncated renderer text. */
     public static String extensionFilename(Container root) {
         var table=(JTable)find(root,c->c instanceof JTable t&&column(t,"Item")>=0&&column(t,"Detail")>=0,true);
@@ -149,10 +169,17 @@ public final class HostGuiSelectors {
         if(component instanceof JComponent swing&&swing.getVisibleRect().isEmpty())throw new Failure("GUI_CONTROL_CLIPPED");
     }
     public static Component field(Container root,String name) {
-        var direct=all(root).stream().filter(c->c.isShowing()&&named(c,name)).toList();
+        var direct=fieldTargets(root,all(root).stream().filter(c->c.isShowing()&&named(c,name)));
         if(!direct.isEmpty())return unique(direct);
-        var labels=all(root).stream().filter(c->c instanceof JLabel label&&c.isShowing()&&name.equals(label.getText())&&label.getLabelFor()!=null)
-                .map(c->((JLabel)c).getLabelFor()).toList();return unique(labels);
+        return unique(fieldTargets(root,all(root).stream().filter(c->c instanceof JLabel label&&c.isShowing()
+                &&name.equals(label.getText())&&label.getLabelFor()!=null)));
+    }
+    /** A caption and its labelled control identify one input, never two action targets. */
+    private static List<Component> fieldTargets(Container root,java.util.stream.Stream<Component> matches) {
+        var seen=Collections.newSetFromMap(new IdentityHashMap<Component,Boolean>());
+        return matches.map(c->c instanceof JLabel label&&label.getLabelFor()!=null?label.getLabelFor():c)
+                .filter(c->c.isShowing()&&(c==root||SwingUtilities.isDescendingFrom(c,root)))
+                .filter(seen::add).toList();
     }
     public static javax.swing.text.JTextComponent requestEditor(Container root) {
         var editor=(javax.swing.text.JTextComponent)find(root,c->c instanceof javax.swing.text.JTextComponent text&&!(c instanceof JPasswordField)

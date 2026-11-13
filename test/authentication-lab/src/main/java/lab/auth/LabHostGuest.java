@@ -68,7 +68,9 @@ public final class LabHostGuest {
         var plan=object(read(planPath,1_048_576),FIELDS); LabHostInputs.version(plan);
         String platform=member(plan.get("platform"),"windows","linux"), nonce=uuid(plan.get("runNonce")).toString();
         UUID invocation=uuid(plan.get("invocationId"));
-        member(plan.get("mode"),"ACCEPTANCE","QUALIFICATION"); member(plan.get("stage"),"PRIMITIVES","SCENARIOS");
+        var mode=LabHostInputs.Mode.valueOf(member(plan.get("mode"),"ACCEPTANCE","QUALIFICATION"));
+        String stage=member(plan.get("stage"),"PRIMITIVES","SCENARIOS","BROWSER_RUNTIME");
+        require(stage.equals(LabHostInputs.guestStage(mode,stage.toLowerCase(Locale.ROOT).replace('_','-'))),"HOST_STAGE");
         String expectedTask=text(plan,"mode").equals("ACCEPTANCE")?":authLabHostTest":":authLabHostQualify";
         require(text(plan,"taskPath").equals(expectedTask),"HOST_GUEST_TASK");
         hash(plan.get("configurationHash")); hash(plan.get("catalogRevision")); hash(plan.get("sourceRevision"));
@@ -135,6 +137,7 @@ public final class LabHostGuest {
     }
     private static LabHostCoordinator.PlatformResult qualifyGui(JsonObject plan,Path root,Path report,LabRun run) throws IOException {
         String platform=text(plan,"platform");Process burp=null;LabHostMemory memory=null;boolean cleaned=true;
+        JsonObject runtimeProof=null;
         Map<String,LabHostCoordinator.Outcome> scenarios=Map.of();
         LabHostCoordinator.Outcome outcome=LabHostCoordinator.Outcome.BLOCKED;String code="GUI_PRIMITIVES_INCOMPLETE";
         try {
@@ -155,15 +158,19 @@ public final class LabHostGuest {
                         Map.of("extension_type","java","extension_file",product.toString(),"name","Browser Powered Session Handler","loaded",true,"errors","ui","output","ui"));
                 writeNew(root.resolve("user.json"),Map.of("user_options",Map.of("extender",Map.of("extensions",extensions,"settings",Map.of("automatically_reload_extensions_on_startup",true,"automatically_update_bapps_on_startup",false)))));
                 int heapMiB=BURP_HEAP_MIB;long physicalMemoryMiB=physicalMemoryMiB(root,platform);
+                Path temporary=platform.equals("linux")?LabHostLinuxTemp.create(root,session.invocationId(),session.runNonce()):root.resolve("tmp");
                 var command=new ArrayList<>(List.of(text(plan,"java"),"-Xmx"+heapMiB+"m",
-                        "-Xlog:gc+heap=info,gc+humongous=debug:file=gc-private.log:uptimemillis,level,tags:filecount=1,filesize=8M",
+                        "-Xlog:gc=info,gc+heap=info,gc+humongous=debug:file=gc-private.log:uptimemillis,level,tags:filecount=1,filesize=8M",
                         "-Dlab.host.gui.root="+root,"-Dlab.host.burpNonce="+session.runNonce(),
                         "-Dlab.host.preferences="+root.resolve("preferences"),"-Djava.util.prefs.PreferencesFactory=lab.auth.gui.HostGuiPreferences",
-                        "-Djava.io.tmpdir="+root.resolve("tmp"),"-Duser.home="+root.resolve("home"),"-javaagent:"+helper+"="+root,"-jar",text(plan,"burpJar"),
+                        "-Djava.io.tmpdir="+temporary,"-Duser.home="+root.resolve("home"),"-javaagent:"+helper+"="+root,"-jar",text(plan,"burpJar"),
                         "--use-defaults","--disable-auto-update","--user-config-file="+root.resolve("user.json"),"--config-file="+root.resolve("project.json"),"--data-dir="+root.resolve("data")));
                 for(var listener:listeners)listener.close();
                 var builder=new ProcessBuilder(command).directory(root.toFile()).redirectOutput(root.resolve("burp-private-out.txt").toFile()).redirectError(root.resolve("burp-private-error.txt").toFile());
-                if(platform.equals("linux"))builder.environment().put("DISPLAY",text(plan,"display"));
+                if(platform.equals("linux")) {
+                    builder.environment().put("DISPLAY",text(plan,"display"));
+                    for(String key:List.of("TMPDIR","TMP","TEMP"))builder.environment().put(key,temporary.toString());
+                }
                 burp=builder.start();
                 writeNew(root.resolve("burp-owner.json"),Map.of("pid",burp.pid(),"nonce",session.runNonce(),"executable",text(plan,"java"),
                         "startedEpochMs",burp.info().startInstant().orElseThrow().toEpochMilli()));
@@ -174,12 +181,16 @@ public final class LabHostGuest {
                 var probe=awaitMetadata(root.resolve("probe-ready.json"),Duration.ofSeconds(30),ownedBurp::isAlive,
                         ()->Files.exists(root.resolve("cancel")));
                 long actualMaxHeapBytes=verifyProbeMetadata(probe,session,burp.pid(),burp.info().startInstant().orElseThrow().toEpochMilli(),ports);
-                verifyListeners(root,burp.pid(),ports,platform);
+                verifyListeners(root,burp,positive(probe.get("startedEpochMs")),ports,platform);
                 writeNew(report.resolve("environment.json"),Map.ofEntries(Map.entry("version",1),Map.entry("burpVersion",text(probe,"burpVersion")),Map.entry("javaVersion",text(probe,"javaVersion")),Map.entry("labJavaVersion",System.getProperty("java.version")),
                         Map.entry("os",System.getProperty("os.name")),Map.entry("maxBurpHeapMiB",heapMiB),Map.entry("physicalMemoryMiB",physicalMemoryMiB),Map.entry("listeners",ports),Map.entry("adapter","JDK_AWT_ROBOT_V1"),
                         Map.entry("burpPid",burp.pid()),Map.entry("burpStartedEpochMs",burp.info().startInstant().orElseThrow().toEpochMilli()),Map.entry("actualMaxHeapBytes",actualMaxHeapBytes)));
                 for(String tool:List.of("REPEATER","PROXY","EXTENSIONS"))peer.ask(LabHostGuiProtocol.Operation.OPEN_TOOL,arguments("tool",tool),Duration.ofSeconds(30));
                 peer.ask(LabHostGuiProtocol.Operation.SET_INTERCEPT,arguments("enabled",false),Duration.ofSeconds(30));
+                if(text(plan,"stage").equals("BROWSER_RUNTIME")) {
+                    runtimeProof=qualifyBrowserRuntime(plan,root,report,run,session,ports,peer,product,actualMaxHeapBytes);
+                    outcome=LabHostCoordinator.Outcome.PASS;code="BROWSER_RUNTIME_QUALIFIED";
+                } else {
                 for(int cycle=0;cycle<5;cycle++) {
                     peer.ask(LabHostGuiProtocol.Operation.SET_PRODUCT_LOADED,arguments("enabled",false),Duration.ofSeconds(30));
                     peer.ask(LabHostGuiProtocol.Operation.SET_PRODUCT_LOADED,arguments("enabled",true),Duration.ofSeconds(30));
@@ -223,15 +234,18 @@ public final class LabHostGuest {
                 }
                 outcome=LabHostCoordinator.Outcome.PASS;code="GUI_PRIMITIVES_QUALIFIED";
                 }
+                }
                 memory.close();
                 if(!peer.broken)peer.ask(LabHostGuiProtocol.Operation.CLOSE,new JsonObject(),Duration.ofSeconds(30));
             }finally{for(var listener:listeners)try{listener.close();}catch(IOException ignored){}}
         }catch(InterruptedException stopped){Thread.currentThread().interrupt();outcome=LabHostCoordinator.Outcome.INTERRUPTED;code="HOST_CANCELLED";}
         catch(Exception failed){outcome=LabHostCoordinator.Outcome.BLOCKED;
-            code=failed.getMessage()!=null&&Set.of("HOST_PROBE_NOT_READY","HOST_VENDOR_NOT_QUALIFIED","HOST_LISTENER_QUERY","HOST_LISTENER_OWNERSHIP","HOST_LISTENER_CONFIGURATION",
+            code=failed.getMessage()!=null&&Set.of("HOST_PROBE_NOT_READY","HOST_VENDOR_NOT_QUALIFIED","HOST_LISTENER_OWNERSHIP","HOST_LISTENER_CONFIGURATION",
+                    "HOST_LISTENER_IDENTITY","HOST_LISTENER_QUERY_START","HOST_LISTENER_QUERY_TIMEOUT","HOST_LISTENER_QUERY_EXIT",
+                    "HOST_LISTENER_QUERY_OVERSIZE","HOST_LISTENER_QUERY_MALFORMED","HOST_LISTENER_QUERY_READ","HOST_LISTENER_QUERY_CLEANUP",
                     "HOST_GUI_OPERATION_FAILED","HOST_GUI_RECEIPT_DEADLINE","HOST_BURP_EXITED","HOST_NATIVE_EXPORT_FAILED","HOST_PROBE_IDENTITY","HOST_HEAP_BUDGET",
                     "HOST_PRIMITIVE_SEED_RESPONSE","HOST_PRIMITIVE_FORWARD_RESPONSE").contains(failed.getMessage())
-                    ?failed.getMessage():"GUI_PRIMITIVES_INCOMPLETE";}
+                    ?failed.getMessage():text(plan,"stage").equals("BROWSER_RUNTIME")?"BROWSER_RUNTIME_INCOMPLETE":"GUI_PRIMITIVES_INCOMPLETE";}
         finally {
             try{Files.writeString(root.resolve("cancel"),"");}catch(IOException unavailable){cleaned=false;}
             JsonObject memoryProof=null;
@@ -243,12 +257,45 @@ public final class LabHostGuest {
                 if(!summary.get("complete").getAsBoolean()&&outcome==LabHostCoordinator.Outcome.PASS){outcome=LabHostCoordinator.Outcome.BLOCKED;code="HOST_MEMORY_OBSERVATION_INCOMPLETE";}
             }catch(RuntimeException unavailable){cleaned=false;outcome=LabHostCoordinator.Outcome.BLOCKED;code="HOST_MEMORY_OBSERVATION_INCOMPLETE";}
             if(burp!=null){boolean stopped=stopOwned(burp);cleaned&=stopped;}
+            if(platform.equals("linux"))try { LabHostLinuxTemp.cleanup(root,uuid(plan.get("invocationId")),uuid(plan.get("runNonce"))); }
+            catch(IOException|RuntimeException unavailable){cleaned=false;}
+            LabHostMemory.privateGcSizes(root);
             if(memoryProof!=null)try {
                 var gc=LabHostMemory.gcSummary(root);memoryProof.add("gc",gc);writeNew(report.resolve("memory.json"),memoryProof);
                 if(!gc.get("complete").getAsBoolean()&&outcome==LabHostCoordinator.Outcome.PASS){outcome=LabHostCoordinator.Outcome.BLOCKED;code="HOST_MEMORY_OBSERVATION_INCOMPLETE";}
             }catch(IOException|RuntimeException unavailable){cleaned=false;outcome=LabHostCoordinator.Outcome.BLOCKED;code="HOST_MEMORY_OBSERVATION_INCOMPLETE";}
+            if(runtimeProof!=null)try {
+                runtimeProof.add("memory",memoryProof);runtimeProof.addProperty("cleanup",cleaned?"COMPLETE":"INCOMPLETE");
+                runtimeProof.addProperty("nativeLoadingErrors",LabHostBrowserRuntime.loadingErrors(root));
+                LabHostBrowserRuntime.validate(runtimeProof,text(object(plan.get("product")),"sha256"),root.resolve(text(object(plan.get("product")),"path")).toRealPath().toString());
+                writeNew(report.resolve("browser-runtime.json"),runtimeProof);
+            }catch(IOException|RuntimeException invalid){outcome=LabHostCoordinator.Outcome.BLOCKED;code="HOST_BROWSER_RUNTIME_EVIDENCE";}
         }
         return new LabHostCoordinator.PlatformResult(platform,outcome,code,cleaned?LabHostCoordinator.Cleanup.COMPLETE:LabHostCoordinator.Cleanup.INCOMPLETE,true,scenarios);
+    }
+    private static JsonObject qualifyBrowserRuntime(JsonObject plan,Path root,Path report,LabRun run,LabHostGuiProtocol.Session session,
+                                                    List<Integer> ports,GuiPeer peer,Path product,long heap) throws Exception {
+        var evidence=LabHostGuiProtocol.identity(session);String loaded=product.toRealPath().toString();
+        evidence.addProperty("stage","BROWSER_RUNTIME");evidence.addProperty("taskPath",text(plan,"taskPath"));evidence.addProperty("loadedPath",loaded);
+        evidence.addProperty("burpPid",peer.burp.pid());long born=peer.burp.info().startInstant().orElseThrow().toEpochMilli();
+        evidence.addProperty("burpStartedEpochMs",born);evidence.addProperty("heapBytes",heap);evidence.addProperty("startedEpochMs",System.currentTimeMillis());
+        var cycles=new JsonArray();evidence.add("cycles",cycles);
+        try(var runner=new LabHostScenarios(session,run,root,report,ports,peer::ask,(prefix,output)->prepareExports(plan,root,run,output,prefix))) {
+            for(int i=0;i<5;i++) {
+                long begin=System.currentTimeMillis();
+                var unloaded=peer.ask(LabHostGuiProtocol.Operation.SET_PRODUCT_LOADED,arguments("enabled",false),Duration.ofSeconds(30));
+                var loadedReceipt=peer.ask(LabHostGuiProtocol.Operation.SET_PRODUCT_LOADED,arguments("enabled",true),Duration.ofSeconds(30));
+                var cycle=new JsonObject();cycle.addProperty("cycle",i+1);cycle.addProperty("pid",peer.burp.pid());cycle.addProperty("startedEpochMs",born);
+                cycle.addProperty("productSha256",session.productSha256());cycle.addProperty("loadedPath",loaded);cycle.addProperty("beganEpochMs",begin);
+                cycle.add("endedEpochMs",loadedReceipt.get("endedEpochMs"));cycle.add("unloadSequence",unloaded.get("sequence"));cycle.add("loadSequence",loadedReceipt.get("sequence"));
+                cycle.addProperty("unloaded",!unloaded.getAsJsonObject("observed").get("enabled").getAsBoolean());
+                cycle.add("loaded",loadedReceipt.getAsJsonObject("observed").get("enabled"));cycle.add("productSourceMatched",loadedReceipt.getAsJsonObject("observed").get("productSourceMatched"));cycles.add(cycle);
+                if(i==3){runner.prepareBrowserRuntime();evidence.add("preReloadLogin",runner.browserRuntimeLogin(true));}
+            }
+            var login=runner.browserRuntimeLogin(true);login.remove("endedEpochMs");evidence.add("login",login);
+            var finish=runner.finishBrowserRuntime();finish.entrySet().forEach(entry->evidence.add(entry.getKey(),entry.getValue()));
+        }
+        evidence.addProperty("endedEpochMs",System.currentTimeMillis());return evidence;
     }
     static long verifyProbeMetadata(JsonObject probe,LabHostGuiProtocol.Session session,long pid,long started,List<Integer> ports) {
         object(probe,"version","invocationId","platform","runNonce","productSha256","helperSha256","burpVersion","javaVersion","os","listenerPorts","pid","startedEpochMs","maxHeapBytes");
@@ -283,6 +330,7 @@ public final class LabHostGuest {
         return LabHostCoordinator.Outcome.PASS;
     }
     static int evidenceSizeLimit(String name) {
+        if(name.equals("browser-runtime.json"))return 65536;
         if(name.matches("gui-[0-9]{3,6}\\.json|environment\\.json|memory\\.json|started\\.json|burp-exit\\.json"))return 65536;
         if(name.equals("scenario-setup.json"))return 1_048_576;
         for(String scenario:LabHostInputs.SCENARIOS)if(name.equals("scenario-"+scenario+".json"))return 16*1024*1024;
@@ -342,15 +390,10 @@ public final class LabHostGuest {
             catch(InterruptedException stopped){interrupted=true;return false;}
         }finally{if(interrupted)Thread.currentThread().interrupt();}
     }
-    private static void verifyListeners(Path root,long pid,List<Integer> ports,String platform) throws Exception {
+    private static void verifyListeners(Path root,Process burp,long startedEpochMs,List<Integer> ports,String platform) throws Exception {
+        long pid=burp.pid();
         if(platform.equals("windows")) {
-            String script="$rows=@(Get-NetTCPConnection -State Listen -OwningProcess "+pid+" -ErrorAction SilentlyContinue|Where-Object {$_.LocalAddress -in @('127.0.0.1','::1','::ffff:127.0.0.1')}|Select-Object -ExpandProperty LocalPort);ConvertTo-Json -InputObject $rows";
-            String encoded=Base64.getEncoder().encodeToString(script.getBytes(java.nio.charset.StandardCharsets.UTF_16LE));
-            var process=new ProcessBuilder("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe","-NoProfile","-WindowStyle","Hidden","-EncodedCommand",encoded)
-                    .redirectOutput(root.resolve("listener-ports.json").toFile()).redirectError(ProcessBuilder.Redirect.DISCARD).start();
-            try{require(process.waitFor(10,TimeUnit.SECONDS)&&process.exitValue()==0,"HOST_LISTENER_QUERY");}finally{if(process.isAlive())stopOwned(process);}
-            var values=LabJson.parse(Files.readAllBytes(root.resolve("listener-ports.json"))).getAsJsonArray().asList().stream().map(JsonElement::getAsInt).toList();
-            require(values.containsAll(ports),"HOST_LISTENER_OWNERSHIP");
+            LabHostWindowsListeners.verify(burp,startedEpochMs,ports);
         }else {
             var sockets=new HashSet<String>();
             try(var entries=Files.list(Path.of("/proc",Long.toString(pid),"fd"))){for(Path entry:entries.toList())try{String link=Files.readSymbolicLink(entry).toString();if(link.startsWith("socket:["))sockets.add(link.substring(8,link.length()-1));}catch(IOException ignored){}}
@@ -454,10 +497,14 @@ public final class LabHostGuest {
         LabHostInputs.version(json);
         require(uuid(json.get("invocationId")).equals(plan.invocationId())&&text(json,"platform").equals(platform)
                 &&uuid(json.get("runNonce")).toString().equals(nonce)&&hash(json.get("productSha256")).equals(plan.product().sha256())
-                &&hash(json.get("helperSha256")).equals(plan.helper().sha256())&&text(json,"stage").equals(stage.toUpperCase(Locale.ROOT)),"HOST_FOREIGN_GUEST_RESULT");
+                &&hash(json.get("helperSha256")).equals(plan.helper().sha256())&&text(json,"stage").equals(LabHostInputs.guestStage(plan.mode(),stage)),"HOST_FOREIGN_GUEST_RESULT");
         require(json.get("unattended").isJsonPrimitive()&&json.get("unattended").getAsJsonPrimitive().isBoolean(),"HOST_UNATTENDED_TYPE");
         positive(json.get("durationMs"));
         require(json.get("evidence").isJsonArray(),"HOST_EVIDENCE_INDEX");validateEvidenceIndex(json.getAsJsonArray("evidence"));
+        if(stage.equals("browser-runtime")&&text(json,"outcome").equals("PASS")) {
+            require(text(json,"code").equals("BROWSER_RUNTIME_QUALIFIED")&&object(json.get("scenarios")).isEmpty()
+                    &&json.getAsJsonArray("evidence").asList().stream().anyMatch(e->text(e.getAsJsonObject(),"path").equals("browser-runtime.json")),"HOST_RUNTIME_RECEIPT_MISSING");
+        }
         var scenarios=new LinkedHashMap<String,LabHostCoordinator.Outcome>();
         object(json.get("scenarios")).entrySet().forEach(e -> {
             require(LabHostInputs.SCENARIOS.contains(e.getKey()),"HOST_SCENARIO");

@@ -200,19 +200,32 @@ public final class LabHostMemory implements AutoCloseable {
 
     /** Numeric observations only; GC log text, classes and addresses stay private. */
     public static JsonObject gcSummary(Path root) {
+        var source=gcLog(root);return gcNumbers(source.text(),source.complete());
+    }
+    private record GcLog(String text,boolean complete) {}
+    private static GcLog gcLog(Path root) {
         try {
             Path log=root.resolve("gc-private.log");
             if(Files.exists(root.resolve("gc-private.log.0"))||!Files.isRegularFile(log,LinkOption.NOFOLLOW_LINKS)||Files.size(log)>8L*1024*1024)
-                return gcNumbers("",false);
+                return new GcLog("",false);
             try(var input=Files.newInputStream(log)) {
                 byte[] bytes=input.readNBytes(8*1024*1024+1);
-                return gcNumbers(new String(bytes,StandardCharsets.US_ASCII),bytes.length<=8*1024*1024);
+                return new GcLog(new String(bytes,StandardCharsets.US_ASCII),bytes.length<=8*1024*1024);
             }
-        }catch(IOException|RuntimeException unavailable){return gcNumbers("",false);}
+        }catch(IOException|RuntimeException unavailable){return new GcLog("",false);}
     }
     static JsonObject gcNumbers(String text,boolean complete) {
+        var parsed=gcObjects(text,complete);
+        var result=new JsonObject();result.addProperty("complete",parsed.complete());result.addProperty("objectObservations",parsed.observations());
+        result.addProperty("gcObservations",parsed.collections().size());result.addProperty("maxObservedObjectBytes",parsed.maximum());
+        result.addProperty("peakObservedHumongousBytes",parsed.peak());return result;
+    }
+    private record GcObjects(Map<Long,Map<Long,Long>> collections,Map<Long,Long> uptimes,
+                             long maximum,long peak,int observations,boolean complete,boolean timelineComplete) {}
+    private static GcObjects gcObjects(String text,boolean complete) {
         text=text.replace("\r\n","\n");
         long maximum=0,peak=0;int observations=0;var collections=new HashMap<Long,Map<Long,Long>>();
+        var uptimes=new HashMap<Long,Long>();boolean timelineComplete=true;
         var pattern=java.util.regex.Pattern.compile("GC\\(([0-9]{1,10})\\).*?Humongous region ([0-9]{1,10}).*?object size ([0-9]{1,12})");
         var prefix=java.util.regex.Pattern.compile("^\\[[0-9]+ms\\]\\[(?:debug|info|trace|warning|error)\\s*\\]\\[gc(?:,[a-z]+)*\\s*\\] .*");
         if(text.isEmpty()||text.length()>8*1024*1024||!text.endsWith("\n"))complete=false;
@@ -226,11 +239,46 @@ public final class LabHostMemory implements AutoCloseable {
                 var objects=collections.computeIfAbsent(gc,ignored->new HashMap<>());
                 Long old=objects.putIfAbsent(region,size);if(old!=null&&old.longValue()!=size)throw new IllegalArgumentException();
                 if(collections.size()>4096)throw new IllegalArgumentException();maximum=Math.max(maximum,size);
+                try {uptimes.merge(gc,Long.parseLong(line.substring(1,line.indexOf("ms]"))),Math::min);}
+                catch(RuntimeException unavailable){timelineComplete=false;}
             }
             for(var objects:collections.values()){long total=0;for(long size:objects.values())total=Math.addExact(total,size);peak=Math.max(peak,total);}
         }catch(RuntimeException malformed){complete=false;}
-        var result=new JsonObject();result.addProperty("complete",complete);result.addProperty("objectObservations",observations);
-        result.addProperty("gcObservations",collections.size());result.addProperty("maxObservedObjectBytes",maximum);result.addProperty("peakObservedHumongousBytes",peak);return result;
+        return new GcObjects(collections,uptimes,maximum,peak,observations,complete,timelineComplete);
+    }
+
+    /** Optional private size distributions use existing GC log observations, never object contents or a heap walk. */
+    public static void privateGcSizes(Path root) {
+        try {
+            var source=gcLog(root);String journal=gcSizes(source.text(),source.complete(),4096,1<<20);
+            Path output=LabJson.owned(root,"gui/private-diagnostics/heap-gc-sizes.jsonl");Files.createDirectories(output.getParent());
+            var options=Set.<OpenOption>of(StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
+            var attributes=Files.getFileStore(output.getParent()).supportsFileAttributeView("posix")
+                    ? new java.nio.file.attribute.FileAttribute<?>[]{java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))}
+                    : new java.nio.file.attribute.FileAttribute<?>[0];
+            try(var channel=java.nio.channels.FileChannel.open(output,options,attributes)) {
+                var bytes=java.nio.ByteBuffer.wrap(journal.getBytes(StandardCharsets.US_ASCII));
+                while(bytes.hasRemaining())if(channel.write(bytes)<=0)throw new IOException("HOST_GC_SIZES_WRITE");
+            }
+        }catch(Throwable unavailable){/* Optional diagnosis cannot alter acceptance or expose private error text. */}
+    }
+
+    /** Fixed numeric rows plus a final completeness marker; region identifiers never leave the parser. */
+    static String gcSizes(String text,boolean complete,int maxRows,int maxBytes) {
+        if(maxRows<1||maxRows>4096||maxBytes<128||maxBytes>(1<<20))throw new IllegalArgumentException("HOST_GC_SIZES_BOUNDS");
+        var parsed=gcObjects(text,complete);boolean valid=parsed.complete()&&parsed.timelineComplete(),overflow=false;
+        var result=new StringBuilder();int rows=0;
+        if(valid)outer:for(long gc:new TreeSet<>(parsed.collections().keySet())) {
+            var sizes=new TreeMap<Long,Integer>();
+            for(long size:parsed.collections().get(gc).values())sizes.merge(size,1,Integer::sum);
+            for(var entry:sizes.entrySet()) {
+                String row="{\"gcId\":"+gc+",\"uptimeMs\":"+parsed.uptimes().get(gc)+",\"objectBytes\":"+entry.getKey()+",\"count\":"+entry.getValue()+"}\n";
+                if(rows>=maxRows||result.length()+row.length()+128>maxBytes){overflow=true;break outer;}
+                result.append(row);rows++;
+            }
+        }
+        result.append("{\"complete\":").append(valid&&!overflow).append(",\"overflow\":").append(overflow)
+                .append(",\"rows\":").append(rows).append("}\n");return result.toString();
     }
 
     boolean awaitFinished(Duration timeout) throws InterruptedException {return finished.await(timeout.toMillis(),TimeUnit.MILLISECONDS);}

@@ -46,7 +46,7 @@ Resolve again at the start of every attempt; do not cache the external executabl
 
 ## Per-user settings and errors
 
-Builder proposal: add a small Burp Browser group to the existing Settings page. Automatic detection is the default. A native executable picker supports custom or ambiguous installs, and a Use automatic action clears the override. Show the selected/detected location and a plain explanation that login and recording use separate temporary sessions. Persist the override in Montoya user preferences, never in journeys, project exports or the shared library. Changing it affects subsequent attempts; already running sessions retain their captured selection.
+The Burp Browser group on the existing Settings page defaults to automatic detection and displays the detected executable in the path field without saving an override. Editing the path or using the native executable picker selects a custom executable. Restore automatic detection clears the override and is disabled while already automatic. Show the active mode and a plain explanation that login and recording use separate temporary sessions. Persist the override in Montoya user preferences, never in journeys, project exports or the shared library. Changing it affects subsequent attempts; already running sessions retain their captured selection.
 
 Discovery, validation and status refresh must not block the EDT. Render filesystem paths as literal data and preserve plain accessible descriptions. Use existing native styling and tooltip contracts; add no browser-based configuration interface.
 

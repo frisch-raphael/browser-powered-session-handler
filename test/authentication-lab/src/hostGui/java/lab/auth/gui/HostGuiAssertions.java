@@ -12,8 +12,7 @@ final class HostGuiAssertions {
     HostGuiAssertions(HostGuiDriver ui){this.ui=ui;}
     static boolean message(String code,String text) {
         return switch(code) {
-            case "URL_REGEX_INVALID" -> text.matches("Rule [0-9]+: Use supported RE2 syntax for the URL expression(?: at position [0-9]+)?\\.")
-                    ||text.toLowerCase(Locale.ROOT).contains("invalid url regex");
+            case "URL_REGEX_INVALID" -> text.matches("Rule [1-9][0-9]?, URL: requires supported RE2 syntax(?: at position [0-9]+)?\\.");
             case "RECOVERY_PAUSED" -> text.contains("Automatic recovery is paused after")&&text.contains("Test login");
             case "LOGIN_FAILED" -> text.contains("Login failed")||text.contains("HTTP 503");
             default -> throw new Failure("GUI_ASSERTION_UNSUPPORTED");

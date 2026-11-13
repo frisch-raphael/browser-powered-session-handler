@@ -13,6 +13,11 @@ public final class LabHostInputs {
     public static final List<String> SCENARIOS = List.of("routing", "tags", "repeater", "http-auth", "recovery",
             "rejected-replay", "intercept", "unload", "ordinary-failure");
     public enum Mode { ACCEPTANCE, QUALIFICATION }
+    static String guestStage(Mode mode,String stage) {
+        require(Set.of("primitives","scenarios","browser-runtime").contains(stage),"HOST_STAGE");
+        require(mode==Mode.QUALIFICATION||stage.equals("scenarios"),"HOST_QUALIFICATION_ONLY");
+        return stage.toUpperCase(Locale.ROOT).replace('-','_');
+    }
     public record Options(String command, Map<String,String> values) {
         public Options { values = Map.copyOf(values); }
         public Path path(String name) { return Path.of(values.get(name)).toAbsolutePath().normalize(); }
@@ -53,7 +58,7 @@ public final class LabHostInputs {
         }
         require(values.keySet().containsAll(required), "HOST_MISSING_ARGUMENT");
         require(Set.of("windows", "linux", "both").contains(values.getOrDefault("--platform", "both")), "HOST_PLATFORM");
-        require(Set.of("primitives", "scenarios").contains(values.getOrDefault("--stage", "scenarios")), "HOST_STAGE");
+        require(Set.of("primitives", "scenarios", "browser-runtime").contains(values.getOrDefault("--stage", "scenarios")), "HOST_STAGE");
         return new Options(command, values);
     }
 

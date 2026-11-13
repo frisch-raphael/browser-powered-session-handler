@@ -252,7 +252,7 @@ public final class IntegrationFixtures {
         Path path = Path.of(value).toRealPath();
         if (!Files.isRegularFile(path)) throw new IllegalArgumentException("The packaged JAR must be a regular file.");
         Path loaded=Path.of(BrowserRuntimeManager.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
-        assertEquals(path,loaded,"Real execution must load production classes and helper dependencies from the selected packaged JAR");
+        if(!path.equals(loaded))throw new AssertionError("Real execution must load production classes and helper dependencies from the selected packaged JAR");
         try (var jar = new java.util.jar.JarFile(path.toFile())) {
             if (jar.getEntry("bpsh/browser/runtime/BrowserRuntimeManager.class") == null) throw new IllegalArgumentException("The supplied JAR is not this extension.");
         }

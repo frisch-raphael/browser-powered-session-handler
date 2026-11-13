@@ -10,6 +10,79 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LabHostMemoryTest {
+    private static String object(long uptime,long gc,long region,long size) {
+        return "["+uptime+"ms][debug][gc,humongous] GC("+gc+") Humongous region "+region+" (object size "+size+") object @ 0xPRIVATE_ADDRESS class PRIVATE_SECRET\n";
+    }
+    private static List<com.google.gson.JsonObject> sizes(String text,int rows,int bytes) {
+        return LabHostMemory.gcSizes(text,true,rows,bytes).lines()
+                .map(line->LabJson.object(LabJson.parse(line.getBytes(java.nio.charset.StandardCharsets.US_ASCII)))).toList();
+    }
+    @Test void privateGcSizesDeduplicatesRegionsWithinEachCollectionAndEmitsOnlyNumericDistributions() {
+        String text=object(125,3,8,536870928)+object(123,3,8,536870928)+object(124,3,9,536870928)
+                +object(130,3,10,530339824)+object(140,4,8,536870928);
+        var rows=sizes(text,4096,1<<20);assertEquals(4,rows.size());
+        assertEquals(Set.of("gcId","uptimeMs","objectBytes","count"),rows.getFirst().keySet());
+        assertEquals(3,rows.get(0).get("gcId").getAsLong());assertEquals(123,rows.get(0).get("uptimeMs").getAsLong());
+        assertEquals(530339824,rows.get(0).get("objectBytes").getAsLong());assertEquals(1,rows.get(0).get("count").getAsInt());
+        assertEquals(536870928,rows.get(1).get("objectBytes").getAsLong());assertEquals(2,rows.get(1).get("count").getAsInt());
+        assertEquals(4,rows.get(2).get("gcId").getAsLong());assertEquals(1,rows.get(2).get("count").getAsInt());
+        assertTrue(rows.getLast().get("complete").getAsBoolean());assertFalse(rows.getLast().get("overflow").getAsBoolean());
+        assertEquals(3,rows.getLast().get("rows").getAsInt());
+        assertFalse(rows.toString().contains("PRIVATE"));assertFalse(rows.toString().contains("region"));
+        assertFalse(rows.toString().contains("class"));
+    }
+    @Test void privateGcSizesRefusesConflictsMalformedOrTruncatedLogsWithoutLeakingInput() {
+        String one=object(123,3,8,536870928);
+        for(String text:List.of(one+object(124,3,8,536870929),one.stripTrailing(),one+"PRIVATE_SENTINEL\n",
+                one+"[124ms][debug][gc,humongous] GC(3) Humongous region invalid PRIVATE_SENTINEL\n",
+                object(123,3,8,0),object(123,3,8,(16L<<30)+1))) {
+            var rows=sizes(text,4096,1<<20);assertEquals(1,rows.size());
+            assertFalse(rows.getLast().get("complete").getAsBoolean());assertEquals(0,rows.getLast().get("rows").getAsInt());
+            assertFalse(rows.toString().contains("PRIVATE"));
+        }
+        var crlf=sizes(one.replace("\n","\r\n"),4096,1<<20);assertTrue(crlf.getLast().get("complete").getAsBoolean());
+    }
+    @Test void privateGcTimelineFailureDoesNotChangeNormalizedAcceptanceSchemaOrCompleteness() {
+        String text=object(123,3,8,536870928).replace("123ms","999999999999999999999ms");
+        var normalized=LabHostMemory.gcNumbers(text,true);
+        assertEquals(Set.of("complete","objectObservations","gcObservations","maxObservedObjectBytes","peakObservedHumongousBytes"),normalized.keySet());
+        assertTrue(normalized.get("complete").getAsBoolean());assertEquals(536870928,normalized.get("maxObservedObjectBytes").getAsLong());
+        var privateRows=sizes(text,4096,1<<20);assertEquals(1,privateRows.size());assertFalse(privateRows.getLast().get("complete").getAsBoolean());
+    }
+    @Test void privateGcSizeRowsAndBytesAreBoundedWithExplicitTruncation() {
+        String text=object(1,1,1,1000000)+object(2,1,2,2000000)+object(3,1,3,3000000);
+        var limited=sizes(text,2,1<<20);assertEquals(3,limited.size());
+        assertEquals(2,limited.getLast().get("rows").getAsInt());assertTrue(limited.getLast().get("overflow").getAsBoolean());
+        assertFalse(limited.getLast().get("complete").getAsBoolean());
+        String tiny=LabHostMemory.gcSizes(text,true,4096,128);assertTrue(tiny.length()<=128);
+        var status=LabJson.object(LabJson.parse(tiny.strip().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        assertEquals(0,status.get("rows").getAsInt());assertTrue(status.get("overflow").getAsBoolean());
+        assertThrows(IllegalArgumentException.class,()->LabHostMemory.gcSizes(text,true,4097,1<<20));
+        assertThrows(IllegalArgumentException.class,()->LabHostMemory.gcSizes(text,true,4096,(1<<20)+1));
+        assertThrows(IllegalArgumentException.class,()->LabHostMemory.gcSizes(text,true,4096,127));
+        var groups=new StringBuilder();for(int gc=0;gc<=4096;gc++)groups.append(object(gc,gc,0,1000000));
+        assertFalse(sizes(groups.toString(),4096,1<<20).getLast().get("complete").getAsBoolean());
+    }
+    @Test void privateGcSizePublicationRejectsRotatedOversizedOrMissingInputsWithoutAcceptanceChanges() throws Exception {
+        for(int variant=0;variant<3;variant++) {
+            Path root=Files.createDirectory(directory.resolve("gc-"+variant));
+            if(variant==1){Files.writeString(root.resolve("gc-private.log"),object(1,1,1,1000000));Files.writeString(root.resolve("gc-private.log.0"),"PRIVATE_SENTINEL");}
+            if(variant==2)Files.writeString(root.resolve("gc-private.log"),"x".repeat((8<<20)+1));
+            var before=LabHostMemory.gcSummary(root);LabHostMemory.privateGcSizes(root);
+            String journal=Files.readString(root.resolve("gui/private-diagnostics/heap-gc-sizes.jsonl"));
+            assertFalse(journal.contains("PRIVATE"));assertTrue(journal.length()<=1<<20);
+            assertFalse(LabJson.object(LabJson.parse(journal.strip().getBytes(java.nio.charset.StandardCharsets.US_ASCII))).get("complete").getAsBoolean());
+            assertEquals(before,LabHostMemory.gcSummary(root));
+        }
+    }
+    @Test void privateGcSizePublicationIsExclusiveAndNeverOverwritesOrFollowsAnExistingTarget() throws Exception {
+        Files.writeString(directory.resolve("gc-private.log"),object(1,1,1,1000000));
+        LabHostMemory.privateGcSizes(directory);Path output=directory.resolve("gui/private-diagnostics/heap-gc-sizes.jsonl");
+        String first=Files.readString(output);LabHostMemory.privateGcSizes(directory);assertEquals(first,Files.readString(output));
+        assertTrue(first.contains("\"complete\":true"));
+        if(Files.getFileStore(output).supportsFileAttributeView("posix"))assertEquals("rw-------",java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(output)));
+        Files.writeString(output,"PRIVATE_SENTINEL");LabHostMemory.privateGcSizes(directory);assertEquals("PRIVATE_SENTINEL",Files.readString(output));
+    }
     @Test void gcSummaryCountsOnlyNumericDistinctObjectsPerCollection() {
         String one="[123ms][debug][gc,humongous] GC(3) Humongous region 0 (object size 1048576)\n";
         var value=LabHostMemory.gcNumbers(one+one+"[124ms][debug][gc,humongous] GC(3) Humongous region 4 (object size 2097152)\n"

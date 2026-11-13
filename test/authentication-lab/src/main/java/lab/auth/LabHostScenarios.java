@@ -16,7 +16,7 @@ import static lab.auth.LabHostCoordinator.Outcome;
 import static lab.auth.LabHostGuiProtocol.Operation;
 
 /** Fixed host recipes. Authentication, editing, storage and replay remain owned by the loaded extension. */
-public final class LabHostScenarios {
+public final class LabHostScenarios implements AutoCloseable {
     @FunctionalInterface public interface Gui {
         JsonObject ask(Operation operation, JsonObject arguments, Duration timeout) throws Exception;
     }
@@ -66,6 +66,54 @@ public final class LabHostScenarios {
 
     /** Setup is separately timed; no login is performed before the first measured cold dispatch. */
     public JsonObject setupEvidence(){return setup.deepCopy();}
+    void prepareBrowserRuntime() throws Exception {
+        deadline=System.nanoTime()+Duration.ofMinutes(12).toNanos();
+        lease=run.cases().stream().filter(c->c.id().equals(CASE)).findFirst().orElseThrow(()->new Check(Outcome.BLOCKED,"HOST_CASE_MISSING"));
+        observedLeases.add(lease);measurement=json("originals",new JsonArray());
+        Path output=Files.createDirectory(root.resolve("scenario-native-runtime"));exporter.prepare("host",output);
+        ask(Operation.IMPORT_JOURNEY,json("path",relative(output.resolve("native-examples/host_b.json")),"alias","host_b"));
+    }
+    JsonObject browserRuntimeLogin(boolean refill) throws Exception {
+        Set<String> before=issued();
+        if(refill)ask(Operation.ENTER_SECRET,json("alias","host_b","secret","FORM_B"));
+        var observed=ask(Operation.TEST_BROWSER_LOGIN,json("alias","host_b"),Duration.ofSeconds(120)).getAsJsonObject("observed");
+        block(observed.has("testUiConfirmed")&&observed.get("testUiConfirmed").getAsBoolean(),"HOST_RUNTIME_LOGIN_UI");
+        String nonce=proxy(target(false,null),ports.getFirst(),"user2",200,formTags("host_b"));
+        var row=single(nonce);String issuance=nullable(row.get("issuanceId"));
+        var fresh=new HashSet<>(issued());fresh.removeAll(before);
+        expect(fresh.equals(Set.of(issuance)),"HOST_RUNTIME_FRESH_LOGIN");
+        return json("testUiConfirmed",true,"endedEpochMs",System.currentTimeMillis(),"proof",
+                json("status",row.get("status"),"account",row.get("accountId"),"issuance",issuance,"roles",row.get("roles")));
+    }
+    @Override public void close(){for(var client:clients.values())client.close();direct.close();}
+    JsonObject finishBrowserRuntime() throws Exception {
+        Set<String> before=issued();
+        var start=ask(Operation.RECORD_BROWSER_LOGIN,json("alias","host_b","secret","FORM_B"),Duration.ofSeconds(180)).getAsJsonObject("observed");
+        for(String key:List.of("initialStepsCleared","nativeStart","loginTyped"))block(start.has(key)&&start.get(key).getAsBoolean(),"HOST_RUNTIME_RECORDING_UI");
+        await(()->!issued().equals(before),Duration.ofSeconds(30),"HOST_RUNTIME_RECORDING_LOGIN_MISSING");
+        var fresh=new HashSet<>(issued());fresh.removeAll(before);expect(fresh.size()==1,"HOST_RUNTIME_RECORDING_ISSUANCE");
+        String issuance=fresh.iterator().next();
+        var completed=server().getAsJsonArray("events").asList().stream().map(JsonElement::getAsJsonObject)
+                .filter(event->"login-completed".equals(nullable(event.get("name")))&&event.getAsJsonArray("safeIds").asList().stream()
+                        .map(JsonElement::getAsJsonObject).anyMatch(id->"issuance".equals(nullable(id.get("kind")))&&issuance.equals(nullable(id.get("value"))))).toList();
+        expect(completed.size()==1,"HOST_RUNTIME_RECORDING_EVENT");
+        var accounts=completed.getFirst().getAsJsonArray("safeIds").asList().stream().map(JsonElement::getAsJsonObject)
+                .filter(id->"account".equals(nullable(id.get("kind")))).map(id->nullable(id.get("value"))).toList();
+        expect(accounts.equals(List.of("user2")),"HOST_RUNTIME_RECORDING_ACCOUNT");
+        var stop=ask(Operation.FINISH_BROWSER_RECORDING,json("alias","host_b"),Duration.ofSeconds(120)).getAsJsonObject("observed");
+        for(String key:List.of("nativeStop","reviewReplaced"))block(stop.has(key)&&stop.get(key).getAsBoolean(),"HOST_RUNTIME_RECORDING_UI");
+        var replay=browserRuntimeLogin(false);
+        var recording=json("initialStepsCleared",start.get("initialStepsCleared"),"nativeStart",start.get("nativeStart"),"nativeStop",stop.get("nativeStop"),
+                "reviewReplaced",stop.get("reviewReplaced"),"replayUiConfirmed",replay.get("testUiConfirmed"),"recordedAccount",accounts.getFirst(),"recordedIssuance",issuance,"replayProof",replay.get("proof"));
+        Set<String> afterReplay=issued();var variants=new JsonArray();
+        for(String theme:List.of("Light","Dark"))for(String size:List.of("compact","wide")) {
+            var variant=ask(Operation.BROWSER_SETTINGS,json("alias","host_b","theme",theme,"size",size),Duration.ofSeconds(90)).getAsJsonObject("observed").deepCopy();
+            expect(theme.equals(nullable(variant.get("theme")))&&size.equals(nullable(variant.get("size"))),"HOST_RUNTIME_SETTINGS_VARIANT");
+            for(String key:List.of("inlineError","focused","noPopup","literalPath","controlsVisible"))block(variant.has(key)&&variant.get(key).getAsBoolean(),"HOST_RUNTIME_SETTINGS_UI");
+            variants.add(variant);expect(issued().equals(afterReplay),"HOST_RUNTIME_INVALID_PATH_AUTHENTICATED");
+        }
+        return json("browserVersion",start.get("browserVersion"),"recording",recording,"settings",variants);
+    }
     public Map<String,Outcome> run() throws IOException {
         var results=new LinkedHashMap<String,Outcome>();boolean interrupted=false, initialized=false;
         try {
@@ -112,7 +160,7 @@ public final class LabHostScenarios {
                 LabJson.writeNew(report.resolve("scenario-"+id+".json"),evidence);results.put(id,outcome);
             }
         } finally {
-            for(var client:clients.values())client.close();direct.close();
+            close();
         }
         return Collections.unmodifiableMap(results);
     }
@@ -173,7 +221,10 @@ public final class LabHostScenarios {
         }
     }
     private JsonObject ask(Operation operation,JsonObject arguments) throws Exception {
-        check();var receipt=gui.ask(operation,arguments,budget(Duration.ofSeconds(30)));
+        return ask(operation,arguments,Duration.ofSeconds(30));
+    }
+    private JsonObject ask(Operation operation,JsonObject arguments,Duration maximum) throws Exception {
+        check();var receipt=gui.ask(operation,arguments,budget(maximum));
         block(receipt!=null&&receipt.has("sequence")&&receipt.has("observed")&&"PASS".equals(receipt.get("outcome").getAsString()),"HOST_GUI_RECEIPT_MISSING");
         long sequence=receipt.get("sequence").getAsLong();block(sequence>lastGuiSequence,"HOST_GUI_SEQUENCE");
         lastGuiSequence=sequence;return receipt;

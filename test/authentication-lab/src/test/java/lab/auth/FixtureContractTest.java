@@ -106,6 +106,61 @@ class FixtureContractTest {
             assertEquals(400, send(http, lease.endpoint("login/json"), "POST", "x".repeat(65_537), "application/json").statusCode());
         }
     }
+    @Test void outputsStayWithTheirOriginalBrowserWhenAnotherAccountLogsInBeforeTheyAreFetched() throws Exception {
+        try(var lease=run.prepareCase("BROW.basic.json");var first=browser();var second=browser()) {
+            var loginA=send(first,lease.endpoint("login/json"),"POST","{\"username\":\"user\",\"password\":\"pass\"}","application/json");
+            var loginB=send(second,lease.endpoint("login/json"),"POST","{\"username\":\"user2\",\"password\":\"pass2\"}","application/json");
+            assertEquals(200,loginA.statusCode());assertEquals(200,loginB.statusCode());
+            var outputsA=send(first,lease.endpoint("outputs"),"GET",null,null);
+            var outputsB=send(second,lease.endpoint("outputs"),"GET",null,null);
+            assertEquals(200,outputsA.statusCode());assertEquals(200,outputsB.statusCode());
+            assertEquals("user",json(outputsA).get("accountId").getAsString());
+            assertEquals("user2",json(outputsB).get("accountId").getAsString());
+            for(var pair:List.of(List.of(loginA,outputsA),List.of(loginB,outputsB))) {
+                var login=pair.get(0);var outputs=pair.get(1);var original=json(login);var fetched=json(outputs);
+                assertTrue(original.get("access_token").equals(fetched.get("access_token")),"Outputs must preserve the original login's bearer.");
+                assertEquals(original.get("issuanceId"),fetched.get("issuanceId"));
+                var accepted=request(lease,"b_c1",Map.of(Role.B,fetched.get("access_token").getAsString(),Role.C1,cookie(login,"LAB_C1")),"GET",null);
+                assertEquals(200,accepted.statusCode());assertEquals(original.get("accountId"),json(accepted).get("accountId"));
+                assertEquals(original.get("issuanceId"),json(accepted).get("issuanceId"));
+            }
+            assertEquals(401,request(lease,"b_c1",Map.of(Role.B,json(outputsA).get("access_token").getAsString(),Role.C1,cookie(loginB,"LAB_C1")),"GET",null).statusCode());
+        }
+    }
+
+    @Test void outputsKeepPerLoginBearerOmissionWhenOtherBrowserOutputsAreComplete() throws Exception {
+        for(boolean omitFirst:List.of(true,false))try(var lease=run.prepareCase("BROW.basic.json");var first=browser();var second=browser()) {
+            lease.armFault(new LabRun.FaultSpec(LabRun.Phase.LOGIN,omitFirst?1:2,"OMIT_OUTPUT",Role.B,null,null));
+            var loginA=send(first,lease.endpoint("login/json"),"POST","{\"username\":\"user\",\"password\":\"pass\"}","application/json");
+            var loginB=send(second,lease.endpoint("login/json"),"POST","{\"username\":\"user2\",\"password\":\"pass2\"}","application/json");
+            var outputsA=send(first,lease.endpoint("outputs"),"GET",null,null);var outputsB=send(second,lease.endpoint("outputs"),"GET",null,null);
+            assertEquals(200,loginA.statusCode());assertEquals(200,loginB.statusCode());assertEquals(200,outputsA.statusCode());assertEquals(200,outputsB.statusCode());
+            assertEquals(!omitFirst,json(outputsA).has("access_token"));assertEquals(omitFirst,json(outputsB).has("access_token"));
+            assertEquals("user",json(outputsA).get("accountId").getAsString());assertEquals("user2",json(outputsB).get("accountId").getAsString());
+            assertTrue(json(loginA).equals(json(outputsA)),"An omitted output must not be reconstructed or replaced by another login.");
+            assertTrue(json(loginB).equals(json(outputsB)),"Each session retains its actual emitted output map.");
+            assertEquals(200,request(lease,"c1",Map.of(Role.C1,cookie(loginA,"LAB_C1")),"GET",null).statusCode());
+            assertEquals(200,request(lease,"c1",Map.of(Role.C1,cookie(loginB,"LAB_C1")),"GET",null).statusCode());
+        }
+    }
+
+    @Test void outputsRefuseMissingForgedAndCrossCaseSessionsEvenWithTheValidFlowMarker() throws Exception {
+        try(var first=run.prepareCase("BROW.basic.json");var second=run.prepareCase("BROW.basic.cookie-one");var a=browser();var b=browser()) {
+            var loginA=send(a,first.endpoint("login/json"),"POST","{\"username\":\"user\",\"password\":\"pass\"}","application/json");
+            var loginB=send(b,second.endpoint("login/json"),"POST","{\"username\":\"user2\",\"password\":\"pass2\"}","application/json");
+            String flowA="LAB_FLOW="+cookie(loginA,"LAB_FLOW"),flowB="LAB_FLOW="+cookie(loginB,"LAB_FLOW");
+            String sessionA="LAB_OUTPUT_SESSION="+cookie(loginA,"LAB_OUTPUT_SESSION");
+            assertEquals(401,outputsWithCookie(first,flowA).statusCode());
+            assertEquals(401,outputsWithCookie(first,sessionA).statusCode());
+            assertEquals(401,outputsWithCookie(first,flowA+"; LAB_OUTPUT_SESSION=forged-session").statusCode());
+            assertEquals(401,outputsWithCookie(second,flowB+"; "+sessionA).statusCode());
+            assertEquals(200,outputsWithCookie(first,flowA+"; "+sessionA).statusCode());
+            assertEquals("user2",json(send(b,second.endpoint("outputs"),"GET",null,null)).get("accountId").getAsString());
+        }
+    }
+    private HttpResponse<String> outputsWithCookie(LabRun.CaseLease lease,String cookies) throws Exception {
+        return http.send(HttpRequest.newBuilder(lease.endpoint("outputs")).header("Cookie",cookies).timeout(Duration.ofSeconds(3)).GET().build(),HttpResponse.BodyHandlers.ofString());
+    }
     /** Qualifies the retained legacy verifier route; it does not compose extension journeys. */
     @Test void independentCookieRoutePreservesSameAccountDifferentLoginSemantics() throws Exception {
         try (var lease = run.prepareCase("FIX.extra.same-account-other-login")) {

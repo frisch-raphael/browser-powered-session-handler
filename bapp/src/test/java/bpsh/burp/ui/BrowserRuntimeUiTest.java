@@ -83,18 +83,33 @@ class BrowserRuntimeUiTest {
         Path first = root.resolve("a/burpbrowser/156.0.0.0/chrome.exe"), second = root.resolve("b/burpbrowser/156.0.0.0/chrome.exe");
         for (Path executable : List.of(first, second)) { Files.createDirectories(executable.getParent()); Files.writeString(executable, "synthetic executable"); executable.toFile().setExecutable(true); }
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var reads = new AtomicInteger();
+        var newerEntered = new CountDownLatch(1); var newerRelease = new CountDownLatch(1);
         try (var editor = harness.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
-            var settings = new BrowserExecutableSettings(); settings.setExecutableOverride(first.toString());
+            var settings = new BrowserExecutableSettings();
             var preferences = new BrowserRuntimePreferences(null, BrowserRuntimePreferencesTest.installation(settings, null));
-            var resolver = new BurpBrowserResolver(new BurpBrowserResolver.Environment("windows-x64", List.of(), List.of()), () -> {
-                if (reads.incrementAndGet() == 1) { entered.countDown(); try { if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("Discovery release missing"); } catch (InterruptedException error) { Thread.currentThread().interrupt(); } return first.toString(); }
-                return settings.executableOverride();
-            });
+            var installation = new bpsh.authentication.BrowserInstallation() {
+                @Override public String executableOverride() { return settings.executableOverride(); }
+                @Override public void setExecutableOverride(String value) { settings.setExecutableOverride(value); }
+                @Override public Selection discover(long deadline, java.util.function.BooleanSupplier cancelled) {
+                    boolean firstRead = reads.incrementAndGet() == 1;
+                    (firstRead ? entered : newerEntered).countDown();
+                    try {
+                        if (!(firstRead ? release : newerRelease).await(5, TimeUnit.SECONDS)) throw new AssertionError("Discovery release missing");
+                    } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new AssertionError(error); }
+                    // Deliberately complete despite cancellation to exercise the UI's stale-result fence.
+                    return new Selection(firstRead ? first : second, !firstRead);
+                }
+            };
             try {
-                harness.edt(() -> editor.ui.browserRuntime(BrowserRuntimePreferencesTest.installation(settings, resolver), preferences)); assertTrue(entered.await(5, TimeUnit.SECONDS));
+                harness.edt(() -> editor.ui.browserRuntime(installation, preferences)); assertTrue(entered.await(5, TimeUnit.SECONDS));
                 harness.edt(() -> { BurpBrowserSettingsPanel panel = harness.member(editor.ui, "browserSettingsPanel"); ((JTextField) panel.focusTarget()).setText(second.toString()); });
-            } finally { release.countDown(); }
-            harness.await(() -> { try { BurpBrowserSettingsPanel panel = harness.member(editor.ui, "browserSettingsPanel"); return ((JTextArea) harness.member(panel, "location")).getText().contains(second.toRealPath().toString()); } catch (Exception error) { return false; } });
+                release.countDown(); assertTrue(newerEntered.await(5, TimeUnit.SECONDS));
+                harness.edt(() -> {
+                    BurpBrowserSettingsPanel panel = harness.member(editor.ui, "browserSettingsPanel");
+                    assertEquals(second.toString(), ((JTextField) panel.focusTarget()).getText(), "A late automatically detected path must not overwrite an edit");
+                });
+            } finally { release.countDown(); newerRelease.countDown(); }
+            harness.await(() -> { try { BurpBrowserSettingsPanel panel = harness.member(editor.ui, "browserSettingsPanel"); return ((JTextField) panel.focusTarget()).getText().equals(second.toString()) && ((JTextArea) harness.member(panel, "location")).getText().startsWith("Custom executable."); } catch (Exception error) { return false; } });
             assertEquals(second.toString(), settings.executableOverride());
             var lateEntered = new CountDownLatch(1); var lateRelease = new CountDownLatch(1);
             var late = new BurpBrowserResolver(new BurpBrowserResolver.Environment("windows-x64", List.of(), List.of()), () -> {
