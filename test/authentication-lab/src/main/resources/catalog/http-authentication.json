@@ -3211,7 +3211,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3292,7 +3292,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3373,7 +3373,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3454,7 +3454,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3535,7 +3535,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3616,7 +3616,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
@@ -3697,7 +3697,7 @@
           "bapp/src/test/java/bpsh/support/HttpAuthenticationBrowserPolicies.java": "38dcec742ba8cd07bed0c3a7422166ba76bb98164ac22a3b10562d27243ffd4a",
           "bapp/src/test/java/bpsh/support/BrowserProcessWitness.java": "d96c1ea718fa96b319fa24ea183ed970b5cacc254a302e864e72f15c4578e772",
           "test/authentication-lab/src/main/java/lab/auth/LabHttpBoundaryEvidence.java": "917cb9be8f2e9f3a7d339f4ffebe75de57751f7b5fc2c2a2c38667f70c32039e",
-          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "77115a897e66bfc10e8ba1cfaa067e0b699428769f6e808fcec95d02dcb754b8"
+          "bapp/src/test/java/bpsh/browser/BrowserJourneyIntegrationTest.java": "de2fd2420996fbe29456a243c9dd6883bbed26684a9e8ccd5fb2ed063b8e8f6d"
         },
         "taskPath": ":authLabBrowserTest",
         "configurationHash": "342e2d0dc2970e48ad1e8abd39a8f587be105b59689f94dfab78b55a3f3d68a3",
