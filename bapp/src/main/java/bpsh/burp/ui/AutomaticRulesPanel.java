@@ -62,7 +62,7 @@ final class AutomaticRulesPanel extends JPanel {
         setLayout(new BorderLayout(0, 10));
         ((AbstractDocument) failureStatus.getDocument()).setDocumentFilter(new StatusDigits());
         var top = new JPanel(new BorderLayout(8, 6));
-        top.add(text("Matching journeys run from top to bottom. Cached sessions are reused."), BorderLayout.NORTH);
+        top.add(text("Matching journeys run from top to bottom. The last matching HTTP identity is used; cached sessions are reused."), BorderLayout.NORTH);
         var actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         available.setPrototypeDisplayValue(new Option(null, "Customer portal authentication"));
         actions.add(available); add = UiIcons.button(UiIcons.Action.ADD, "Add automatic journey", this::addSelected); actions.add(add);

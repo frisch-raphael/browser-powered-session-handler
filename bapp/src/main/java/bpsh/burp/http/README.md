@@ -11,7 +11,10 @@ Adapts global/Proxy hooks to credential acquisition, tag expansion, automatic in
 - [SessionRequestProcessor](./SessionRequestProcessor.java): Owns atomic ordinary/tagged preparation and safe failure policy.
 - [GlobalHttpSessionAdapter](./GlobalHttpSessionAdapter.java): Delivers direct identities and processes non-Proxy traffic.
 - [ProxyHttpSessionAdapter](./ProxyHttpSessionAdapter.java): Uses final interception edits and actual incoming listener metadata.
-- [HttpAuthenticationDelivery](./HttpAuthenticationDelivery.java): Materializes the actual response for explicit HTTP identity delivery.
+- [HttpAuthenticationDelivery](./HttpAuthenticationDelivery.java): Shares actual native delivery for explicit and automatic request identities.
+- [AutomaticHttpAuthentication](./AutomaticHttpAuthentication.java): Selects eligible transport-only providers and coordinates captures under the automatic policy.
+- [DeferredRequestDelivery](./DeferredRequestDelivery.java): Transfers exact pinned requests once across callback families, owning bounds/deadlines.
+- [GuardedHttpTransportFactory](./GuardedHttpTransportFactory.java): Owns routed DIRECT/TEST marking and preserves request policies.
 - [RecoveryReplayDelivery](./RecoveryReplayDelivery.java): Owns bounded one-time application replays without rematching listener rules.
 - [RequestExchange](./RequestExchange.java): Keeps callback families and their numeric IDs distinct.
 - [RequestRuleMatcher](./RequestRuleMatcher.java): Compiles one immutable URL/port matching plan.
@@ -32,7 +35,7 @@ Failed tagged Proxy processing requests native DROP on a best-effort basis. The
 tested Burp host may still forward the original unresolved request; this is an
 [accepted limitation](../../../../../../docs/designs/session-handling-by-url-and-proxy-port.md#proxy-failure-policy-native-drop-is-best-effort).
 No stop header, diagnostic-ticket bridge or second credential pass is used.
-Global-owned requests retain their native global drop behavior.
+Global-owned requests retain native global drop behavior. Trusted automatic transport and recovery share a separate one-use bridge, capped at 256 plans and 32 MiB total clean-plus-marked bytes. It pins service, bytes, selection and request deadline, revokes abandoned markers, and closes/awaits its expiry worker on unload.
 
 HTTP identity selection captures the journey generation and epoch before waiting
 for explicit token references. It removes all competing Authorization headers,
@@ -47,3 +50,5 @@ Replaces/annotates outgoing requests, retains bounded replay templates and sends
 ## Verification
 
 From the repository root: `.\bapp\gradlew.bat -p bapp check verifyNativeDocumentation --offline`. Browser/native integration uses explicit tasks in [the build guide](../../../../../../README.md).
+
+Only transport-only journeys supply automatic direct identities; capture journeys retain browser helpers. The last matching provider permitted for the actual origin wins. Send immediately preserves the whole original while required authentication is missing. A later ESTABLISHED_ONLY transmission never negotiates/resends the original; single-flight HEAD warmup uses its DIRECT pool. Actual responses are observed by recovery once before spoofing; HTTP-only outcomes never enter captured-token recovery.

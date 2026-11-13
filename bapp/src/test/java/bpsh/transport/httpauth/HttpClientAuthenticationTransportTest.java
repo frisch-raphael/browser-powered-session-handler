@@ -20,6 +20,32 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class HttpClientAuthenticationTransportTest {
     @TempDir Path temporary;
+    @ParameterizedTest(name="established-only-{0}") @EnumSource(HttpAuthentication.Protocol.class)
+    void cachedOnlyRequestsNeverNegotiateOrReplayTheOriginalPost(HttpAuthentication.Protocol protocol) throws Exception {
+        try(var lab=IntegrationFixtures.httpAuthentication(protocol.name(),null);
+            var workers=Executors.newFixedThreadPool(2);var deadlines=Executors.newSingleThreadScheduledExecutor();
+            var service=transport(protocol,"user-a","alpha-password",lab.url("/"),SSLContext.getDefault(),workers,deadlines);
+            var body=IntegrationFixtures.httpBody("payload".getBytes(StandardCharsets.UTF_8))) {
+            var post=new HttpAuthenticationService.Request(lab.url("/perform"),"POST",List.of(),body,
+                    HttpAuthenticationService.AuthorizationPolicy.REPLACE_SELECTED,HttpAuthenticationService.ChallengePolicy.ESTABLISHED_ONLY);
+            int before=lab.requests.size();
+            try(var cold=IntegrationFixtures.httpExchange(service,post,deadline()).get(5,TimeUnit.SECONDS)) {
+                assertEquals(401,cold.status());assertEquals(1,lab.requests.size()-before);assertEquals(0,lab.applicationPosts.get());
+            }
+            try(var warm=await(service,lab.url("/whoami"))){assertEquals(200,warm.status());}
+            int handshakes=lab.handshakes.get();before=lab.requests.size();
+            try(var cached=IntegrationFixtures.httpExchange(service,post,deadline()).get(5,TimeUnit.SECONDS)) {
+                assertEquals(200,cached.status());assertEquals(HttpAuthenticationEvidence.Status.ACCEPTED,cached.authentication().status());
+                assertEquals(1,lab.requests.size()-before);assertEquals(1,lab.applicationPosts.get());if(protocol!=HttpAuthentication.Protocol.BASIC)assertEquals(handshakes,lab.handshakes.get());
+            }
+            try(var closing=await(service,lab.url("/close"))){assertEquals(200,closing.status());}
+            handshakes=lab.handshakes.get();before=lab.requests.size();
+            try(var next=IntegrationFixtures.httpExchange(service,post,deadline()).get(5,TimeUnit.SECONDS)) {
+                assertEquals(protocol==HttpAuthentication.Protocol.BASIC?200:401,next.status());
+                assertEquals(1,lab.requests.size()-before);if(protocol!=HttpAuthentication.Protocol.BASIC)assertEquals(handshakes,lab.handshakes.get());
+            }
+        }
+    }
     @ParameterizedTest(name="response-headers-{0}") @EnumSource(HttpAuthentication.Protocol.class)
     void boundsHeadersBeforeIntermediateAuthenticationOrFinalResponse(HttpAuthentication.Protocol protocol) throws Exception {
         var proof=new bpsh.support.HttpBoundaryCapture("HTTP.auth.resources.response-headers-"+protocol.name().toLowerCase(java.util.Locale.ROOT).replace('_','-'));

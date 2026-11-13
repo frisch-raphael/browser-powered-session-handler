@@ -90,7 +90,10 @@ final class JourneyEventLogPanel extends JPanel {
         int selected = table.getSelectedRow();
         if (selected < 0) { detail.setText(model.rows.isEmpty() ? "No events for this journey yet." : table.getRowCount() == 0 ? "No events match your filters." : "Select an event to read its details."); return; }
         int index = table.convertRowIndexToModel(selected); if (index >= model.rows.size()) return;
-        var event = model.rows.get(index); detail.setText("Time: " + Model.TIME.format(event.time()) + "\nType: " + caption(event.level()) + "\n\n" + event.message()); detail.setCaretPosition(0);
+        var event = model.rows.get(index);
+        String timing = event.occurrences() == 1 ? "Time: " + Model.TIME.format(event.time()) :
+                "First seen: " + Model.TIME.format(event.time()) + "\nLast seen: " + Model.TIME.format(event.lastTime()) + "\nOccurrences: " + event.occurrences();
+        detail.setText(timing + "\nType: " + caption(event.level()) + "\n\n" + event.message()); detail.setCaretPosition(0);
     }
     /** @return Stable selected sequence, or -1 when filters/selection leave no row. */
     private long selectedSequence() { int row = table.getSelectedRow(); return row < 0 || table.convertRowIndexToModel(row) >= model.rows.size() ? -1 : model.rows.get(table.convertRowIndexToModel(row)).sequence(); }
@@ -112,7 +115,7 @@ final class JourneyEventLogPanel extends JPanel {
         /** @return Time, type and message columns. */ @Override public int getColumnCount() { return 3; }
         /** @param column Visible column. @return Comparable timestamps for chronological sorting across dates. */ @Override public Class<?> getColumnClass(int column) { return column == 0 ? java.time.Instant.class : String.class; }
         /** @param column Visible column. @return Familiar Burp-style caption. */ @Override public String getColumnName(int column) { return switch (column) { case 0 -> "Time"; case 1 -> "Type"; default -> "Message"; }; }
-        /** @param row Immutable event index. @param column Visible column. @return Safe literal display value. */ @Override public Object getValueAt(int row, int column) { var event = rows.get(row); return switch (column) { case 0 -> event.time(); case 1 -> caption(event.level()); default -> event.message(); }; }
+        /** @param row Immutable event index. @param column Visible column. @return Safe literal display value. */ @Override public Object getValueAt(int row, int column) { var event = rows.get(row); return switch (column) { case 0 -> event.time(); case 1 -> caption(event.level()); default -> event.message() + (event.occurrences() == 1 ? "" : " (" + event.occurrences() + " occurrences)"); }; }
     }
     /** Prevents Swing's HTML renderer from interpreting message text as markup. */
     private static final class PlainRenderer extends DefaultTableCellRenderer {

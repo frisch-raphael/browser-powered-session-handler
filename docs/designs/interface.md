@@ -256,7 +256,7 @@ authentication failures must not move the user's focus or open a popup.
 
 Burp request notes report the extension's observed action, the failing journey
 only when known, the specific safe error and any supported next action. Automatic
-failure says BPSH left the request unchanged; it does not claim delivery. A drop
+failure before native dispatch says BPSH left the request unchanged; it does not claim delivery. After native dispatch retain the actual response or request terminal drop, never a second forwarding of the original. A drop
 note says Burp was asked to drop the request, without promising server-side
 absence. Direct HTTP-auth delivery uncertainty must retain its warning to check
 the server before resending. Never infer a bad password, missing library or
@@ -284,6 +284,16 @@ request or unclassified exception is accepted as event data. Show Cancel only
 during authentication, Retry after a failed attempt, or Open certificate settings
 when the configured PIN requires attention. An open event
 dock remains open and switches to the selected journey's own history.
+Identical warnings and errors for the same journey, severity and saved step
+share one retained row even when other events intervene. Show the occurrence
+count in that row and first/last seen times in Event detail. Distinct problems
+and step generations remain separate; clearing history resets the counts.
+The host log emits a condition immediately, then at most one summary per minute
+for that same condition with the suppressed-repeat count. Per-request diagnostic
+annotations remain available independently of log aggregation.
+Valid HTTP/mTLS-only requests do not produce missing-token warnings. A token
+reference to such a journey instead explains that it has no value to insert and
+points to automatic handling or the HTTP-authentication header.
 Validation guidance appears beside the corresponding field, clears on editing,
 and never steals focus during background validation.
 An explicit failed Test login reveals the identified input or login step. A
@@ -308,6 +318,13 @@ actions and expose neither passwords nor NTLM payloads. Clear cache removes the
 observations and fences late in-flight updates; saved settings remain visible.
 Recording can expose its validated HTTP identity while capture settings are still
 unfinished. That inspection remains bound to the recording's saved generation.
+
+For mTLS, show only a Selected certificate (SHA-256) row containing the saved
+fingerprint, including before authentication and in certificate-only journeys.
+Do not add origins, last HTTPS results or authentication-success claims to this
+row. Inspecting it must not load middleware or access the PIN or private key.
+It has no copy actions and remains visible after clearing runtime credentials
+because it describes the saved certificate selection.
 
 Event log includes fixed HTTP-authentication stages for browser login, recording,
 HTTP-only tests and direct requests. NTLM reports type 1 negotiation, validated
@@ -457,7 +474,7 @@ The HTTPS Login URL's exact canonical server is included in the client-certifica
 
 Step failure navigation uses stable step UUIDs and the exact journey generation, never parsed log text or the current visible row. Journey attribution and paused-recovery wrapping must preserve that target. Response-only early completion records skipped-step metadata without executing the remaining steps. Any cookie capture requires successful completion of the configured sequence; an anonymous cookie must not turn a failed login step into a success.
 
-Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** waits within the request deadline and allows the selected HTTP identity to negotiate authentication when needed. **Send immediately** preserves the whole original request when any required captured credential or transport identity is not ready, and starts or joins background authentication. For HTTP identities, background work sends a bounded HEAD for the actual permitted origin, preferring the configured protected login URL when it is on that origin in the reusable DIRECT pool, without the original body, application Authorization or cookies. Once ready, an automatic HTTP request uses existing authentication without challenge negotiation: an actually reused NTLM connection can authenticate it, while a cold connection's real 401 is retained and triggers background warmup for later requests. The original request is never replayed by this policy. Explicit journey tags remain independent and wait within their deadlines.
 
 Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized explicitly path-filtered network responses are aborted. Origin-only and service-worker capture stop collecting each oversized response while ordinary browser delivery continues. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 
@@ -513,3 +530,5 @@ handling. See the [routing design](session-handling-by-url-and-proxy-port.md#pro
 Token-free HTTP or client-certificate tests use the existing shared request transport and report the actual HTTP outcome, without launching a capture journey or creating a cached token. Client-certificate-only tests require a permitted HTTPS destination and retain application Authorization. Success copy describes a request made with configured certificate settings, not proof that the server required the certificate. Known failures remain inline at the HTTP authentication or client-certificate group. Capture-wait and credential-cache input are unused in this mode and do not block it.
 
 Origin-only response capture observes bounded response streams without interrupting ordinary browser delivery. A large matching page or asset may fail capture for that response, but must not prevent a later valid token response or disable collection for other responses. The 1 MiB decoded capture limit still applies.
+
+Transport-only automatic rules use the saved HTTP/client-certificate settings. Matching still requires the master switch, selected tool, URL and any actual incoming listener; the last permitted provider wins. Captured journeys remain application-credential sources. The policy explanation covers NTLM connection reuse and nonwaiting challenge behavior.

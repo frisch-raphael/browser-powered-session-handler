@@ -579,7 +579,7 @@ public final class UiController {
         browserSettingsPanel.setOverride(browserInstallation == null ? "" : browserInstallation.executableOverride());
         row(panel, "", browserSettingsPanel);
         requestPolicy.getAccessibleContext().setAccessibleName("Automatic handling policy");
-        requestPolicyHelp.setRows(7);
+        requestPolicyHelp.setRows(10);
         updateRequestPolicyHelp();
         requestPolicy.addActionListener(e -> { updateRequestPolicyHelp(); if (!suppress) controlsEdited(true); });
         row(panel, "Automatic handling policy", requestPolicy);
@@ -624,9 +624,9 @@ public final class UiController {
     /** Explains the selected policy's effect on this request and the user's next action. */
     private void updateRequestPolicyHelp() {
         String explanation = requestPolicy.getSelectedItem() == RequestSettings.RequestPolicy.DO_NOT_WAIT
-                ? "If a token or cookie is missing or expired, send the original request unchanged and run login in the background. Later requests use the credentials after login succeeds."
-                : "If a token or cookie is missing or expired, wait for login to finish, up to the request wait timeout. If login succeeds, send the request with the new credentials.";
-        String help = explanation + "\n\nA valid cached token or cookie is added to the request immediately."
+                ? "If authentication is missing, send the original request unchanged and run login in the background. Later requests use the credentials. NTLM uses an authenticated connection when available; it does not negotiate for this request."
+                : "If authentication is missing, wait for login to finish, up to the request wait timeout. NTLM signs in when needed and reuses authenticated connections.";
+        String help = explanation + "\n\nWhen all matching authentication is ready, a valid cached token or cookie is added immediately."
                 + "\n\nThis policy applies only to automatic handling. Explicit BPSH tags always wait for login.";
         requestPolicyHelp.setText(help); requestPolicyHelp.setCaretPosition(0);
         UiTooltips.set(requestPolicy, help, 340, String.valueOf(requestPolicy.getSelectedItem()));

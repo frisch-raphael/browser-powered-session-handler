@@ -12,6 +12,8 @@ import static bpsh.burp.http.SessionRequestProcessor.*;
 /** Global delivery boundary for terminal stops, owned traffic, direct HTTP identities and non-Proxy requests. */
 public final class GlobalHttpSessionAdapter implements HttpHandler {
     private final SessionRequestProcessor processor;
+    private final DeferredRequestDelivery deferred;
+    private final AutomaticHttpAuthentication automatic;
     private final HttpAuthenticationDelivery direct;
     private final RecoveryReplayDelivery replays;
     private final RequestControlState controls;
@@ -19,8 +21,8 @@ public final class GlobalHttpSessionAdapter implements HttpHandler {
 
     /** Wires shared operations; installs no independent parsers, caches or workers. */
     GlobalHttpSessionAdapter(SessionRequestProcessor processor, HttpAuthenticationDelivery direct, RecoveryReplayDelivery replays,
-                            RequestControlState controls, AtomicBoolean closed) {
-        this.processor=processor;this.direct=direct;this.replays=replays;this.controls=controls;this.closed=closed;
+                            RequestControlState controls, AtomicBoolean closed, DeferredRequestDelivery deferred, AutomaticHttpAuthentication automatic) {
+        this.automatic=automatic;this.deferred=deferred;this.processor=processor;this.direct=direct;this.replays=replays;this.controls=controls;this.closed=closed;
     }
 
     /** @param request Actual global outgoing message. @return Supported continuation, terminal drop or actual direct-delivery response. */
@@ -33,7 +35,7 @@ public final class GlobalHttpSessionAdapter implements HttpHandler {
             var ownership=processor.ownership(request,exchange.family(),exchange.id());
             if(ownership.classification()==AuthTrafficGuard.Classification.INVALID)
                 return action(processor.stopped(request,notes,exchange,null,ownership.failure()));
-            if(ownership.replayKey()!=null) {terminal=true;return action(replays.deliver(request,ownership));}
+            if(ownership.replayKey()!=null) {terminal=true;return action(deferred.deliver(request,ownership));}
             var bytes=request.toByteArray();
             boolean httpTagged=HttpAuthenticationDirective.present(bytes);
             if(ownership.classification()==AuthTrafficGuard.Classification.OWNED) {
@@ -53,7 +55,10 @@ public final class GlobalHttpSessionAdapter implements HttpHandler {
             }
             var tool=tool(request);
             if(tool==RequestSettings.Tool.PROXY)return RequestToBeSentAction.continueWith(request,notes);
-            return action(processor.process(request,notes,new RequestRuleMatcher.Context(exchange,tool,null),applied));
+            var context=new RequestRuleMatcher.Context(exchange,tool,null);
+            var matching=processor.matching(request,context,applied);
+            var authenticated=automatic.prepare(request,notes,context,applied,matching,false);
+            return action(authenticated==null?processor.process(request,notes,context,applied,matching):authenticated);
         } catch(InterruptedException error) {
             Thread.currentThread().interrupt();
             return action(processor.failed(request,notes,exchange,null,terminal,new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
@@ -66,6 +71,7 @@ public final class GlobalHttpSessionAdapter implements HttpHandler {
 
     /** @param result Shared processor outcome. @return Global action without another credential pass. */
     private static RequestToBeSentAction action(SessionRequestProcessor.Result result) {
+        if(result.response()!=null)return RequestToBeSentAction.spoof(result.response(),result.annotations());
         return result.stop()==null?RequestToBeSentAction.continueWith(result.request(),result.annotations()):RequestToBeSentAction.drop(result.annotations());
     }
 

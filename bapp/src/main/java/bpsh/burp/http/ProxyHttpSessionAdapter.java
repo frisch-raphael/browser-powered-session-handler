@@ -9,12 +9,13 @@ import static bpsh.burp.http.SessionRequestProcessor.*;
 /** Final edited-request preparation using actual incoming listeners, with best-effort native Proxy drops. */
 public final class ProxyHttpSessionAdapter implements ProxyRequestHandler,ProxyResponseHandler {
     private final SessionRequestProcessor processor;
+    private final AutomaticHttpAuthentication automatic;
     private final RecoveryReplayDelivery replays;
     private final RequestControlState controls;
 
     /** Shares preparation and recovery owners with the global adapter. */
-    ProxyHttpSessionAdapter(SessionRequestProcessor processor,RecoveryReplayDelivery replays,RequestControlState controls) {
-        this.processor=processor;this.replays=replays;this.controls=controls;
+    ProxyHttpSessionAdapter(SessionRequestProcessor processor,RecoveryReplayDelivery replays,RequestControlState controls,AutomaticHttpAuthentication automatic) {
+        this.automatic=automatic;this.processor=processor;this.replays=replays;this.controls=controls;
     }
 
     /** @param request Incoming request before interception. @return Normal interception, owned bypass or a supported early drop. */
@@ -43,8 +44,17 @@ public final class ProxyHttpSessionAdapter implements ProxyRequestHandler,ProxyR
             return ProxyRequestToBeSentAction.continueWith(request,request.annotations());
         else if(HttpAuthenticationDirective.present(request.toByteArray()))
             return ProxyRequestToBeSentAction.continueWith(request,request.annotations());
-        else result=processor.process(request,request.annotations(),new RequestRuleMatcher.Context(exchange,RequestSettings.Tool.PROXY,
-                    ProxyListeners.incomingPort(request.listenerInterface())),controls.snapshot());
+        else {
+            var context=new RequestRuleMatcher.Context(exchange,RequestSettings.Tool.PROXY,ProxyListeners.incomingPort(request.listenerInterface()));
+            var applied=controls.snapshot();
+            try {
+                var matching=processor.matching(request,context,applied);
+                result=automatic.prepare(request,request.annotations(),context,applied,matching,true);
+                if(result==null)result=processor.process(request,request.annotations(),context,applied,matching);
+            } catch(RuntimeException|LinkageError failure) {
+                result=processor.failed(request,request.annotations(),exchange,null,hasTags(request.toByteArray()),unknown());
+            }
+        }
         return result.stop()==null?ProxyRequestToBeSentAction.continueWith(result.request(),result.annotations())
                 :ProxyRequestToBeSentAction.proxyRequestToBeSentAction(result.request(),result.annotations(),burp.api.montoya.proxy.MessageToBeSentAction.DROP);
     }

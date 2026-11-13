@@ -22,6 +22,52 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Verifies explicit cache inspection without acquisition, cross-journey disclosure, logging or editable values. */
 class JourneyCachePanelTest {
+    @Test void certificateOnlyCacheShowsOnlySavedSelectionWithoutInspectingMiddleware() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var owner = certificateEntry(null, "ab".repeat(32));
+            var panel = new JourneyCachePanel(() -> {}); panel.refresh(owner, null);
+            var table = member(panel, "table", JTable.class);
+            assertEquals(1, table.getRowCount()); assertEquals("mTLS", table.getValueAt(0, 0));
+            assertEquals("Selected certificate (SHA-256)", table.getValueAt(0, 1)); assertEquals("ab".repeat(32), table.getValueAt(0, 2));
+            assertNull(httpDetails(table, 0));
+            assertFalse(member(panel, "metadata", JPanel.class).isVisible()); assertFalse(member(panel, "httpNote", JLabel.class).isVisible());
+            assertFalse(member(panel, "copyValue", JMenuItem.class).isEnabled());
+            var changed = certificateEntry(owner.definition(), null, "cd".repeat(32));
+            assertEquals(owner.identity(), changed.identity()); panel.refresh(changed, null);
+            assertEquals("cd".repeat(32), table.getValueAt(0, 2));
+            panel.refresh(certificateEntry(owner.definition(), null, null), null); assertEquals(0, table.getRowCount());
+        });
+    }
+    @Test void unfinishedMtlsDraftDoesNotClaimACertificateWasSelected() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var base = CoordinatorFixtures.journey("employee"); var panel = new JourneyCachePanel(() -> {});
+            for (String fingerprint : List.of("", "not-a-fingerprint")) {
+                var draft = bpsh.journey.JourneyDraft.capture(Map.of(), Map.of("mtls", true), JourneyDefinition.SlotKind.INDEX, fingerprint, List.of(), List.of());
+                var owner = new JourneyCatalog.Entry(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), draft.definition(base.id(), base.displayName(), base.alias(), false));
+                panel.refresh(owner, null); assertEquals(0, member(panel, "table", JTable.class).getRowCount());
+            }
+        });
+    }
+    @Test void selectedCertificateCoexistsWithCapturedValuesAndRemainsAfterCacheInvalidation() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var owner = certificateEntry(new JourneyDefinition.CookieExtraction(java.net.URI.create("https://app.example"), "sid", null, null), "ab".repeat(32));
+            var panel = new JourneyCachePanel(() -> {}); panel.refresh(owner, token(owner, "session-a", Map.of("sid", "session-a"), Map.of()));
+            var table = member(panel, "table", JTable.class); assertEquals(2, table.getRowCount());
+            assertEquals("session-a", table.getValueAt(0, 2)); assertEquals("ab".repeat(32), table.getValueAt(1, 2));
+            assertNull(httpDetails(table, 1)); assertTrue(member(panel, "metadata", JPanel.class).isVisible());
+            panel.refresh(owner, null); assertEquals(1, table.getRowCount()); assertEquals("mTLS", table.getValueAt(0, 0));
+            assertFalse(member(panel, "metadata", JPanel.class).isVisible()); panel.clear(); assertCleared(panel);
+        });
+    }
+    /** Uses an unavailable module to prove cache inspection needs only saved public certificate metadata. */
+    private static JourneyCatalog.Entry certificateEntry(JourneyDefinition.Extraction extraction, String fingerprint) {
+        return certificateEntry(CoordinatorFixtures.journey("employee"), extraction, fingerprint);
+    }
+    private static JourneyCatalog.Entry certificateEntry(JourneyDefinition base, JourneyDefinition.Extraction extraction, String fingerprint) {
+        var mtls = fingerprint == null ? null : new JourneyDefinition.Mtls("C:/unavailable/middleware.dll", new JourneyDefinition.Slot(JourneyDefinition.SlotKind.INDEX, 0), fingerprint, List.of(java.net.URI.create("https://app.example")), null);
+        var definition = new JourneyDefinition(base.id(), base.displayName(), base.alias(), base.authenticationUrl(), false, List.of(), base.browser(), extraction, base.injection(), base.cache(), mtls);
+        return new JourneyCatalog.Entry(new JourneyDefinition.Identity(JourneyDefinition.Scope.PROJECT, base.id(), 1), definition);
+    }
     @Test void unfinishedRecordingCanShowHttpAuthenticationBeforeCaptureRulesExist() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var base=CoordinatorFixtures.journey("http-user");var origin=java.net.URI.create("https://app.example");

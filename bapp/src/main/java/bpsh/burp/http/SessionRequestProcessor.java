@@ -28,9 +28,14 @@ public final class SessionRequestProcessor {
     final RequestCapacity capacity = new RequestCapacity();
 
     /** @param request Complete continuation or failed original. @param annotations Safe notes. @param stop Terminal failure notice, or null for continuation. */
-    public record Result(HttpRequest request, Annotations annotations, Diagnostics.Notice stop) {
+    public record Result(HttpRequest request, Annotations annotations, Diagnostics.Notice stop, burp.api.montoya.http.message.responses.HttpResponse response) {
         /** @param request Outgoing message. @param annotations Host notes. @return Ordinary continuation. */
-        static Result continueWith(HttpRequest request, Annotations annotations) { return new Result(request, annotations, null); }
+        static Result continueWith(HttpRequest request, Annotations annotations) { return new Result(request, annotations, null, null); }
+    }
+
+    /** Captures matching rules once for either ordinary capture or transport preparation. */
+    List<RequestSettings.AutomaticRule> matching(HttpRequest request,RequestRuleMatcher.Context context,RequestControlState.Applied applied) {
+        return closed.get() || hasTags(request.toByteArray())?List.of():applied.matcher().automaticRules(request,context);
     }
 
     /** Wires shared policy owners without registering a host callback. */
@@ -40,7 +45,7 @@ public final class SessionRequestProcessor {
     }
 
     /** @param request Outgoing message. @param notes Host notes. @param context Actual origin. @param applied Captured controls and plan. @return Atomic continuation or required stop. */
-    Result process(HttpRequest request, Annotations notes, RequestRuleMatcher.Context context, RequestControlState.Applied applied) {
+    Result process(HttpRequest request, Annotations notes, RequestRuleMatcher.Context context, RequestControlState.Applied applied,List<RequestSettings.AutomaticRule> matching) {
         boolean tagged = false; JourneyCatalog.Entry selected = null;
         var cfg = applied.controls();
         try {
@@ -49,7 +54,6 @@ public final class SessionRequestProcessor {
                 if (tagged) return stopped(request, notes, context.exchange(), null, unavailable());
                 return Result.continueWith(request, notes);
             }
-            var matching = !tagged ? applied.matcher().automaticRules(request, context) : List.<RequestSettings.AutomaticRule>of();
             boolean ordinary = !matching.isEmpty();
             if (!tagged && !ordinary) return Result.continueWith(request, notes);
             if (tagged && bytes.length() > NativeTagParser.MAX_OUTPUT_BYTES) return stopped(request, notes, context.exchange(), null, NativeTagParser.syntax("The tagged request exceeds the 4 MiB message ceiling."));
@@ -108,7 +112,7 @@ public final class SessionRequestProcessor {
     /** @param request Failed original. @param notes Host notes. @param exchange Actual request reference. @param alias Safe journey alias. @param error Safe failure. @return Required stop with diagnostic attribution. */
     Result stopped(HttpRequest request, Annotations notes, RequestExchange exchange, String alias, AuthenticationFailure error) {
         var notice=diagnostics.request(exchange,alias,error,true);
-        return new Result(request,annotate(notes,notice),notice);
+        return new Result(request,annotate(notes,notice),notice,null);
     }
     private String alias(AuthenticationFailure error, JourneyCatalog.Entry selected) {
         if (error.journey() != null) { var entry = registry.snapshot().entries().get(error.journey().key()); if (entry != null) return entry.definition().alias(); }

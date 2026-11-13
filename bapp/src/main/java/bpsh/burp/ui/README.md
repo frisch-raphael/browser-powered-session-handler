@@ -14,7 +14,7 @@ Owns Swing editing/presentation, autosave interaction, explicit device actions a
 - [CredentialsPanel](./CredentialsPanel.java): Edits response tokens, captured cookies and their request destinations without runtime values.
 - [DocumentChangeListener](./DocumentChangeListener.java): Adapts all Swing document changes to the same callback.
 - [InlineValidation](./InlineValidation.java): Places safe validation guidance beside its input without changing the input's identity or keyboard contract.
-- [JourneyCachePanel](./JourneyCachePanel.java): Explicit read-only inspection of one journey's usable cache; values never enter logs, persistence or diagnostics.
+- [JourneyCachePanel](./JourneyCachePanel.java): Explicit read-only inspection of one journey's usable cache and saved certificate fingerprint. The mTLS row shows only the selected certificate, without origins or HTTPS results, and never opens middleware. Captured values never enter logs, persistence or diagnostics.
 - [JourneyDialogs](./JourneyDialogs.java): Isolates modal decisions from storage actions so cancellation and preview flows can be exercised locally.
 - [JourneyEventLogPanel](./JourneyEventLogPanel.java): Burp-style event dock with per-journey time/type/message rows, filters and selectable safe details.
 - [JourneyForms](./JourneyForms.java): Shared native form layout, independent of journey persistence and authentication state.

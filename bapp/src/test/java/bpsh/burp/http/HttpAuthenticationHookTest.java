@@ -124,13 +124,14 @@ class HttpAuthenticationHookTest {
             @Override public bpsh.authentication.http.HttpMessageBody.Allocator bodies() {return allocator;}
             @Override public void close() { }
         };
-        try(var fixture=new NativeTagPipelineTest.Fixture()) {
+        try(var fixture=new NativeTagPipelineTest.Fixture();var guard=new bpsh.browser.AuthTrafficGuard()) {
             var id=UUID.randomUUID();var identity=new JourneyDefinition(id,"HTTP","http",origin,false,List.of(),
                     new JourneyDefinition.Browser(true,new JourneyDefinition.Proxy(java.net.URI.create("http://127.0.0.1:8080")),10000,1000),null,
                     JourneyDefinition.Injection.perToken(List.of()),new JourneyDefinition.Cache(1800,10),null,
                     new HttpAuthentication(HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",Set.of(origin)),null);
             var definitions=new java.util.ArrayList<>(fixture.definitions);definitions.add(identity);CoordinatorFixtures.load(fixture.registry,definitions);
-            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,factory);var host=hooks.new Host(fixture,null,identities,origin)) {
+            try(var routed=new GuardedHttpTransportFactory(factory,guard);var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,routed);
+                var host=hooks.new Host(fixture,null,identities,origin,guard)) {
                 hostRef.set(host);var employee=fixture.registry.snapshot().resolve("employee");var d=bpsh.request.RequestSettings.Controls.defaults();
                 var rule=new bpsh.request.RequestSettings.AutomaticRule(true,new bpsh.request.RequestSettings.JourneySelection(employee.identity().scope(),employee.identity().journeyId()), new bpsh.request.RequestSettings.AllRequests(), null,new JourneyDefinition.Recovery(false,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null));
                 host.controls.publish(host.controls.prepare(new bpsh.request.RequestSettings.Controls(true,List.of(rule),d.tools(),60000,60000,300000,null,null,bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT)));

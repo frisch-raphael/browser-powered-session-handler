@@ -34,10 +34,13 @@ final class HttpAuthenticationDirective {
         return java.util.regex.Pattern.compile("(?im)^[ \\t]*BPSP-HTTP-AUTHENT[ \\t]*:").matcher(new String(raw,0,end,StandardCharsets.ISO_8859_1)).find();
     }
 
-    static Selection consume(byte[] raw) throws AuthenticationFailure {
+    static Selection consume(byte[] raw) throws AuthenticationFailure {return parse(raw,true);}
+    /** Validates the same transport framing without introducing an explicit directive. */
+    static Selection prepare(byte[] raw) throws AuthenticationFailure {return parse(raw,false);}
+    private static Selection parse(byte[] raw,boolean requireDirective) throws AuthenticationFailure {
         int end=-1;
         for(int i=0;i+3<raw.length;i++)if(raw[i]==13 && raw[i+1]==10 && raw[i+2]==13 && raw[i+3]==10) {end=i;break;}
-        if(end<0) {if(present(raw))throw invalid("The tagged request needs valid HTTP/1.1 headers.");return null;}
+        if(end<0) {if(!requireDirective || present(raw))throw invalid("The tagged request needs valid HTTP/1.1 headers.");return null;}
         String head=new String(raw,0,end,StandardCharsets.ISO_8859_1);
         String[] lines=head.split("\r\n",-1);
         String directive=null;
@@ -52,16 +55,21 @@ final class HttpAuthenticationDirective {
                 directive=lines[i].substring(colon+1).trim();
             }
         }
-        if(directive==null)return null;
+        if(directive==null && requireDirective)return null;
         if(end>65536 || lines[0].length()>16384)throw invalid("The tagged request exceeds the HTTP header or request-line limit.");
         String method=lines[0].split(" ",2)[0];
         if(method.equalsIgnoreCase("CONNECT"))throw invalid("Tagged HTTP authentication does not support CONNECT requests.");
         if(lines[0].regionMatches(true,0,"TRACE ",0,6))throw invalid("Tagged HTTP authentication does not support TRACE requests.");
         if(raw.length>NativeTagParser.MAX_OUTPUT_BYTES)throw invalid("The tagged request exceeds the 4 MiB message ceiling.");
         if(!lines[0].matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^ \\r\\n]+ HTTP/1\\.1"))throw invalid("Tagged HTTP authentication requires an HTTP/1.1 request.");
-        var tree=NativeTagParser.parse(directive,directive.length(),new NativeTagParser.Budget());
-        if(tree.nodes.size()!=1 || !(tree.nodes.getFirst() instanceof NativeTagParser.Reference reference) || reference.tokenName()!=null)
-            throw invalid("Use one journey reference, for example BPSP-HTTP-AUTHENT: <@user-a/>.");
+        String alias=null;
+        if(directive!=null) {
+            if(!requireDirective)throw invalid("An automatic request cannot introduce an HTTP authentication directive.");
+            var tree=NativeTagParser.parse(directive,directive.length(),new NativeTagParser.Budget());
+            if(tree.nodes.size()!=1 || !(tree.nodes.getFirst() instanceof NativeTagParser.Reference reference) || reference.tokenName()!=null)
+                throw invalid("Use one journey reference, for example BPSP-HTTP-AUTHENT: <@user-a/>.");
+            alias=reference.alias();
+        }
         int contentLengths=0, hosts=0;long contentLength=-1;
         for(int i=1;i<lines.length;i++) {
             String line=lines[i];int colon=line.indexOf(':');
@@ -83,7 +91,7 @@ final class HttpAuthenticationDirective {
         byte[] prefix=(String.join("\r\n",retained)+"\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
         ByteArrayOutputStream stripped=new ByteArrayOutputStream();stripped.writeBytes(prefix);stripped.writeBytes(Arrays.copyOfRange(raw,end+4,raw.length));
         byte[] applicationPrefix=(String.join("\r\n",application)+"\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
-        return new Selection(reference.alias(),stripped.toByteArray(),applicationPrefix,prefix.length);
+        return new Selection(alias,stripped.toByteArray(),applicationPrefix,prefix.length);
     }
     private static AuthenticationFailure invalid(String message) {return NativeTagParser.syntax(message);}
 }

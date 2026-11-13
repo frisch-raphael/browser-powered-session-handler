@@ -374,11 +374,7 @@ Use this brief guidance next to the ordered rules:
 > Matching rules run from top to bottom. Later rules overwrite earlier values
 > in the same header or cookie.
 
-Direct HTTP-authentication identities keep their existing allowed-origin
-checks and explicit directive selection. A matching URL or incoming port does
-not expand those origins or change the selected HTTP identity. This preserves
-the previously approved separation of automatic captured-credential injection
-and explicit direct HTTP-authentication delivery.
+Transport-only journeys can supply automatic HTTP or client-certificate authentication. The last matching transport-only rule permitted for the actual destination origin supplies one identity; never try several users sequentially. URL/listener matching does not expand its exact allowed origins. Captured journeys retain their browser/capture behavior, including HTTP authentication needed at their login origin. Explicit directives retain independent selection and precedence.
 
 ### One shared request-processing pipeline
 
@@ -408,13 +404,14 @@ uses enabled rules for the referenced saved identity and the committed URL when
 the captured master switch is on. It ignores the automatic-tool selection, but
 does require a rule's incoming-port restriction to match actual live Proxy context.
 Without such a match, keep that explicit use's existing disabled-recovery policy.
-Direct HTTP-authentication delivery remains outside this application-recovery path.
+Explicit HTTP-authentication directives remain outside this application-recovery path. Automatic transport combined with actual captured outputs retains configured application-session recovery.
 
 ### Divide responsibility by request kind
 
 | Request kind | Preparation and delivery owner | Recovery attribution |
 | --- | --- | --- |
-| Live Proxy request without an HTTP-authentication directive | Proxy to-be-sent adapter invokes the shared processor; successful output continues, failed tagged processing requests native DROP on a best-effort basis | Proxy message-ID family |
+| Live Proxy capture/tag request without a direct identity | Final Proxy invokes shared capture preparation; failed tags request best-effort native DROP | Proxy message-ID family |
+| Matching automatic transport-only journey | Final Proxy pins the exact identity, request and policy in a one-use plan; Global delivers through shared transport and spoofs the actual response | Actual owned response is observed directly under GLOBAL; only captured outputs authorize application recovery |
 | Repeater, Intruder, Scanner or Extensions request without that directive | Global request adapter invokes the same processor | Global message-ID family |
 | Explicit `BPSP-HTTP-AUTHENT` request from any tool | Global adapter uses the shared direct HTTP-authentication operation and returns the actual response through `spoof` | Preserve existing direct-delivery policy; do not add automatic session replays |
 | Owned login traffic | Existing traffic guard exempts it from ordinary processing; the global adapter removes its owned marker | Excluded from application-session recovery |
@@ -426,11 +423,7 @@ to-be-sent, after the user has had an opportunity to edit the intercepted reques
 Tool selection and the automatic master switch still apply there. Explicit tags
 retain their existing independent policy, including requesting native DROP on failure; Proxy delivery prevention is best effort.
 
-Global handling checks owned traffic and explicit HTTP-authentication delivery,
-then bypasses ordinary Proxy processing based on its tool source. This is a
-fixed ownership rule, not a per-request annotation or a content-hash lookup.
-Proxy and global IDs are never joined. Ordinary Proxy output is not parsed for
-credential tags a second time.
+Global consumes trusted deferred plans before ordinary owned-traffic/directive handling, then bypasses ordinary Proxy processing. Capture-only Proxy output is not expanded again. Automatic HTTP preparation is deferred as one operation, so captures resolve only once in Global. A nonce indexes a pinned plan; a digest verifies integrity and never identifies a browser or selects an identity. Proxy/global IDs and annotations provide no handoff authority.
 
 The HTTP-authentication exception is required by the host API: the pinned
 Montoya 2026.4 `ProxyRequestToBeSentAction` offers continuation and drop, whereas
@@ -439,15 +432,13 @@ global `RequestToBeSentAction` also offers response spoofing. Current public
 and [global action documentation](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/http/handler/RequestToBeSentAction.html)
 show the same distinction. A Proxy request carrying the explicit directive is
 deferred unchanged; the global operation consumes the directive and resolves
-its dependent capture tags once, as it does today. Automatic listener rules do
-not choose a direct HTTP-authentication identity in this feature.
+its dependent capture tags once. Automatic transport uses DeferredRequestDelivery from the final Proxy listener context to Global. A plan pins HttpIdentityManager.Selection (generation and invalidation epoch), request bytes/service, policy, deadline and admission. Exact marked bytes, destination and source tool are checked before a one-time claim; alias changes cannot choose another account.
 
 Before committing ordinary output, shared validation must prevent captured data
 or automatic header injection from creating an HTTP-authentication
 directive or owned-traffic marker that a later callback would interpret as a
 new command. Report such output through the existing atomic tagged/ordinary
-failure policy. Do not introduce a new header or User-Agent suffix to mark
-ordinary browser requests as processed.
+failure policy. Capture-only preparation uses no processed marker. Trusted automatic transport and recovery share the existing guard's one-use replay marker, never a synthetic BPSP directive. Plans retain at most 256 requests and 32 MiB total clean-plus-marked bytes, with a 4 MiB clean-message ceiling and the original request deadline. Expiry, cancellation, completion and unload release markers and admission, including when another handler drops the request before Global. Invalid, altered, expired or reused markers stop at Global. Before native dispatch an automatic setup failure can continue unchanged; after dispatch retain the actual response or stop without forwarding the original again.
 
 ### Share recovery across independent callback families
 
@@ -500,6 +491,7 @@ Proxy request + incoming port      Non-Proxy request
                      |
         one authorized global delivery replay
 
+Automatic transport-only rule -> final listener match -> pinned plan -> shared native transport + spoof
 Explicit HTTP-authentication directive -> global direct delivery + spoof
 Owned login traffic -> traffic guard, excluded from ordinary processing
 ```
@@ -870,7 +862,7 @@ snapshot, retaining identity/version and replacing only the recovery policy when
 present. It then records the uses and replay template under the family-qualified
 exchange. Tagged credentials still resolve with the master switch off or the
 tool excluded; only configured recovery attribution depends on the master switch.
-Do not apply this lookup to direct HTTP-authentication delivery or rematch pinned
+Do not apply this lookup to explicit HTTP-authentication directives or rematch pinned
 replay policies.
 
 Create [RequestControlState.java](../../bapp/src/main/java/bpsh/burp/http/RequestControlState.java).
@@ -930,7 +922,7 @@ Create these production files, with the following single owners:
 | [HttpAuthenticationDelivery.java](../../bapp/src/main/java/bpsh/burp/http/HttpAuthenticationDelivery.java) | Extract current authenticatedRequest orchestration, preserving directive consumption, dependent-tag resolution, exact origins, deadline/admission, body ownership, Authorization replacement, actual-response materialization and indeterminate-delivery semantics. The global adapter translates the result to spoof; no NTLM logic is copied from the existing transport. |
 | [RecoveryReplayDelivery.java](../../bapp/src/main/java/bpsh/burp/http/RecoveryReplayDelivery.java) | Own the existing bounded replay executor, active replay leases/jobs, one-time claim, final generation/version checks, transport dispatch and cleanup. Keep two workers and the existing queue cap of 256. |
 | [GlobalHttpSessionAdapter.java](../../bapp/src/main/java/bpsh/burp/http/GlobalHttpSessionAdapter.java) | Implement HttpHandler: classify guard/replay first, handle explicit HTTP directives, bypass ordinary PROXY requests, then invoke the shared processor for other sources. Global responses consult only GLOBAL attribution. Unsupported tool origins remain ineligible for automatic rules; explicit tags retain their policy. |
-| [ProxyHttpSessionAdapter.java](../../bapp/src/main/java/bpsh/burp/http/ProxyHttpSessionAdapter.java) | Implement ProxyRequestHandler and ProxyResponseHandler. Preserve received-stage interception/owned-login policy; process ordinary/tagged requests at final send with the actual incoming port; request native Proxy DROP for failed tagged processing without a global retry or internal marker. Defer explicit HTTP directives unchanged to global handling. Proxy responses consult only PROXY attribution; final response handling preserves normal Burp policy. |
+| [ProxyHttpSessionAdapter.java](../../bapp/src/main/java/bpsh/burp/http/ProxyHttpSessionAdapter.java) | Implement ProxyRequestHandler and ProxyResponseHandler. Preserve received-stage interception/owned-login policy; process ordinary/tagged requests at final send with the actual incoming port; request native Proxy DROP for failed tagged processing without a global retry for failed tags. Defer explicit directives unchanged and publish trusted automatic transport plans for Global delivery. Proxy responses consult only PROXY attribution; final response handling preserves normal Burp policy. |
 
 Both adapters call the same ownership classification and safe annotation helpers;
 keep these small helpers within the shared processor rather than duplicate them.
@@ -1208,9 +1200,9 @@ For each platform, record these concrete outcomes against the current JAR:
 | Overlapping rules | Existing order decides final header/cookie values; only surviving versions own recovery. |
 | Expired Proxy session | The original response is retained, one shared recovery occurs, each authorized original has at most one separately identified global replay, and replay rejection cannot cause another replay. |
 | Copy to Repeater/Intruder | No incoming listener is attributed; listener-restricted rules do not apply. Existing copied credential bytes remain ordinary request data. URL-only rules and explicit tags retain their behavior. |
-| Explicit HTTP-auth directive through Proxy and Repeater | Independent fixture evidence confirms the selected account/protocol, actual response and no second original send; automatic rules do not select the direct identity. |
+| Explicit HTTP-auth directive through Proxy and Repeater | Independent fixture evidence confirms the selected account/protocol, actual response and no second original send; automatic transport-only rules independently select a pinned eligible identity under their policy. |
 | Stop/delete/recreate listener and failed refresh | The saved port remains selected, never becomes Any listener, and becomes applicable again only to actual incoming traffic on that port. |
-| Cancellation and unload under pending work | Owned wait/replay/refresh resources close, no late result is published and aggregate retention limits are released. Proxy drop delivery prevention is best effort; no internal handoff or unload guarantee is required. |
+| Cancellation and unload under pending work | Owned wait/replay/refresh resources close, no late result is published and aggregate retention limits are released. Proxy drop delivery prevention is best effort. Deferred delivery plans and their expiry worker close on unload. |
 
 Retain current source identity, artifact hashes, test completion, safe server
 observations and platform-specific Burp results in ignored build reports. Mark

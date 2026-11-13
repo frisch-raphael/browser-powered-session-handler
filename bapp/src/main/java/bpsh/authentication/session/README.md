@@ -13,6 +13,7 @@ Owns shared acquisition cycles, waiters, publication, recovery pauses and bounde
 ## Invariants
 
 AuthenticationCoordinator.java consumes JourneyCatalog and AuthenticationPolicy only. Publication rechecks the current generation and lifetime; ordered waiters retain one deadline.
+JourneyEventLog groups retained identical warnings/errors by stable journey, severity, message and saved step. Immutable snapshots preserve first/last occurrence times and counts; clearing or eviction releases that aggregation state. Normal tokenless HTTP/mTLS routing never requests a captured credential.
 
 ## Side Effects
 

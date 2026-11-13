@@ -244,7 +244,7 @@ public class NativeTagPipelineTest {
             public final RequestControlState controls = new RequestControlState(RequestSettings.Controls.defaults());
             public final java.util.concurrent.atomic.AtomicInteger largeReads = new java.util.concurrent.atomic.AtomicInteger(), urls = new java.util.concurrent.atomic.AtomicInteger(), bodyAccesses = new java.util.concurrent.atomic.AtomicInteger();
             public final List<String> logs = new java.util.concurrent.CopyOnWriteArrayList<>();
-            public final AuthTrafficGuard guard = new AuthTrafficGuard(); public final Diagnostics diagnostics = new Diagnostics(logs::add);
+            public final AuthTrafficGuard guard; public final Diagnostics diagnostics = new Diagnostics(logs::add);
             public final SessionRecovery recovery; public final GlobalHttpSessionAdapter handler; public final ProxyHttpSessionAdapter proxy; public final SessionHandling sessions;
             public String incomingListener = "127.0.0.1:8081";
             public boolean supportsDrop = true;
@@ -255,7 +255,10 @@ public class NativeTagPipelineTest {
             public Host(Fixture fixture) { this(fixture, null); }
             public Host(Fixture fixture, RecoveryReplayDelivery.ReplayTransport transport) { this(fixture,transport,null,null); }
             public Host(Fixture fixture,RecoveryReplayDelivery.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin) {
-                httpOrigin=origin;
+                this(fixture,transport,identities,origin,new AuthTrafficGuard());
+            }
+            public Host(Fixture fixture,RecoveryReplayDelivery.ReplayTransport transport,bpsh.authentication.http.HttpIdentityManager identities,java.net.URI origin,AuthTrafficGuard guard) {
+                this.guard=guard;httpOrigin=origin;
                 recovery = new SessionRecovery(fixture.coordinator, fixture.clock::nanos);
                 burp.api.montoya.internal.ObjectFactoryLocator.FACTORY = stub(burp.api.montoya.internal.MontoyaObjectFactory.class, (method, args) -> factory(method, args));
                 sessions = new SessionHandling(fixture.registry, fixture.resolver, guard, recovery, diagnostics, controls, transport, identities); handler = sessions.global(); proxy = sessions.proxy();
@@ -279,7 +282,14 @@ public class NativeTagPipelineTest {
                 }
                 if(result==burp.api.montoya.http.message.responses.HttpResponse.class) {
                     var raw=(burp.api.montoya.core.ByteArray)a[a.length-1];
-                    return stub(burp.api.montoya.http.message.responses.HttpResponse.class,(m,x)->m.getName().equals("toByteArray")?raw:null);
+                    int offset=raw.indexOf("\r\n\r\n")+4;
+                    String head=new String(raw.subArray(0,offset).getBytes(),StandardCharsets.ISO_8859_1);
+                    return stub(burp.api.montoya.http.message.responses.HttpResponse.class,(m,x)->switch(m.getName()) {
+                        case "toByteArray"->raw;case "bodyOffset"->offset;case "body"->raw.subArray(offset,raw.length());
+                        case "statusCode"->(short)Integer.parseInt(head.split(" ",3)[1]);
+                        case "headerValue"->{String found=null;for(String line:head.split("\r\n")){int colon=line.indexOf(':');if(colon>0 && line.substring(0,colon).equalsIgnoreCase((String)x[0])){found=line.substring(colon+1).trim();break;}}yield found;}
+                        default->null;
+                    });
                 }
                 if (result == burp.api.montoya.http.handler.RequestToBeSentAction.class) {
                     if (!supportsDrop) throw new UnsupportedOperationException("Controlled unsupported host factory");
@@ -342,9 +352,13 @@ public class NativeTagPipelineTest {
                     Object[] a = args == null ? new Object[0] : args;
                     return switch (m.getName()) {
                         case "messageId" -> id; case "listenerInterface" -> incomingListener; case "headers" -> headers; case "toByteArray" -> bytes(wire); case "annotations" -> notes; case "isInScope" -> inScope;
-                        case "httpService" -> httpOrigin==null?null:stub(burp.api.montoya.http.HttpService.class,(method,x)->switch(method.getName()) {
-                            case "host" -> httpOrigin.getHost();case "port" -> httpOrigin.getPort();case "secure" -> httpOrigin.getScheme().equals("https");default -> null;
-                        });
+                        case "httpService" -> {
+                            var target=httpOrigin==null?java.net.URI.create("https://app.example"):httpOrigin;
+                            yield stub(burp.api.montoya.http.HttpService.class,(method,x)->switch(method.getName()) {
+                                case "host" -> target.getHost();case "port" -> target.getPort()<0?(target.getScheme().equals("https")?443:80):target.getPort();
+                                case "secure" -> target.getScheme().equals("https");default -> null;
+                            });
+                        }
                         case "method" -> raw.substring(0,raw.indexOf(' '));
                         case "body" -> bytes(Arrays.copyOfRange(wire,end+4,wire.length));
                         case "toolSource" -> stub(burp.api.montoya.core.ToolSource.class, (method, x) -> ToolTypeForTest());

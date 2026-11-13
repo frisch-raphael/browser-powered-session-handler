@@ -79,6 +79,9 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   stages, server acceptance, connection reuse and actionable failures for every
   delivery path. Passwords, authentication payloads and raw exceptions stay out
   of both views. Clear cache fences late observation updates.
+- For mTLS, Journey cache shows only the saved selected certificate's SHA-256
+  fingerprint. It does not show origins or the last HTTPS result, and opening
+  the inspector does not access certificate middleware, the PIN or private key.
 - Editing a journey keeps usable cached credentials and their original expiry
   and refresh times, including while an unfinished edit temporarily blocks
   execution. Renaming, reordering or removing captured outputs retains matching
@@ -116,7 +119,10 @@ The per-journey Event log dock is inspired by Burp's bottom event log and retain
 Info/Warning/Error history for automatic and explicit authentication, supports
 filter/search and event details, and follows stable journey identity. Logs are
 session-only and bounded; credential values and raw request/response data are
-excluded. The former phase line, permanent feedback box and separate test-result
+excluded. Repeated identical warnings/errors share one row with an occurrence
+count and first/last seen times in its details, including across intervening
+events. Valid tokenless HTTP/mTLS authentication does not warn about missing
+captured credentials. The former phase line, permanent feedback box and separate test-result
 box are removed. Automatic injection is named Session handling in the UI.
 Successful Test login and Retry finish with a native popup summarizing captured
 credential names and counts. Values remain in Journey cache. Errors associated
@@ -131,13 +137,9 @@ Automatic authentication does not open completion popups.
 The implementation has unit, bundled-browser and owned SoftHSM integration tests.
 Qualify responsive login, cancellation, cache actions, storage, transfer/secrets, certificate selection, tagged/automatic protected access, compact/wide forms and Burp themes against the delivered artifact. Stress, assistive-technology and physical-device checks require their own observations. The lab guide specifies current commands and evidence boundaries.
 
-Automatic authentication uses multiple ordered journeys. Session
-handling owns activation, URL scope and expiration detection per rule. Matching
-journeys are acquired sequentially with cache reuse, and later rules overwrite
-earlier destinations. Commit all injections together only after every required
-session succeeds. Explicit tags retain their independent request-wide policy.
+Automatic authentication uses ordered journeys selected by tool, URL and optional incoming Proxy listener. Captured journeys acquire their application credentials sequentially; later mappings overwrite earlier values at the same destination. A journey without capture can instead provide HTTP or client-certificate request authentication. The last matching transport-only journey whose exact allowed origins include the destination supplies that identity. Captured journeys with HTTP authentication retain their browser-login semantics; they are not silently converted into direct identity providers. A separately selected HTTP identity owns Authorization, so a capture used only for that overwritten header is not acquired. Other cookies and headers remain atomic. Explicit tags retain their independent request-wide policy.
 
-Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
+Automatic requests use the project Automatic handling policy in Settings. **Wait for login** waits within the request deadline and allows the selected HTTP identity to negotiate authentication when needed. **Send immediately** preserves the whole original request when any required captured credential or transport identity is not ready, and starts or joins background authentication. For HTTP identities, background work sends a bounded HEAD for the actual permitted origin, preferring the configured protected login URL when it is on that origin in the reusable DIRECT pool, without the original body, application Authorization or cookies. Once ready, an automatic HTTP request uses existing authentication without challenge negotiation: an actually reused NTLM connection can authenticate it, while a cold connection's real 401 is retained and triggers background warmup for later requests. The original request is never replayed by this policy. Explicit journey tags remain independent and wait within their deadlines.
 
 Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized explicitly path-filtered network responses are aborted. Origin-only capture and service-worker capture stop collecting each oversized response at the same decoded limit while ordinary browser delivery continues; unrelated page assets must not be blocked by broad capture. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 

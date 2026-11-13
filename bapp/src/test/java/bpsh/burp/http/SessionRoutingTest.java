@@ -14,6 +14,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Exercises separate host objects, annotations and IDs with the real shared operations. */
 class SessionRoutingTest {
+    @Test void captureOnlyRequestsUseOneCapturedUrlMatchingPlan() throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();
+        try(var fixture=new NativeTagPipelineTest.Fixture();var host=hooks.new Host(fixture)) {
+            var selected=fixture.registry.snapshot().resolve("employee");var defaults=RequestSettings.Controls.defaults();
+            var rule=new RequestSettings.AutomaticRule(true,new RequestSettings.JourneySelection(selected.identity().scope(),selected.identity().journeyId()),
+                    new RequestSettings.Prefix(java.net.URI.create("https://app.example")),null,new JourneyDefinition.Recovery(false,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null));
+            host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule),defaults.tools(),60000,60000,300000,null,null)));
+            host.selectedTool=ToolType.REPEATER;
+            var sent=hooks.callback(fixture,()->host.handler.handleHttpRequestToBeSent(host.request(NativeTagPipelineTest.header("stale"),1,true)));
+            assertEquals("Bearer employee-token",sent.request().headerValue("Authorization"));assertEquals(1,host.urls.get());
+        }
+    }
     @Test void proxyAndGlobalAdaptersProcessEachRequestOnceWithoutMetadataSharing() throws Exception {
         var hooks=new NativeTagPipelineTest().new ProductionHooks();
         try(var f=new NativeTagPipelineTest.Fixture();var host=hooks.new Host(f)) {

@@ -8,9 +8,9 @@ import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
-/** Produces actionable request outcomes while suppressing repeated safe cycle warnings for five seconds. */
+/** Produces actionable request outcomes with at most one host-log summary per matching condition per minute. */
 public final class Diagnostics implements AutoCloseable {
-    private static final long WINDOW = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+    private static final long WINDOW = java.util.concurrent.TimeUnit.MINUTES.toNanos(1);
     private static final int MAX_KEYS = 1000;
     /** Safe per-request annotation; drop-request annotations remain available even when logs are suppressed. */
     public record Notice(RequestExchange requestId, boolean dropRequested, String text) {}
@@ -73,7 +73,7 @@ public final class Diagnostics implements AutoCloseable {
     }
 
     /**
-     * Emits one bounded category of safe message per five-second window, counting suppressed repeats.
+     * Emits one bounded category of safe message per minute, counting suppressed repeats.
      * @param key Token/request-free suppression identity.
      * @param text Already formatted safe output.
      */

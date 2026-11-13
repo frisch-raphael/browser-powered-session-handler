@@ -22,6 +22,15 @@ public final class HttpIdentityManager implements AutoCloseable {
     private final Map<JourneyKey,Long> epochs=new HashMap<>();
     private final Map<JourneyDefinition.Identity,Scope> scopes=new HashMap<>();
     private final Set<Scope> tests=new HashSet<>();
+    private record WarmKey(JourneyDefinition.Identity identity,long epoch,java.net.URI origin) {}
+    private final Map<WarmKey,Warmup> warming=new HashMap<>();
+    private final LinkedHashMap<WarmKey,Long> warmRetryAfter=new LinkedHashMap<>();
+    private static final class Warmup {
+        final CompletableFuture<Void> result=new CompletableFuture<>();
+        volatile CompletableFuture<HttpAuthenticationService.Delivery> admission;
+        volatile CompletableFuture<HttpAuthenticationService.Response> operation;
+        volatile HttpAuthenticationService.Delivery lease;
+    }
     private final AtomicInteger pending=new AtomicInteger();
     private final ScheduledThreadPoolExecutor timer=new ScheduledThreadPoolExecutor(1,task->{
         var thread=new Thread(task,"bpsh-http-identity-deadline");thread.setDaemon(true);return thread;
@@ -32,6 +41,7 @@ public final class HttpIdentityManager implements AutoCloseable {
         final CompletableFuture<HttpAuthenticationService> service=new CompletableFuture<>();
         final Set<CompletableFuture<?>> waiting=ConcurrentHashMap.newKeySet();
         final Set<HttpAuthenticationService.Delivery> leases=ConcurrentHashMap.newKeySet();
+        final Set<java.net.URI> acceptedOrigins=ConcurrentHashMap.newKeySet();
         volatile boolean retired;
         volatile CompletableFuture<HttpAuthenticationService> opening;
         volatile long lastUse=System.nanoTime();
@@ -146,7 +156,18 @@ public final class HttpIdentityManager implements AutoCloseable {
                                     response.whenComplete((value,failure)->{if(failure!=null)operation.cancel(true);});
                                     operation.whenComplete((value,failure)->{
                                         if(failure!=null)response.completeExceptionally(failure);
-                                        else if(!response.complete(value))value.close();
+                                        else {
+                                            synchronized(HttpIdentityManager.this) {
+                                                if(!selected.retired && current(selection) && !response.isDone()) {
+                                                    var origin=bpsh.journey.JourneyOrigins.authenticationOrigin(request.uri());
+                                                    if(value.authentication().status()==HttpAuthenticationEvidence.Status.ACCEPTED ||
+                                                            !selection.entry().definition().httpAuthenticationEnabled() && value.status()>=200 && value.status()<400)
+                                                        selected.acceptedOrigins.add(origin);
+                                                    else if(value.status()==401)selected.acceptedOrigins.remove(origin);
+                                                } else if(!response.isDone())response.completeExceptionally(new IOException("This HTTP identity is no longer current."));
+                                            }
+                                            if(!response.complete(value))value.close();
+                                        }
                                     });
                                 } catch(RuntimeException failure) {response.completeExceptionally(new IOException("HTTP delivery could not start."));close();}
                             }
@@ -166,6 +187,75 @@ public final class HttpIdentityManager implements AutoCloseable {
         } catch(RejectedExecutionException failure) {result.completeExceptionally(new IOException("HTTP identity admission is closing."));}
         return result;
     }
+    /** Recent acceptance selects a nonnegotiating attempt; only actual socket evidence can prove NTLM reuse. */
+    public synchronized boolean hasRecentAuthentication(Selection selection,java.net.URI target) {
+        if(!current(selection))return false;
+        var scope=scopes.get(selection.entry().identity());
+        return scope!=null && !scope.retired && scope.service.isDone() && !scope.service.isCompletedExceptionally() &&
+                scope.service.join().isOpen() && scope.acceptedOrigins.contains(bpsh.journey.JourneyOrigins.authenticationOrigin(target));
+    }
+
+    /** Establishes one background HEAD in the reusable DIRECT scope; it never carries an application's body or credentials. */
+    public synchronized CompletableFuture<Void> warm(Selection selection,java.net.URI target,long deadline) {
+        if(!current(selection) || deadline-System.nanoTime()<=0)return CompletableFuture.failedFuture(new IOException("This HTTP identity is no longer available for background authentication."));
+        final java.net.URI origin;
+        try {origin=bpsh.journey.JourneyOrigins.authenticationOrigin(target);}
+        catch(IllegalArgumentException invalid) {return CompletableFuture.failedFuture(new IOException("Invalid background authentication destination."));}
+        var definition=selection.entry().definition();
+        if(definition.httpAuthenticationEnabled()?!definition.httpAuthentication().allows(origin):definition.mtls()==null || !definition.mtls().origins().contains(origin))
+            return CompletableFuture.failedFuture(new IOException("Background authentication is not allowed for this exact origin."));
+        if(hasRecentAuthentication(selection,target))return CompletableFuture.completedFuture(null);
+        var key=new WarmKey(selection.entry().identity(),selection.epoch(),origin);
+        var current=warming.get(key);if(current!=null)return current.result;
+        long now=System.nanoTime();
+        warmRetryAfter.entrySet().removeIf(entry->entry.getValue()<=now || !catalog.snapshot().isCurrent(entry.getKey().identity()));
+        if(warmRetryAfter.getOrDefault(key,0L)>now || warming.size()>=8)
+            return CompletableFuture.failedFuture(new IOException("Background HTTP authentication is cooling down or at capacity."));
+        var warm=new Warmup();warming.put(key,warm);
+        warm.result.whenComplete((nothing,failure)->{
+            synchronized(HttpIdentityManager.this) {
+                warming.remove(key,warm);
+                if(failure!=null && current(selection)) {
+                    if(warmRetryAfter.size()>=128)warmRetryAfter.remove(warmRetryAfter.keySet().iterator().next());
+                    warmRetryAfter.put(key,System.nanoTime()+TimeUnit.SECONDS.toNanos(2));
+                }
+            }
+            if(failure!=null) {
+                var admission=warm.admission;if(admission!=null)admission.cancel(true);
+                var operation=warm.operation;if(operation!=null)operation.cancel(true);
+                var lease=warm.lease;if(lease!=null)lease.close();
+            }
+        });
+        warm.admission=admit(selection,deadline);
+        warm.admission.whenComplete((lease,error)->{
+            if(error!=null) {warm.result.completeExceptionally(error);return;}
+            warm.lease=lease;
+            if(warm.result.isDone()) {lease.close();return;}
+            HttpMessageBody body;
+            try(var builder=bodies().builder(0)) {body=builder.finish();}
+            catch(RuntimeException failure) {lease.close();warm.result.completeExceptionally(new IOException("Background authentication could not prepare a request."));return;}
+            try {
+                warm.operation=lease.exchange(new HttpAuthenticationService.Request(target,"HEAD",List.of(),body));
+                if(warm.result.isDone())warm.operation.cancel(true);
+                warm.operation.whenComplete((response,failure)->{
+                    try {
+                        if(failure!=null)warm.result.completeExceptionally(failure);
+                        else if(hasRecentAuthentication(selection,target))warm.result.complete(null);
+                        else warm.result.completeExceptionally(new IOException("The background request did not establish HTTP authentication."));
+                    } finally {if(response!=null)response.close();body.close();lease.close();}
+                });
+            } catch(RuntimeException failure) {body.close();lease.close();warm.result.completeExceptionally(new IOException("Background authentication could not start."));}
+        });
+        if(warm.result.isDone())warm.admission.cancel(true);
+        return warm.result;
+    }
+
+    private void cancelStaleWarmups() {
+        for(var entry:List.copyOf(warming.entrySet()))if(closed || !catalog.snapshot().isCurrent(entry.getKey().identity()) ||
+                epochs.getOrDefault(entry.getKey().identity().key(),0L)!=entry.getKey().epoch())
+            entry.getValue().result.completeExceptionally(new IOException("The HTTP identity changed during background authentication."));
+    }
+
     private synchronized void retireTest(Scope scope) {tests.remove(scope);scope.retire();}
     /** Explicit HTTP-only tests own a fresh scope and return a complete response to their caller. */
     public CompletableFuture<HttpAuthenticationService.Response> test(JourneyCatalog.Entry entry,long deadline,boolean recovery) {
@@ -192,6 +282,7 @@ public final class HttpIdentityManager implements AutoCloseable {
     public synchronized void invalidate(JourneyDefinition.Identity identity) {
         if(activity!=null)activity.clear(identity);
         epochs.merge(identity.key(),1L,Long::sum);
+        cancelStaleWarmups();
         Scope scope=scopes.remove(identity);if(scope!=null)scope.retire();
         for(var test:List.copyOf(tests))if(test.identity.equals(identity))retireTest(test);
     }
@@ -205,6 +296,7 @@ public final class HttpIdentityManager implements AutoCloseable {
         return cancelled;
     }
     public synchronized void reconcile() {
+        cancelStaleWarmups();
         for(var entry:List.copyOf(scopes.entrySet())) {
             var scope=entry.getValue();
             if(!catalog.snapshot().isCurrent(entry.getKey()) || scope.service.isDone() && !scope.service.isCompletedExceptionally() && !scope.service.join().isOpen()) {
@@ -215,7 +307,7 @@ public final class HttpIdentityManager implements AutoCloseable {
     @Override public void close() {
         List<Scope> retired;
         synchronized(this) {
-            if(closed)return;closed=true;
+            if(closed)return;closed=true;cancelStaleWarmups();warmRetryAfter.clear();
             retired=new ArrayList<>(scopes.values());retired.addAll(tests);scopes.clear();tests.clear();
         }
         var cleanup = new ArrayList<Runnable>();

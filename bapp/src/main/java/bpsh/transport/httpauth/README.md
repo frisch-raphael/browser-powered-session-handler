@@ -26,3 +26,5 @@ Native tests mirror this package and reuse the authentication lab's independent
 multi-user verifier. HTTP acceptance uses the separate http-auth profile without
 requiring PKCS#11. Actual Burp and operating-system qualification remain separate
 gates in docs/designs/http-authentication.md.
+
+ESTABLISHED_ONLY disables challenge negotiation for that application request. NTLM evidence stays on the actual socket; a cold socket's 401 is returned without resending. Basic reuses an accepted library-generated proof only for its exact origin, wiping char buffers on 401 and retirement. Routing preserves both challenge and Authorization policies through Request.withHeaders. No NTLM proof is cached or replayed across connections.

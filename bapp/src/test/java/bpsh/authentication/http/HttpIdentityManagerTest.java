@@ -26,6 +26,28 @@ class HttpIdentityManagerTest {
                         null,JourneyDefinition.Injection.perToken(List.of()),new JourneyDefinition.Cache(1800,10),null,
                         new HttpAuthentication(HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",Set.of(ORIGIN)),null));
     }
+    @Test void automaticWarmupIsSingleFlightHeadInTheDirectPoolAndClearFencesReadiness() throws Exception {
+        var entry=entry();var scope=new Fake();var opened=new AtomicReference<HttpTransportFactory.ScopeSpec>();
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->snapshot(entry),secrets,factory((spec,values,recovery,end)->{opened.set(spec);return scope;}))) {
+            var selected=manager.select(entry);var target=ORIGIN.resolve("/protected?choice=1");
+            var first=manager.warm(selected,target,deadline());var second=manager.warm(selected,target,deadline());assertSame(first,second);
+            assertEquals(1,scope.requests.get());assertEquals("HEAD",scope.last.method());assertEquals(target,scope.last.uri());
+            assertTrue(scope.last.headers().isEmpty());assertEquals(0,scope.last.bodyLength());
+            assertEquals(HttpTransportFactory.Purpose.DIRECT,opened.get().purpose());assertFalse(manager.hasRecentAuthentication(selected,target));
+            scope.response.complete(new HttpAuthenticationService.Response(200,List.of(),bpsh.support.IntegrationFixtures.httpBody(new byte[0]),
+                    new HttpAuthenticationEvidence(HttpAuthentication.Protocol.NTLM_V2,HttpAuthenticationEvidence.Status.ACCEPTED)));
+            first.get(1,TimeUnit.SECONDS);assertTrue(manager.hasRecentAuthentication(selected,target));
+            manager.invalidate(entry.identity());assertFalse(manager.hasRecentAuthentication(selected,target));
+            assertTrue(manager.warm(selected,target,deadline()).isCompletedExceptionally());assertEquals(1,scope.requests.get());
+        }
+    }
+    @Test void clearingAnIdentityCancelsItsBackgroundAuthentication() throws Exception {
+        var entry=entry();var scope=new Fake();
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->snapshot(entry),secrets,factory((spec,values,recovery,end)->scope))) {
+            var warm=manager.warm(manager.select(entry),ORIGIN.resolve("/protected"),deadline());assertFalse(warm.isDone());
+            manager.invalidate(entry.identity());assertTrue(warm.isCompletedExceptionally());assertTrue(scope.response.isCancelled());
+        }
+    }
     private static JourneyCatalog.Entry certificateEntry() {
         var base=entry();var d=base.definition();
         var mtls=new JourneyDefinition.Mtls("fixture-module",new JourneyDefinition.Slot(JourneyDefinition.SlotKind.INDEX,0),"12".repeat(32),List.of(ORIGIN),null);
@@ -69,8 +91,9 @@ class HttpIdentityManagerTest {
     private static final class Fake implements HttpAuthenticationService {
         final CompletableFuture<Response> response=new CompletableFuture<>();
         final AtomicInteger requests=new AtomicInteger(),closed=new AtomicInteger();
+        volatile HttpAuthenticationService.Request last;
         @Override public boolean isOpen() {return true;}
-            @Override public Delivery admit(long deadline) {return bpsh.support.IntegrationFixtures.httpDelivery(request->{requests.incrementAndGet();return response;});}
+            @Override public Delivery admit(long deadline) {return bpsh.support.IntegrationFixtures.httpDelivery(request->{last=request;requests.incrementAndGet();return response;});}
         @Override public void close() {closed.incrementAndGet();}
     }
     private static CompletableFuture<HttpAuthenticationService.Response> deliver(HttpIdentityManager manager,JourneyCatalog.Entry entry,HttpAuthenticationService.Request request,long end) {

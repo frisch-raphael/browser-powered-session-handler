@@ -23,3 +23,5 @@ guidance. HttpAuthenticationActivity retains bounded, session-only observations
 for the current saved generation and secret revision, rejects cleared/stale
 publishers, and supplies a safe event sink plus read-only inspection snapshots.
 Neither owner acquires credentials, opens connections or retains raw messages.
+
+ChallengePolicy is independent of AuthorizationPolicy. ESTABLISHED_ONLY permits one application transmission without a challenge resend; recent acceptance does not prove the next pooled socket is authenticated. HttpIdentityManager warms the DIRECT pool with a body-free/header-free HEAD for the exact destination, single-flight per selection/epoch/origin, bounded to eight active operations and 128 two-second cooldown records. Clear/edit/unload cancel stale work. Explicit tests retain fresh TEST scopes.

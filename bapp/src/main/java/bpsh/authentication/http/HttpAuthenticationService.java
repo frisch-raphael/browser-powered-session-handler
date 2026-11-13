@@ -27,19 +27,26 @@ public interface HttpAuthenticationService extends AutoCloseable {
     }
 
     enum AuthorizationPolicy { REPLACE_SELECTED, PRESERVE_APPLICATION }
+    /** Whether this application request may negotiate authentication or only use already established state. */
+    enum ChallengePolicy { CHALLENGE, ESTABLISHED_ONLY }
 
     /** Immutable bounded application request; the transport never follows redirects implicitly. */
-    record Request(URI uri, String method, List<Header> headers, HttpMessageBody body, AuthorizationPolicy authorizationPolicy) {
+    record Request(URI uri, String method, List<Header> headers, HttpMessageBody body, AuthorizationPolicy authorizationPolicy, ChallengePolicy challengePolicy) {
         public Request(URI uri,String method,List<Header> headers,HttpMessageBody body) {
-            this(uri,method,headers,body,AuthorizationPolicy.REPLACE_SELECTED);
+            this(uri,method,headers,body,AuthorizationPolicy.REPLACE_SELECTED,ChallengePolicy.CHALLENGE);
+        }
+        public Request(URI uri,String method,List<Header> headers,HttpMessageBody body,AuthorizationPolicy authorizationPolicy) {
+            this(uri,method,headers,body,authorizationPolicy,ChallengePolicy.CHALLENGE);
         }
         public static final int MAX_BODY_BYTES = 8 * 1024 * 1024;
         public Request {
-            Objects.requireNonNull(uri); Objects.requireNonNull(method); Objects.requireNonNull(body); Objects.requireNonNull(authorizationPolicy);
+            Objects.requireNonNull(uri); Objects.requireNonNull(method); Objects.requireNonNull(body); Objects.requireNonNull(authorizationPolicy); Objects.requireNonNull(challengePolicy);
             if (!method.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+") || body.length() > MAX_BODY_BYTES)
                 throw new IllegalArgumentException("Unsupported HTTP request.");
             headers = List.copyOf(headers);
         }
+        /** @param replacements New headers only. @return Same request semantics and body with replacement headers. */
+        public Request withHeaders(List<Header> replacements) {return new Request(uri,method,replacements,body,authorizationPolicy,challengePolicy);}
         public int bodyLength() { return body.length(); }
         @Override public String toString() { return "HttpRequest[redacted]"; }
     }

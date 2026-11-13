@@ -345,8 +345,8 @@ public final class AuthenticationCoordinator implements AutoCloseable {
                 for (var entry : entries) {
                     if (!registry.snapshot().isCurrent(entry.identity())) throw stale();
                     if (entry.definition().transportOnly()) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
-                            AuthenticationFailure.Cause.CONFIGURATION, "This journey authenticates requests without a captured token or cookie.",
-                            "Use BPSP-HTTP-AUTHENT: <@" + entry.definition().alias() + "/> to apply this journey's authentication to the request.").forJourney(entry.identity());
+                            AuthenticationFailure.Cause.CONFIGURATION, "This journey has no captured token or cookie to insert.",
+                            "For HTTP or client-certificate authentication, use automatic session handling or the BPSP-HTTP-AUTHENT header instead of a token tag.").forJourney(entry.identity());
                     if (entry.definition().draft() != null) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
                             AuthenticationFailure.Cause.CONFIGURATION, "This journey has incomplete or invalid settings.",
                             "Review the journey settings, then test login.").forJourney(entry.identity());

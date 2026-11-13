@@ -23,6 +23,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Establishes shared-cycle and reservation policy with controlled clocks; no hardware claims. */
 public class AuthenticationCoordinatorTest {
+    @Test void tokenAcquisitionFromATransportOnlyJourneyExplainsTheTokenReferenceInsteadOfCallingAuthenticationInvalid() {
+        try (var f = new Fixture(RequestSettings.Controls.defaults())) {
+            var base = f.definitions.getFirst();
+            var definition = new JourneyDefinition(base.id(), base.displayName(), base.alias(), base.authenticationUrl(), false, List.of(), base.browser(), null,
+                    JourneyDefinition.Injection.perToken(List.of()), base.cache(), null,
+                    new bpsh.journey.HttpAuthentication(bpsh.journey.HttpAuthentication.Protocol.NTLM_V2, "user-a", "LAB", "", java.util.Set.of(java.net.URI.create("https://login.example"))), null);
+            CoordinatorFixtures.load(f.registry, List.of(definition));
+            var error = CoordinatorFixtures.error(f.acquire(0));
+            assertTrue(error.problem().contains("no captured token or cookie to insert"));
+            assertTrue(error.recovery().contains("automatic session handling")); assertTrue(error.recovery().contains("BPSP-HTTP-AUTHENT"));
+            assertEquals(0, f.attempts.get());
+        }
+    }
     @Test void failedLaunchCleanupReachesTheCallerAndEventLog() throws Exception {
         try (var f = new Fixture(RequestSettings.Controls.defaults())) {
             f.fail.set(bpsh.browser.BrowserCleanupFixtures.failedLaunch(CoordinatorFixtures.failure(AuthenticationFailure.Cause.ASSET_MISSING)));

@@ -120,48 +120,7 @@ public final class Extension implements BurpExtension {
          */
         Services(MontoyaApi api) {
             this.api = api; diagnostics = new Diagnostics(api.logging()::logToError);
-            var httpFactory=new bpsh.authentication.http.HttpTransportFactory() {
-                @Override public bpsh.authentication.http.HttpMessageBody.Allocator bodies() {return httpTransport.bodies();}
-                @Override public void close() {httpTransport.close();}
-                @Override public java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService> open(
-                        ScopeSpec spec,SecretStore.Values values,long deadline) {
-                    var opened=httpTransport.open(spec,values,deadline);
-                    boolean direct=spec.purpose()==Purpose.DIRECT || spec.purpose()==Purpose.TEST;
-                    if(!direct || spec.setup().browser().proxy()==null)return opened;
-                    AuthTrafficGuard.Lease lease;
-                    try {lease=guard.begin();}
-                    catch(AuthenticationFailure failure) {opened.thenAccept(bpsh.authentication.http.HttpAuthenticationService::close);opened.cancel(true);return java.util.concurrent.CompletableFuture.failedFuture(failure);}
-                    var result=new java.util.concurrent.CompletableFuture<bpsh.authentication.http.HttpAuthenticationService>();
-                    opened.whenComplete((service,error)->{
-                        if(error!=null) {lease.close();result.completeExceptionally(error);return;}
-                        var wrapped=new bpsh.authentication.http.HttpAuthenticationService() {
-                            @Override public boolean isOpen() {return service.isOpen();}
-                            @Override public boolean isIdle() {return service.isIdle();}
-                            @Override public Delivery admit(long end) throws java.io.IOException {
-                                var admitted=service.admit(end);
-                                return new Delivery() {
-                                    @Override public java.util.concurrent.CompletableFuture<Response> exchange(Request request) {
-                                        try {
-                                            var headers=new ArrayList<Header>();String agent="";
-                                            for(var header:request.headers()) {if(header.name().equalsIgnoreCase("User-Agent"))agent=header.value();else headers.add(header);}
-                                            headers.add(new Header("User-Agent",lease.decorate(agent)));
-                                            return admitted.exchange(new Request(request.uri(),request.method(),headers,request.body(),request.authorizationPolicy()));
-                                        } catch(AuthenticationFailure failure) {admitted.close();return java.util.concurrent.CompletableFuture.failedFuture(failure);}
-                                    }
-                                    @Override public void close() {admitted.close();}
-                                };
-                            }
-
-                            @Override public java.util.List<bpsh.authentication.http.HttpAuthenticationEvidence> observations() {return service.observations();}
-                            @Override public AuthenticationFailure failure() {return service.failure();}
-                            @Override public void close() {service.close();lease.close();}
-                        };
-                        if(!result.complete(wrapped))wrapped.close();
-                    });
-                    result.whenComplete((service,error)->{if(error!=null) {opened.cancel(true);lease.close();}});
-                    return result;
-                }
-            };
+            var httpFactory=new bpsh.burp.http.GuardedHttpTransportFactory(httpTransport,guard);
             httpIdentities = new bpsh.authentication.http.HttpIdentityManager(registry,secrets,httpFactory,httpActivity);
             var launcher = new BrowserSessionLauncher(runtime, browserResolver, httpFactory, guard, Clock.systemUTC());
             var runner = new BrowserFlowRunner(launcher, Clock.systemUTC());

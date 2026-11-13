@@ -84,6 +84,49 @@ class Pkcs11JourneyIntegrationTest {
         char[] pin = pin(); try { return identities.select(definition, pin, false, deadline(), () -> false); } finally { Arrays.fill(pin, '\0'); }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest(name="automatic-mtls-{0}")
+    @org.junit.jupiter.params.provider.EnumSource(bpsh.request.RequestSettings.RequestPolicy.class)
+    @Order(9)
+    void automaticCertificateOnlyRequestsUseTheSelectedRealPkcs11Key(bpsh.request.RequestSettings.RequestPolicy policy) throws Exception {
+        var hooks=new bpsh.burp.http.NativeTagPipelineTest().new ProductionHooks();
+        try(var origin=IntegrationFixtures.https(root,false,true);var nativeFixture=new bpsh.burp.http.NativeTagPipelineTest.Fixture()) {
+            String fingerprint=fixture.path("fingerprints").path("employee").textValue();
+            var observed=new TransportFixtures.CertificateObservation(fingerprint);
+            origin.route("/login",exchange->{
+                assertEquals(exchange.getRequestMethod().equals("HEAD")?null:"Bearer application-value",exchange.getRequestHeaders().getFirst("Authorization"));
+                observed.target(exchange);
+            }).start();
+            var destination=TokenExtractor.origin(origin.url("/"));
+            var d=new JourneyDefinition(java.util.UUID.randomUUID(),"Certificate","certificate",origin.url("/login"),false,List.of(),
+                    new JourneyDefinition.Browser(true,null,10000,3000,false,false),null,JourneyDefinition.Injection.perToken(List.of()),
+                    new JourneyDefinition.Cache(1800,10),mtls("employee",List.of(destination),root.resolve("ca.crt").toString()));
+            bpsh.authentication.session.CoordinatorFixtures.load(nativeFixture.registry,List.of(d));
+            char[] supplied=pin();
+            try(var values=new SecretStore.Values(supplied,Map.of())) {nativeFixture.secrets.put(new JourneyKey(JourneyDefinition.Scope.PROJECT,d.id()),values);}
+            finally {Arrays.fill(supplied,'\0');}
+            try(var manager=new bpsh.authentication.http.HttpIdentityManager(nativeFixture.registry,nativeFixture.secrets,httpTransport);
+                var host=hooks.new Host(nativeFixture,null,manager,destination)) {
+                var selected=nativeFixture.registry.snapshot().resolve("certificate");var defaults=bpsh.request.RequestSettings.Controls.defaults();
+                var rule=new bpsh.request.RequestSettings.AutomaticRule(true,new bpsh.request.RequestSettings.JourneySelection(selected.identity().scope(),selected.identity().journeyId()),
+                        new bpsh.request.RequestSettings.AllRequests(),8081,new JourneyDefinition.Recovery(false,JourneyDefinition.RecoveryMode.STATUS_CODE,401,null));
+                host.controls.publish(host.controls.prepare(new bpsh.request.RequestSettings.Controls(true,List.of(rule),defaults.tools(),10000,30000,60000,null,null,policy)));
+                host.selectedTool=burp.api.montoya.core.ToolType.PROXY;
+                String raw="GET /login HTTP/1.1\r\nHost: "+destination.getAuthority()+"\r\nAuthorization: Bearer application-value\r\n\r\n";
+                for(int id=1;id<=2;id++) {
+                    var proxy=host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest)host.request(raw,id,true));
+                    var result=host.handler.handleHttpRequestToBeSent(host.request(new String(proxy.request().toByteArray().getBytes(),java.nio.charset.StandardCharsets.ISO_8859_1),1000+id,true));
+                    if(id==1 && policy==bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT) {
+                        assertEquals("CONTINUE",result.action().name());assertArrayEquals(raw.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1),result.request().toByteArray().getBytes());
+                        manager.warm(manager.select(selected),origin.url("/login"),deadline()).get(30,TimeUnit.SECONDS);
+                    } else {
+                        assertEquals("SPOOF_RESPONSE",result.action().name());assertTrue(new String(host.spoofResponse.toByteArray().getBytes(),java.nio.charset.StandardCharsets.UTF_8).startsWith("HTTP/1.1 200"));
+                    }
+                }
+                assertEquals(List.of(fingerprint,fingerprint),observed.fingerprints());assertEquals(0,nativeFixture.attempts);
+            }
+        }
+    }
+
     @Test @Order(1) void explicitRejectedPinLatchIsSharedAndOnlyOperatorRecoveryClearsIt() throws Exception {
         var employee = mtls("employee", List.of(URI.create("https://localhost")), root.resolve("ca.crt").toString());
         char[] wrong = "not-the-disposable-pin".toCharArray(), correct = pin();

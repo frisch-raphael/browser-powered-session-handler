@@ -9,6 +9,7 @@ import burp.api.montoya.http.handler.*;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.proxy.http.*;
 import java.io.ByteArrayInputStream;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static bpsh.burp.http.SessionRequestProcessor.*;
@@ -18,6 +19,9 @@ public final class RecoveryReplayDelivery implements AutoCloseable {
     /** Actual replay send; response hooks retain the original response independently. */
     @FunctionalInterface public interface ReplayTransport { void send(HttpRequest request, long responseTimeoutMs) throws Exception; }
     private final JourneyCatalog registry;
+    private final DeferredRequestDelivery deferred;
+    private final HttpAuthenticationDelivery direct;
+    private final SessionRequestProcessor processor;
     private final AuthTrafficGuard guard;
     private final SessionRecovery recovery;
     private final Diagnostics diagnostics;
@@ -30,20 +34,42 @@ public final class RecoveryReplayDelivery implements AutoCloseable {
 
     /** Wires shared replay policy, cleanup state and actual host transport. */
     RecoveryReplayDelivery(JourneyCatalog registry, AuthTrafficGuard guard, SessionRecovery recovery, Diagnostics diagnostics,
-                           RequestControlState controls, AtomicBoolean closed, ReplayTransport transport) {
-        this.registry=registry;this.guard=guard;this.recovery=recovery;this.diagnostics=diagnostics;this.controls=controls;this.closed=closed;this.transport=transport;
+                           RequestControlState controls, AtomicBoolean closed, ReplayTransport transport, DeferredRequestDelivery deferred,HttpAuthenticationDelivery direct,SessionRequestProcessor processor) {
+        this.direct=direct;this.processor=processor;this.deferred=deferred;this.registry=registry;this.guard=guard;this.recovery=recovery;this.diagnostics=diagnostics;this.controls=controls;this.closed=closed;this.transport=transport;
     }
 
     /** @param request Owned global replay. @param ownership Guard decision. @return Pinned delivery without matching browser rules. @throws AuthenticationFailure When replay provenance is stale or unavailable. */
-    SessionRequestProcessor.Result deliver(HttpRequestToBeSent request, AuthTrafficGuard.Decision ownership) throws AuthenticationFailure {
-        var replay=replayDeliveries.get(ownership.replayKey());
+    private SessionRequestProcessor.Result deliver(HttpRequestToBeSent request, ReplayJob replay) throws AuthenticationFailure,java.util.concurrent.ExecutionException,InterruptedException {
         if(closed.get()||replay==null||!replay.dispatched.compareAndSet(false,true))throw unavailable();
         replay.plan.validateForDelivery();
         recovery.record(new RequestExchange(AuthTrafficGuard.Family.GLOBAL,request.messageId()),replay.plan.uses(),false);
         replay.actualId=request.messageId();
         appendNote(replay.originalNotes,"BPSH recovery replay submitted to Burp: GLOBAL request "+request.messageId()+". Original response kept.");
         var notes=request.annotations();appendNote(notes,"BPSH recovery replay of "+replay.plan.originalId()+".");
+        if(replay.plan.transport()!=null) {
+            var cfg=controls.snapshot().controls();byte[] complete=replay.clean.toByteArray().getBytes();
+            try(var admission=processor.capacity.admit(cfg,List.of(replay.plan.transport().entry().identity().key()),4L*complete.length+(16L<<20))) {
+                var framed=HttpAuthenticationDirective.prepare(complete);
+                var selected=replay.plan.transport();
+                byte[] outgoing=selected.entry().definition().httpAuthenticationEnabled()?framed.request():framed.applicationAuthorizationRequest();
+                var sent=direct.deliverResolved(replay.clean,notes,selected,outgoing,
+                        System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(cfg.requestWaitTimeoutMs()),admission,
+                        replay.plan::validateForDelivery,()->{},bpsh.authentication.http.HttpAuthenticationService.ChallengePolicy.CHALLENGE);
+                observedDirect(new RequestExchange(AuthTrafficGuard.Family.GLOBAL,request.messageId()),sent.response(),sent.annotations(),replay.clean);
+                return new SessionRequestProcessor.Result(replay.clean,sent.annotations(),null,sent.response());
+            }
+        }
         return SessionRequestProcessor.Result.continueWith(replay.clean,notes);
+    }
+
+    /** Native direct delivery observes its actual response once, independently of host callbacks for spoofed responses. */
+    void observedDirect(RequestExchange exchange,burp.api.montoya.http.message.responses.HttpResponse response,Annotations notes,HttpRequest original) {
+        try {response(exchange,response,notes,original);}
+        catch(RuntimeException|LinkageError failure) {
+            var safe=new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE,AuthenticationFailure.Cause.UNKNOWN,
+                    "Response recovery could not be processed. The original server response was retained.");
+            diagnostics.state(null,safe);appendNote(notes,safe.problem());
+        }
     }
 
     /** @param exchange Actual family-qualified response. @param response Original response. @param notes Host notes. @param initiatingRequest Original request metadata. @return Whether owned login traffic bypasses Proxy interception. */
@@ -83,23 +109,30 @@ public final class RecoveryReplayDelivery implements AutoCloseable {
         final Annotations originalNotes;
         final AtomicBoolean dispatched = new AtomicBoolean();
         volatile HttpRequest clean;
-        volatile AuthTrafficGuard.Lease lease;
+        volatile DeferredRequestDelivery.Handle lease;
+        final AtomicBoolean released=new AtomicBoolean();
         volatile long actualId = -1;
         ReplayJob(SessionRecovery.ReplayPlan plan, burp.api.montoya.http.HttpService service, Annotations originalNotes) { this.plan = plan; this.service = service; this.originalNotes = originalNotes; }
         @Override public void run() {
             try {
                 if (closed.get() || !controls.snapshot().controls().enabled()) return;
                 clean = HttpRequest.httpRequest(service, ByteArray.byteArray(plan.claim()));
-                lease = guard.beginReplay(); replayDeliveries.put(lease.key(), this);
-                String agent = lease.decorate(clean.headerValue("User-Agent"));
-                // Montoya updates existing headers only; absent agents must receive the marker explicitly.
-                var marked = clean.hasHeader("User-Agent") ? clean.withUpdatedHeader("User-Agent", agent) : clean.withAddedHeader("User-Agent", agent);
-                if (closed.get()) return;
-                transport.send(marked, controls.snapshot().controls().requestWaitTimeoutMs());
+                long timeout=controls.snapshot().controls().requestWaitTimeoutMs();
+                lease=deferred.publish(new DeferredRequestDelivery.Plan(){
+                    public HttpRequest clean(){return clean;}
+                    public SessionRequestProcessor.Result deliver(HttpRequestToBeSent callback) throws AuthenticationFailure,java.util.concurrent.ExecutionException,InterruptedException {
+                        return RecoveryReplayDelivery.this.deliver(callback,ReplayJob.this);
+                    }
+                    public void close(){ReplayJob.this.close();}
+                },System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeout));
+                replayDeliveries.put(lease.key(),this);
+                if(released.get() || closed.get()) {replayDeliveries.remove(lease.key(),this);return;}
+                transport.send(lease.marked(),timeout);
             } catch (Exception | LinkageError error) { replayFailure(originalNotes, error); }
             finally { close(); }
         }
         @Override public void close() {
+            if(!released.compareAndSet(false,true))return;
             var marker = lease; if (marker != null) { replayDeliveries.remove(marker.key(), this); marker.close(); } plan.close();
         }
     }
@@ -124,7 +157,9 @@ public final class RecoveryReplayDelivery implements AutoCloseable {
     /** Cancels owned replay workers and plans; leaves global stop rejection to its adapter. */
     @Override public void close() {
         closed.set(true);
-        for (var task : replayWorkers.shutdownNow()) if (task instanceof ReplayJob job) job.close();
-        replayDeliveries.values().forEach(ReplayJob::close);
+        var cleanup=new java.util.ArrayList<Runnable>();
+        for(var task:replayWorkers.shutdownNow())if(task instanceof ReplayJob job)cleanup.add(job::close);
+        java.util.List.copyOf(replayDeliveries.values()).forEach(job->cleanup.add(job::close));
+        bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
     }
 }

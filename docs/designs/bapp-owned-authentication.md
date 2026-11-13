@@ -66,7 +66,7 @@ Authentication traffic routed through Burp must be recognized before acquisition
 
 ## TLS and certificate ownership
 
-Ordinary journeys use their configured optional HTTP proxy directly; empty means direct. Configured upstream proxy authentication is unsupported. Only certificate journeys create the attempt-owned Java TLS proxy. Its internal access credentials are independent of configured upstream proxy support.
+Ordinary journeys use their configured optional HTTP proxy directly; empty means direct. Configured upstream proxy authentication is unsupported. Certificate and HTTP-authentication browser journeys create the attempt-owned Java proxy. Its internal access credentials are independent of configured upstream proxy support.
 
 Java uses explicit key/trust configuration and vendor PKCS#11 middleware. Device discovery does not require a PIN. Certificate choice is pinned to the exact fingerprint and compatible handshake identity; identical subjects do not permit substitution. The HTTPS login server is included in the certificate allowlist, additional servers and trusted CA are explicit advanced inputs, and unrelated servers must never receive the selected certificate. No JVM-global TLS configuration or Burp certificate-host rule is mutated.
 
@@ -91,8 +91,7 @@ processing uses the user's edited request and actual listener. Non-Proxy global
 processing has no listener identity; copied requests do not inherit one.
 SessionRequestProcessor owns shared preparation, GlobalHttpSessionAdapter and
 ProxyHttpSessionAdapter translate host actions, HttpAuthenticationDelivery owns
-explicit direct identity delivery, and RecoveryReplayDelivery owns bounded
-application replays. No ordinary Proxy output is expanded twice.
+shared direct identity delivery. AutomaticHttpAuthentication selects eligible transport-only identities; DeferredRequestDelivery shares one-use pinned plans with RecoveryReplayDelivery. Captures resolve once; no cross-family IDs or annotations are joined.
 
 RequestExchange qualifies every ID with its callback family. Proxy and global
 response attribution never join numeric IDs. A Proxy recovery replay is a new
@@ -104,7 +103,7 @@ aggregate limits. Replay dispatch uses two workers and queue capacity 256.
 Final-Proxy DROP was unreliable on the tested Burp host. The author accepts that
 failed tagged Proxy requests may reach the server. The adapter requests native
 DROP with safe failure notes; no internal stop header, diagnostic-ticket bridge
-or extra global pass is required. Successful preparation continues normally.
+or extra global pass enforces failed tagged drops. Capture-only preparation continues normally. Trusted transport/recovery handoffs separately use bounded one-use plans for actual native delivery.
 Global-owned failures retain their existing native drop action. Captured output
 still cannot create HTTP-authentication directives or owned-traffic markers that
 a later callback would execute. See the [routing design](session-handling-by-url-and-proxy-port.md#proxy-failure-policy-native-drop-is-best-effort).

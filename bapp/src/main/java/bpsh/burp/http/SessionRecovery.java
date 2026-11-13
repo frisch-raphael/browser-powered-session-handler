@@ -69,20 +69,22 @@ public final class SessionRecovery implements AutoCloseable {
     /** A single-use production replay plan with final generation/version checks immediately before sending. */
     public final class ReplayPlan implements AutoCloseable {
         private final RequestExchange originalId;
+        private final bpsh.authentication.http.HttpIdentityManager.Selection transport;
         private final NativeTagResolver.Resolved resolved;
         private final List<CredentialUse> used;
         private final Reservation reservation;
         private final java.util.concurrent.atomic.AtomicBoolean claimed = new java.util.concurrent.atomic.AtomicBoolean(), released = new java.util.concurrent.atomic.AtomicBoolean();
-        private ReplayPlan(RequestExchange originalId, NativeTagResolver.Resolved resolved, List<CredentialUse> rules, Reservation reservation) {
-            this.originalId = originalId; this.resolved = resolved; this.reservation = reservation;
+        private ReplayPlan(RequestExchange originalId, NativeTagResolver.Resolved resolved, List<CredentialUse> rules, Reservation reservation,bpsh.authentication.http.HttpIdentityManager.Selection transport) {
+            this.transport=transport;this.originalId = originalId; this.resolved = resolved; this.reservation = reservation;
             var byIdentity = new java.util.HashMap<JourneyDefinition.Identity, JourneyDefinition.Recovery>(); rules.forEach(u -> byIdentity.put(u.identity(), u.rule()));
             this.used = resolved.uses().stream().map(u -> coordinator.provenance(new CredentialUse(u.identity(), u.version(), byIdentity.getOrDefault(u.identity(), u.rule())), true)).toList();
         }
         public RequestExchange originalId() { return originalId; }
+        bpsh.authentication.http.HttpIdentityManager.Selection transport(){return transport;}
         public List<CredentialUse> uses() { return used; }
         public void validateForDelivery() throws AuthenticationFailure {
             if (closed || released.get()) throw new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE, AuthenticationFailure.Cause.STALE, "This recovery replay is no longer available.");
-            resolved.commit();
+            resolved.validate();
         }
         public byte[] claim() throws AuthenticationFailure {
             if (closed || released.get() || !claimed.compareAndSet(false, true)) throw new AuthenticationFailure(AuthenticationFailure.Phase.LIFECYCLE,
@@ -115,7 +117,7 @@ public final class SessionRecovery implements AutoCloseable {
                         operation.future().whenComplete((resolved, failure) -> {
                             if (failure != null) { fail(failure); return; }
                             ReplayPlan plan;
-                            try { plan = new ReplayPlan(originalId, resolved, source.used(), source.reservation()); }
+                            try { plan = new ReplayPlan(originalId, resolved, source.used(), source.reservation(),source.template().transport()); }
                             catch (RuntimeException preparation) { fail(preparation); return; }
                             if (!done.compareAndSet(false, true)) { plan.close(); return; }
                             synchronized (SessionRecovery.this) { pending.remove(this); if (!closed) plans.add(plan); }

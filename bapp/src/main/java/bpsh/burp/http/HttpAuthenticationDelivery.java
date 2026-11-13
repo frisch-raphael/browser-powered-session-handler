@@ -1,6 +1,5 @@
 package bpsh.burp.http;
 
-import bpsh.browser.AuthTrafficGuard;
 import bpsh.journey.JourneyCatalog;
 import bpsh.authentication.AuthenticationFailure;
 import burp.api.montoya.core.Annotations;
@@ -17,14 +16,13 @@ import static bpsh.burp.http.SessionRequestProcessor.*;
 public final class HttpAuthenticationDelivery {
     private final JourneyCatalog registry;
     private final NativeTagResolver resolver;
-    private final AuthTrafficGuard guard;
     private final bpsh.authentication.http.HttpIdentityManager httpIdentities;
     /** @param response Actual server response. @param annotations Safe host notes. */
     record Delivery(burp.api.montoya.http.message.responses.HttpResponse response, Annotations annotations) {}
     /** Wires the existing shared HTTP identity owner and dependent capture resolver. */
-    HttpAuthenticationDelivery(JourneyCatalog registry, NativeTagResolver resolver, AuthTrafficGuard guard,
+    HttpAuthenticationDelivery(JourneyCatalog registry, NativeTagResolver resolver,
                                bpsh.authentication.http.HttpIdentityManager httpIdentities) {
-        this.registry=registry;this.resolver=resolver;this.guard=guard;this.httpIdentities=httpIdentities;
+        this.registry=registry;this.resolver=resolver;this.httpIdentities=httpIdentities;
     }
     /** Resolves dependent captures, preserves exact origins and returns the actual response once. */
     Delivery deliver(HttpRequestToBeSent original, HttpAuthenticationDirective.Selection directive, int timeoutMs, RequestCapacity.Lease admission)
@@ -44,6 +42,21 @@ public final class HttpAuthenticationDelivery {
             catch(java.util.concurrent.TimeoutException timeout) { throw new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
                     AuthenticationFailure.Cause.TIMEOUT,"The tagged request timed out while waiting for dependent credentials. No HTTP-auth request was sent."); }
             byte[] complete = resolved.commit();
+            return deliverResolved(original,original.annotations(),selection,complete,deadline,admission,resolved::validate,()->{},bpsh.authentication.http.HttpAuthenticationService.ChallengePolicy.CHALLENGE);
+        }
+    }
+
+    /** Final publication validation belongs to the capture/replay owner. */
+    @FunctionalInterface interface Validation {void check() throws AuthenticationFailure;}
+
+    /** Uses the same framing, origin, admission and native delivery for explicit and automatic identity selection. */
+    Delivery deliverResolved(HttpRequest original,Annotations notes,bpsh.authentication.http.HttpIdentityManager.Selection selection,
+                             byte[] complete,long deadline,RequestCapacity.Lease admission,Validation validate,Runnable onDispatch,bpsh.authentication.http.HttpAuthenticationService.ChallengePolicy challengePolicy)
+            throws AuthenticationFailure,ExecutionException,InterruptedException {
+        var entry=selection.entry();
+        if(httpIdentities==null)throw configuration("HTTP authentication is unavailable.","Reload the current extension build.");
+        admission.bind(List.of(entry.identity().key()));
+        try {
             HttpRequest request = HttpRequest.httpRequest(original.httpService(), ByteArray.byteArray(complete));
             java.net.URI target = java.net.URI.create(request.url());
             var service = request.httpService();
@@ -70,21 +83,15 @@ public final class HttpAuthenticationDelivery {
                 opening.cancel(true); throw interrupted;
             }
             try(var admitted=deliveryLease;
-                var internal=entry.definition().browser().proxy()==null?null:guard.begin();
                 var builder=httpIdentities.bodies().builder(bpsh.authentication.http.HttpAuthenticationService.Request.MAX_BODY_BYTES)) {
-                if(internal!=null) {
-                    var agents=headers.stream().filter(header->header.name().equalsIgnoreCase("User-Agent")).toList();
-                    if(agents.size()>1)throw configuration("A routed HTTP-auth request has multiple User-Agent headers.","Use one User-Agent header.");
-                    headers.removeIf(header->header.name().equalsIgnoreCase("User-Agent"));
-                    headers.add(new bpsh.authentication.http.HttpAuthenticationService.Header("User-Agent",internal.decorate(agents.isEmpty()?null:agents.getFirst().value())));
-                }
                 int offset=0;
                 for(int index=0;index+3<complete.length;index++)if(complete[index]==13 && complete[index+1]==10 && complete[index+2]==13 && complete[index+3]==10) {offset=index+4;break;}
                 if(offset==0)throw configuration("Invalid tagged request body framing.","Correct the HTTP headers.");
                 builder.append(java.nio.ByteBuffer.wrap(complete,offset,complete.length-offset));
                 try(var ownedBody=builder.finish()) {
-            var outbound = new bpsh.authentication.http.HttpAuthenticationService.Request(target, request.method(), headers, ownedBody);
-            dispatched=true;
+            var outbound = new bpsh.authentication.http.HttpAuthenticationService.Request(target, request.method(), headers, ownedBody,
+                    bpsh.authentication.http.HttpAuthenticationService.AuthorizationPolicy.REPLACE_SELECTED,challengePolicy);
+            validate.check();dispatched=true;onDispatch.run();
             var delivery = admitted.exchange(outbound);
             bpsh.authentication.http.HttpAuthenticationService.Response response;
             try { response = delivery.get(); }
@@ -103,7 +110,7 @@ public final class HttpAuthenticationDelivery {
                 throw new bpsh.authentication.http.HttpDeliveryFailure(true, failed).presentation();
             }
             try(response;var wire=HttpAuthenticationResponse.wire(httpIdentities.bodies(),request.method(),response)) {
-            var notes = original.annotations();
+
             String observation = !entry.definition().httpAuthenticationEnabled() ? "Request sent with this journey's client-certificate settings. Server response kept." : switch(response.authentication().status()) {
                 case ACCEPTED -> "The server accepted " + switch (response.authentication().protocol()) { case BASIC -> "Basic"; case NTLM_V1 -> "NTLMv1"; case NTLM_V2 -> "NTLMv2"; } + " HTTP authentication. Server response kept.";
                 case REJECTED -> "The server rejected HTTP authentication. Server response kept.";
@@ -124,7 +131,7 @@ public final class HttpAuthenticationDelivery {
                 throw error;
             }
         }
-        catch (AuthenticationFailure failure) { throw failure.journey() == null ? failure.forJourney(entry.identity()) : failure; }
+        catch(AuthenticationFailure failure){throw failure.journey()==null?failure.forJourney(entry.identity()):failure;}
     }
 
 

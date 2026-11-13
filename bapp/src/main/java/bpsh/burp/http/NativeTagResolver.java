@@ -34,7 +34,26 @@ public final class NativeTagResolver {
     public NativeTagResolver(JourneyCatalog registry, AuthenticationCoordinator coordinator) { this.registry = registry; this.coordinator = coordinator; }
 
     /** One captured automatic rule and its resolved saved generation. */
-    public record Automatic(JourneyCatalog.Entry entry, JourneyDefinition.Recovery recovery) {}
+    public record Automatic(JourneyCatalog.Entry entry, JourneyDefinition.Recovery recovery, boolean omitAuthorization) {
+        public Automatic(JourneyCatalog.Entry entry,JourneyDefinition.Recovery recovery){this(entry,recovery,false);}
+        boolean includes(JourneyDefinition.TokenInjection mapping) {
+            return mapping.type()!=JourneyDefinition.InjectionType.DISABLED && !(omitAuthorization &&
+                    (mapping.type()==JourneyDefinition.InjectionType.BEARER || mapping.type()==JourneyDefinition.InjectionType.HEADER && mapping.name().equalsIgnoreCase("Authorization")));
+        }
+        /** Preserve configured cache warmers; omit only captures whose active Authorization output was replaced. */
+        boolean requiresCapture() {
+            if(entry.definition().extraction()==null)return false;
+            if(!omitAuthorization || hasOutputs())return true;
+            return entry.definition().injection().tokens().stream().noneMatch(mapping->mapping.type()==JourneyDefinition.InjectionType.BEARER ||
+                    mapping.type()==JourneyDefinition.InjectionType.HEADER && mapping.name().equalsIgnoreCase("Authorization"));
+        }
+        boolean hasOutputs() {
+            var extraction=entry.definition().extraction();
+            boolean cookie=extraction instanceof JourneyDefinition.CookieExtraction || extraction instanceof JourneyDefinition.CombinedExtraction combined &&
+                    combined.tokens().stream().anyMatch(part->part.selector() instanceof JourneyDefinition.CookieExtraction);
+            return cookie || extraction!=null && entry.definition().injection().tokens().stream().anyMatch(this::includes);
+        }
+    }
 
     /** Owns caller detachment separately from the shared authentication cycle. */
     public final class Operation implements AutoCloseable {
@@ -99,10 +118,12 @@ public final class NativeTagResolver {
          * @throws AuthenticationFailure If configuration, invalidation or hard expiry superseded a result.
          */
         public byte[] commit() throws AuthenticationFailure {
-            byte[] result = bytes.clone();
+            validate();return bytes.clone();
+        }
+        /** Rechecks captured generation/version without allocating another complete request. */
+        public void validate() throws AuthenticationFailure {
             if (!coordinator.current(tokens.values())) throw aliasFailure(String.join(", ", bindings.keySet()), AuthenticationFailure.Cause.STALE,
                     "The journey changed or its token expired while the request was being prepared.", "Resend the request to use the current saved journey and token.");
-            return result;
         }
         /**
          * Produces token-free used-version provenance only for the journeys actually inserted.
@@ -114,7 +135,7 @@ public final class NativeTagResolver {
             if (!automatic.isEmpty()) {
                 used.clear(); var winners = new LinkedHashMap<String, Automatic>();
                 for (var a : automatic) {
-                    for (var mapping : a.entry().definition().injection().tokens()) switch (mapping.type()) {
+                    for (var mapping : a.entry().definition().injection().tokens()) if(a.includes(mapping)) switch (mapping.type()) {
                         case BEARER -> winners.put("header:authorization", a);
                         case HEADER -> winners.put("header:" + mapping.name().toLowerCase(Locale.ROOT), a);
                         case COOKIE -> winners.put("cookie:" + mapping.name(), a);
@@ -129,7 +150,11 @@ public final class NativeTagResolver {
             return List.copyOf(used.values());
         }
         /** Retains the pre-injection template and exact saved identities, never a later alias lookup. */
-        public ReplayTemplate replayTemplate(byte[] original) { return new ReplayTemplate(original, bindings, automatic); }
+        public ReplayTemplate replayTemplate(byte[] original) { return replayTemplate(original,null); }
+        /** Retains the selected transport alongside capture-only recovery input, without alias re-resolution. */
+        public ReplayTemplate replayTemplate(byte[] original,bpsh.authentication.http.HttpIdentityManager.Selection transport) {
+            return new ReplayTemplate(original,bindings,automatic,transport);
+        }
         /**
          * Returns safe result label excluding message bytes, credentials and source fields.
          *
@@ -153,9 +178,11 @@ public final class NativeTagResolver {
         private final byte[] original;
         private final Map<String, JourneyCatalog.Entry> bindings;
         private final List<Automatic> automatic;
-        private ReplayTemplate(byte[] original, Map<String, JourneyCatalog.Entry> bindings, List<Automatic> automatic) {
-            this.original = original.clone(); this.bindings = Map.copyOf(bindings); this.automatic = List.copyOf(automatic);
+        private final bpsh.authentication.http.HttpIdentityManager.Selection transport;
+        private ReplayTemplate(byte[] original, Map<String, JourneyCatalog.Entry> bindings, List<Automatic> automatic,bpsh.authentication.http.HttpIdentityManager.Selection transport) {
+            this.original = original.clone(); this.bindings = Map.copyOf(bindings); this.automatic = List.copyOf(automatic);this.transport=transport;
         }
+        bpsh.authentication.http.HttpIdentityManager.Selection transport(){return transport;}
         public int size() { return original.length; }
         public Operation prepare() throws AuthenticationFailure { return resolveInternal(original, automatic, bindings); }
         @Override public String toString() { return "ReplayTemplate[journeys=" + bindings.size() + "]"; }
@@ -195,8 +222,9 @@ public final class NativeTagResolver {
     private Operation resolveInternal(byte[] raw, List<Automatic> automatic, Map<String, JourneyCatalog.Entry> pinned) throws AuthenticationFailure {
         return resolveInternal(raw, automatic, pinned, true);
     }
-    private Operation resolveInternal(byte[] raw, List<Automatic> automatic, Map<String, JourneyCatalog.Entry> pinned, boolean waitForLogin) throws AuthenticationFailure {
+    private Operation resolveInternal(byte[] raw, List<Automatic> automaticInput, Map<String, JourneyCatalog.Entry> pinned, boolean waitForLogin) throws AuthenticationFailure {
         boolean tagged = tagged(raw);
+        var automatic=automaticInput.stream().filter(Automatic::requiresCapture).toList();
         if (!tagged && automatic.isEmpty())
             return new Operation(false, CompletableFuture.completedFuture(new Resolved(raw.clone(), Map.of(), Map.of(), false, List.of())), null);
         Layout layout = layout(raw);
@@ -367,7 +395,7 @@ public final class NativeTagResolver {
             cookies.put(cookie.name(), value);
         }
         for (var mapping : entry.definition().injection().tokens()) {
-            if (mapping.type() == JourneyDefinition.InjectionType.DISABLED) continue;
+            if (!rule.includes(mapping)) continue;
             String value = mapping.tokenName() == null ? token : values.get(alias + "\0" + mapping.tokenName());
             if (value == null) throw NativeTagParser.syntax("A mapped token is missing from the authentication result. Test the login again.");
             switch (mapping.type()) {

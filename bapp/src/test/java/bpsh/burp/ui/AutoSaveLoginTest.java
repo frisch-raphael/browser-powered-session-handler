@@ -199,9 +199,11 @@ class AutoSaveLoginTest {
                 assertNotNull(policy.getToolTipText());
                 assertEquals(bpsh.request.RequestSettings.RequestPolicy.WAIT_FOR_LOGIN, policy.getSelectedItem());
                 assertTrue(explanation.getText().contains("wait for login to finish"));
+                assertTrue(explanation.getText().contains("NTLM"));
                 policy.setSelectedItem(bpsh.request.RequestSettings.RequestPolicy.DO_NOT_WAIT);
                 assertTrue(explanation.getText().contains("send the original request unchanged"));
                 assertTrue(explanation.getText().contains("Later requests use the credentials"));
+                assertTrue(explanation.getText().contains("does not negotiate"));
                 assertTrue(explanation.getText().contains("valid cached token or cookie"));
                 assertTrue(policy.getToolTipText().contains("send the original request unchanged"));
                 h.call(editor.ui, "saveControls", new Class<?>[]{boolean.class}, true);

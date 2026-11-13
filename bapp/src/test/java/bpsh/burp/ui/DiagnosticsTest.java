@@ -52,8 +52,10 @@ public class DiagnosticsTest {
                 var notice = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, i), "Employee", failure, true); assertTrue(notice.dropRequested()); assertTrue(notice.text().contains("asked to drop")); assertTrue(notice.text().contains("employee"));
             }
             assertEquals(1, logs.size()); now.set(5_000_000_000L); diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 21), "employee", failure, true);
-            assertEquals(2, logs.size()); assertTrue(logs.getLast().contains("19 similar messages suppressed"));
-            var ordinary = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 22), "employee", failure, false); assertFalse(ordinary.dropRequested()); assertTrue(ordinary.text().contains("BPSH left the request unchanged"));
+            assertEquals(1, logs.size(), "An ongoing request failure must not repeat in the host log every five seconds.");
+            now.set(60_000_000_000L); diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 22), "employee", failure, true);
+            assertEquals(2, logs.size()); assertTrue(logs.getLast().contains("20 similar messages suppressed"));
+            var ordinary = diagnostics.request(new bpsh.burp.http.RequestExchange(bpsh.browser.AuthTrafficGuard.Family.GLOBAL, 23), "employee", failure, false); assertFalse(ordinary.dropRequested()); assertTrue(ordinary.text().contains("BPSH left the request unchanged"));
         }
     }
     public @Test void unsafeAliasIsNotLoggedAndUnknownCauseRemainsUnknown() {

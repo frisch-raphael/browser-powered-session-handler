@@ -38,6 +38,7 @@ final class JourneyCachePanel extends JPanel {
     private long version = -1;
     private List<HttpAuthenticationProgress> httpProgress = List.of();
     private bpsh.journey.HttpAuthentication shownHttp;
+    private String shownCertificate;
 
     /** @param close Hides the dock and releases its displayed credential references. */
     JourneyCachePanel(Runnable close) { this(close, message -> {}); }
@@ -117,10 +118,12 @@ final class JourneyCachePanel extends JPanel {
         if (entry == null) { clear(); return; }
         var httpSettings = entry.definition().httpAuthenticationEnabled() ? entry.definition().httpAuthentication() :
                 entry.definition().draft() != null && entry.definition().draft().flags().get("httpAuthentication") ? recordedSettings : null;
+        String certificate = entry.definition().mtls() == null ? null : entry.definition().mtls().certificateSha256();
+        if (certificate != null && !certificate.matches("[0-9a-f]{64}")) certificate = null;
         if (snapshot != null && !entry.identity().equals(snapshot.identity())) snapshot = null;
         long incoming = snapshot == null ? -1 : snapshot.version();
-        if (entry.identity().equals(shown) && version == incoming && httpProgress.equals(observations) && java.util.Objects.equals(shownHttp,httpSettings)) return;
-        clear(); shown = entry.identity(); version = incoming; httpProgress = List.copyOf(observations); shownHttp = httpSettings;
+        if (entry.identity().equals(shown) && version == incoming && httpProgress.equals(observations) && java.util.Objects.equals(shownHttp,httpSettings) && java.util.Objects.equals(shownCertificate,certificate)) return;
+        clear(); shown = entry.identity(); version = incoming; httpProgress = List.copyOf(observations); shownHttp = httpSettings; shownCertificate = certificate;
         var rows = new ArrayList<Credential>();
         if (snapshot != null) {
             metadata.setVisible(true); updateTiming(snapshot.lifetime());
@@ -132,11 +135,12 @@ final class JourneyCachePanel extends JPanel {
         if (httpSettings != null) {
             addHttp(rows,entry,httpSettings,snapshot,observations); httpNote.setVisible(true);
         }
+        if (certificate != null) rows.add(new Credential("mTLS", "Selected certificate (SHA-256)", "", certificate, false, null));
         model.rows = List.copyOf(rows); model.fireTableDataChanged(); empty.setVisible(rows.isEmpty());
         if (!rows.isEmpty()) table.setRowSelectionInterval(0, 0);
     }
     /** Drops every displayed value on close, expiry, invalidation, selection change or unload. */
-    void clear() { menu.setVisible(false); shown = null; version = -1; shownHttp = null; httpProgress = List.of(); if (!model.rows.isEmpty()) { model.rows = List.of(); model.fireTableDataChanged(); } table.clearSelection(); updateCopyActions(); renderer.setText(""); renderer.setToolTipText(null); for (var label : List.of(expires, refresh, cached)) timingValue(label, "", null); metadata.setVisible(false); httpNote.setVisible(false); empty.setVisible(true); }
+    void clear() { menu.setVisible(false); shown = null; version = -1; shownHttp = null; shownCertificate = null; httpProgress = List.of(); if (!model.rows.isEmpty()) { model.rows = List.of(); model.fireTableDataChanged(); } table.clearSelection(); updateCopyActions(); renderer.setText(""); renderer.setToolTipText(null); for (var label : List.of(expires, refresh, cached)) timingValue(label, "", null); metadata.setVisible(false); httpNote.setVisible(false); empty.setVisible(true); }
 
     private static void addHttp(List<Credential> rows,JourneyCatalog.Entry entry,bpsh.journey.HttpAuthentication settings,TokenSnapshot snapshot,List<HttpAuthenticationProgress> observations) {
         String account = settings.domain().isEmpty() ? settings.username() : settings.domain() + "\\" + settings.username();

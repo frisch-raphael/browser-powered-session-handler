@@ -77,6 +77,7 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
     private final Object userToken = new Object();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Set<CompletableFuture<Response>> pending = ConcurrentHashMap.newKeySet();
+    private final Map<URI,char[]> acceptedBasic = new ConcurrentHashMap<>();
     private final Map<Socket, HttpAuthentication.Protocol> established = Collections.synchronizedMap(new WeakHashMap<>());
 
     /** Executors belong to the extension lifecycle; closing a scope does not stop other identities. */
@@ -212,6 +213,7 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
             result.completeExceptionally(new IOException("The browser request has multiple Authorization headers."));return result;
         }
         delivery.authenticate = delivery.selectedOrigin && !(preserve && authorizations == 1);
+        delivery.negotiate=request.challengePolicy()==ChallengePolicy.CHALLENGE;
         Set<String> removed = hopHeaders(request.headers());
         removed.addAll(Set.of("bpsp-http-authent", "host", "content-length", "expect"));
         if (delivery.authenticate) removed.add("authorization");
@@ -222,7 +224,7 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
         var timeout = Timeout.ofMilliseconds(Math.max(1, TimeUnit.NANOSECONDS.toMillis(remaining)));
         outbound.setConfig(RequestConfig.custom().setConnectionRequestTimeout(timeout).setResponseTimeout(timeout)
                 .setExpectContinueEnabled(false)
-                .setAuthenticationEnabled(delivery.authenticate)
+                .setAuthenticationEnabled(delivery.authenticate && delivery.negotiate)
                 .setTargetPreferredAuthSchemes(List.of(settings != null && settings.protocol() == HttpAuthentication.Protocol.BASIC ? "Basic" : "NTLM")).build());
         HttpClientContext context = HttpClientContext.create();
         context.setUserToken(userToken); context.setAttribute(DELIVERY, delivery);
@@ -397,13 +399,13 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
             for (var delivery : pending) cleanup.add(() -> delivery.completeExceptionally(new IOException("This HTTP authentication identity has been retired.")));
             cleanup.add(() -> client.close(CloseMode.IMMEDIATE));
             bpsh.authentication.ServiceCleanup.close(cleanup.toArray(Runnable[]::new));
-        } finally { synchronized (password) { Arrays.fill(password, '\0'); } established.clear(); }
+        } finally { synchronized (password) { Arrays.fill(password, '\0');acceptedBasic.values().forEach(proof->Arrays.fill(proof,'\0'));acceptedBasic.clear(); } established.clear(); }
     }
 
     private record ScopePrincipal(String name) implements Principal { @Override public String getName() { return name; } }
     private static final class Observation {
         int exchanges; long deadlineNanos; Socket socket; URI origin;
-        boolean accepted,authenticate,selectedOrigin,sentProof; volatile boolean attempted;
+        boolean accepted,authenticate,selectedOrigin,sentProof,negotiate,reusedBasic; volatile boolean attempted;
         volatile Stage reportedFailure;
     }
 
@@ -435,7 +437,7 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
             Observation delivery = (Observation) context.getAttribute(DELIVERY);
             if (delivery != null && ++delivery.exchanges > 4) throw new IOException("Too many HTTP authentication exchanges.");
             Socket socket = ((ManagedHttpClientConnection) connection).getSocket();
-            if(delivery!=null && delivery.authenticate && delivery.exchanges==1 &&
+            if(delivery!=null && delivery.authenticate && delivery.negotiate && delivery.exchanges==1 &&
                     (settings.protocol()==HttpAuthentication.Protocol.BASIC || established.get(socket)!=settings.protocol()))
                 report(delivery,Stage.STARTED,0);
             if (delivery != null && delivery.authenticate && settings.protocol() != HttpAuthentication.Protocol.BASIC && delivery.socket != null && delivery.socket != socket) {
@@ -443,8 +445,15 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
                 throw new IOException("The server closed the connection during NTLM authentication.");
             }
             if (delivery != null) { delivery.socket = socket; delivery.attempted = true; }
+            if(delivery!=null && delivery.authenticate && !delivery.negotiate && settings.protocol()==HttpAuthentication.Protocol.BASIC) {
+                synchronized(password) {
+                    var proof=acceptedBasic.get(delivery.origin);
+                    if(proof!=null && !closed.get()) {request.setHeader("Authorization",new String(proof));delivery.reusedBasic=true;}
+                }
+            }
             var auth = context.getAuthExchange(context.getHttpRoute().getTargetHost()).getAuthScheme();
-            boolean sentProof = delivery != null && delivery.authenticate && request.containsHeader("Authorization") && auth != null && auth.isChallengeComplete();
+            boolean sentProof = delivery != null && delivery.authenticate && request.containsHeader("Authorization") &&
+                    (delivery.reusedBasic || auth != null && auth.isChallengeComplete());
             if(delivery!=null && delivery.authenticate && request.containsHeader("Authorization")) {
                 report(delivery,settings.protocol()==HttpAuthentication.Protocol.BASIC?Stage.BASIC_SENT:
                         sentProof?Stage.AUTHENTICATE_SENT:Stage.NEGOTIATE_SENT,0);
@@ -456,10 +465,21 @@ public final class HttpClientAuthenticationTransport implements HttpAuthenticati
             boundedResponse(response,connection);
             if (delivery == null || !delivery.selectedOrigin) return response;
             if (response.getCode() >= 200 && response.getCode() < 400) {
+                if(sentProof && settings.protocol()==HttpAuthentication.Protocol.BASIC) {
+                    synchronized(password) {
+                        if(!closed.get()) {
+                            var previous=acceptedBasic.put(delivery.origin,request.getFirstHeader("Authorization").getValue().toCharArray());
+                            if(previous!=null)Arrays.fill(previous,'\0');
+                        }
+                    }
+                }
                 if (sentProof && settings.protocol() != HttpAuthentication.Protocol.BASIC) established.put(socket, settings.protocol());
                 delivery.accepted = sentProof || (settings.protocol() != HttpAuthentication.Protocol.BASIC && established.get(socket) == settings.protocol());
             } else {
-                if (response.getCode() == 401) established.remove(socket);
+                if(response.getCode()==401) {
+                    established.remove(socket);
+                    synchronized(password) {var previous=acceptedBasic.remove(delivery.origin);if(previous!=null)Arrays.fill(previous,'\0');}
+                }
                 delivery.accepted = response.getCode() != 401 && settings.protocol() != HttpAuthentication.Protocol.BASIC && established.get(socket) == settings.protocol();
             }
             return response;

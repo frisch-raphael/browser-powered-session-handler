@@ -59,8 +59,7 @@ which protocol authenticated the request or which account the server accepted.
    the request according to the existing explicit-tag failure contract.
 3. Keep user identities isolated for A-to-B, A-to-B-to-A and simultaneous requests
    at the same application, including connection replacement and secret changes.
-   No ordinary untagged request may inherit an identity established for a tagged
-   request merely because a connection was reused.
+   Untagged traffic without a matching automatic provider must not inherit a tagged identity. A matching automatic rule can explicitly select that same identity and reuse its private pool.
 4. Use the same saved HTTP identity during browser login and direct tagged
    delivery, with credentials restricted to explicitly configured origins.
    Following a redirect must not extend that permission to a new origin.
@@ -539,8 +538,7 @@ deliberately combine an HTTP identity with an application session. Other origina
 headers, cookies and body data retain their supported semantics. The automatic
 "Wait for login" / "Send immediately" policies continue to apply only to automatic
 handling; they never cause an unresolved explicit identity request to go out
-unauthenticated. HTTP-only journeys do not appear as candidates for automatic
-captured-token injection.
+unauthenticated. Transport-only journeys can provide automatic request authentication through a separate transport path; they never ask the token coordinator for a captured value.
 
 One deadline covers all required explicit resolutions, pool admission, challenge
 rounds and response delivery. Recheck journey generations and runtime invalidation
@@ -1091,7 +1089,7 @@ ordinary autosave. Origin normalization and draft validation stay in shared owne
 | Other end-to-end duplicate headers, cookies and binary entity | Preserve order and values and exact entity bytes; header casing/spacing is not a byte-for-byte contract |
 | Hop-by-hop fields and Connection-nominated fields | Remove; regenerate Host and message framing; remove proxy credentials and Expect; disclose these supported semantic transformations |
 | Redirect | Return the response; never follow it in direct delivery or carry permission to another origin |
-| Complete 401, 403 or 5xx | Return actual response with separate evidence annotation; no automatic recovery replay |
+| Complete 401, 403 or 5xx | Return actual response with separate evidence. HTTP-only outcomes have no captured-session replay; separately configured automatic application recovery retains its one-replay policy |
 | Chunked response | Decode transfer framing, preserve entity bytes and end-to-end fields, emit valid length framing; do not decompress content encoding |
 | Response trailers | Unsupported in initial buffered transport; fail with a clear response-compatibility error, preserving uncertain-delivery semantics where relevant |
 | HEAD, 204, 304 | Emit no entity. Preserve permitted HEAD/304 representation length metadata; do not synthesize a body or invalid 204 framing |
@@ -1374,7 +1372,7 @@ and remove obsolete owners rather than retain compatibility or historical copies
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/UiController.java` | Compose forms and asynchronous test actions; present typed outcomes. |
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/JourneyValidationMessages.java` | Map shared validation to relevant fields/pages. |
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/AuthenticationTagMenu.java` | Insert the exact directive using existing journey aliases/scopes. |
-| 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/AutomaticRulesPanel.java` | Exclude HTTP-only journeys from captured-token injection choices. |
+| 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/AutomaticRulesPanel.java` | Expose transport-only journeys as automatic request identities, separately from captured-token injection. |
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/JourneyCachePanel.java` | Separate HTTP observations from captured credentials and describe invalidation. |
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/SessionStatusBar.java` | Report HTTP-only/mixed states without implying a token exists. |
 | 5 | Modify | `bapp/src/main/java/bpsh/burp/ui/CertificatePresentation.java` | Update shared-device imports without changing certificate presentation. |
@@ -1510,11 +1508,10 @@ host and external-server interoperability retain their separate qualification sc
 
 ## Current callback ownership
 
-HttpAuthenticationDelivery owns directive orchestration and actual-response
-materialization. GlobalHttpSessionAdapter consumes that result through Montoya
-spoofing. ProxyHttpSessionAdapter defers explicit directives unchanged so direct
-identity selection occurs once; automatic URL/listener rules do not select a
-Basic or NTLM account. SessionRequestProcessor handles ordinary captured
-credentials, with RecoveryReplayDelivery owning application-session replays.
-The direct identity operation stays outside that replay path. Failed direct delivery retains native global DROP; ordinary Proxy drop enforcement
-is best effort and introduces no extra header or direct-identity selection.
+HttpAuthenticationDelivery owns explicit directive orchestration and shared native delivery/response materialization. Explicit directives remain independent of automatic matching and application-session recovery. AutomaticHttpAuthentication selects transport-only providers using the captured tool/URL/listener rules and exact permitted origins. The last eligible provider wins. Captured journeys retain browser-login behavior: HTTP authentication at a login origin does not suppress Bearer injection at an application origin.
+
+Final Proxy matching publishes a bounded one-use DeferredRequestDelivery plan for Global spoofing. Recovery shares that bridge. The exact HttpIdentityManager.Selection, clean request/service, deadline and admission are pinned; the marker cannot reselect an alias or substitute another payload. Captures resolve once with final version validation immediately before native dispatch. A separately selected HTTP identity replaces Authorization; a capture used only for that overwritten header is not acquired. mTLS-only selection retains application Authorization.
+
+Wait for login uses normal challenge handling and the existing connection-bound pool. Send immediately is all-or-none across captures and transport readiness: a cold identity preserves the whole original and starts single-flight background HEAD in the same DIRECT scope. A recent identity permits an ESTABLISHED_ONLY request with challenge handling disabled. Socket evidence determines NTLM acceptance; a cold leased socket can return its real 401 without replay. Basic reuses only a previously accepted library-generated Authorization proof for the exact origin, wiped on rejection or retirement. Background work carries no original body, cookies or application Authorization; it is capped at eight active origin operations and 128 cooldown records, cancelled on generation/epoch change or unload, with a two-second failure cooldown. Explicit tests retain fresh TEST scopes.
+
+GuardedHttpTransportFactory is the sole marker owner for routed DIRECT/TEST scopes and preserves both AuthorizationPolicy and ChallengePolicy when changing headers. Browser attempts keep their own existing marker. Before native dispatch an automatic failure can continue unchanged. After dispatch, including linkage or cleanup failure, never forward the original again. Actual owned responses enter shared recovery once before spoofing; no host spoof-response callback is required. Only captured outputs authorize configured application-session replay, which retains its selected HTTP transport. Ordinary failed tagged Proxy drops retain their accepted best-effort host limitation.

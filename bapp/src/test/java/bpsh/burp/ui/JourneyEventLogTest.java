@@ -22,6 +22,43 @@ class JourneyEventLogTest {
     /** @return Fresh stable owner independent of its readable alias. */
     private static JourneyKey key() { return new JourneyKey(JourneyDefinition.Scope.PROJECT, UUID.randomUUID()); }
 
+    @Test void repeatedWarningsStayInOneRowAcrossRequestsAndInterleavedEvents() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var log = new JourneyEventLog(); var owner = key(); var other = key();
+            var panel = new JourneyEventLogPanel(log, () -> {});
+            log.append(owner, NOW, JourneyEventLog.Level.WARNING, "Login is paused. Retry login."); panel.refresh(owner, "employee");
+            var original = log.snapshot(owner).getFirst();
+            long firstSequence = log.snapshot(owner).getFirst().sequence(), revision = log.revision();
+            for (int i = 1; i < 100; i++) {
+                log.append(other, NOW.plusSeconds(i * 10), JourneyEventLog.Level.WARNING, "Login is paused. Retry login.");
+                log.append(owner, NOW.plusSeconds(i * 10), JourneyEventLog.Level.INFO, "Request processed.");
+                log.append(owner, NOW.plusSeconds(i * 10), JourneyEventLog.Level.WARNING, "Login is paused. Retry login.");
+            }
+            var warnings = log.snapshot(owner).stream().filter(e -> e.level() == JourneyEventLog.Level.WARNING).toList();
+            assertEquals(1, warnings.size()); assertEquals(firstSequence, warnings.getFirst().sequence()); assertTrue(log.revision() > revision);
+            assertEquals(1, original.occurrences(), "Previously published snapshots must stay immutable.");
+            assertEquals(100, warnings.getFirst().occurrences()); assertEquals(NOW, warnings.getFirst().time());
+            assertEquals(NOW.plusSeconds(990), warnings.getFirst().lastTime()); assertEquals(99, log.snapshot(other).getFirst().occurrences());
+            panel.refresh(owner, "employee"); var table = member(panel, "table", JTable.class); table.setRowSelectionInterval(0, 0);
+            assertTrue(table.getValueAt(0, 2).toString().contains("100 occurrences"));
+            var detail = member(panel, "detail", JTextArea.class).getText();
+            assertTrue(detail.contains("First seen:")); assertTrue(detail.contains("Last seen:")); assertTrue(detail.contains("Occurrences: 100"));
+            log.clear(owner); log.append(owner, NOW.plusSeconds(1000), JourneyEventLog.Level.WARNING, "Login is paused. Retry login.");
+            panel.refresh(owner, "employee"); assertEquals("Login is paused. Retry login.", table.getValueAt(0, 2));
+        });
+    }
+    @Test void repeatedErrorsGroupOnlyWhenSeverityMessageAndStepGenerationMatch() {
+        var log = new JourneyEventLog(); var owner = key(); var id = UUID.randomUUID();
+        var step = new JourneyEventLog.StepTarget(new JourneyDefinition.Identity(owner.scope(), owner.journeyId(), 1), id);
+        var edited = new JourneyEventLog.StepTarget(new JourneyDefinition.Identity(owner.scope(), owner.journeyId(), 2), id);
+        log.append(owner, NOW, JourneyEventLog.Level.ERROR, "Login failed.", step);
+        log.append(owner, NOW.plusSeconds(10), JourneyEventLog.Level.WARNING, "Login failed.", step);
+        log.append(owner, NOW.plusSeconds(20), JourneyEventLog.Level.ERROR, "Login failed.", edited);
+        log.append(owner, NOW.plusSeconds(30), JourneyEventLog.Level.ERROR, "Another failure.", step);
+        log.append(owner, NOW.plusSeconds(40), JourneyEventLog.Level.ERROR, "Login failed.", step);
+        assertEquals(4, log.snapshot(owner).size()); assertEquals(NOW, log.snapshot(owner).getFirst().time());
+    }
+
     @Test void historyIsIsolatedByStableIdentityAndCoalescesRepeatedWarnings() {
         var log = new JourneyEventLog(); var first = key(); var second = key();
         log.append(first, NOW, JourneyEventLog.Level.ERROR, "Missing PIN. Enter it in certificate settings.");
