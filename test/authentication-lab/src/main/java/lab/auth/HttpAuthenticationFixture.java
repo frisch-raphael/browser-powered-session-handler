@@ -139,6 +139,9 @@ public final class HttpAuthenticationFixture implements AutoCloseable {
             if(authenticated==null) {reply(context,401,"authentication required",protocol==Protocol.BASIC?"Basic realm=\"lab\", charset=\"UTF-8\"":"NTLM",false);return;}
             retain(observations,new Observation(authenticated,protocol,context.channel().id().asLongText(),request.method().name(),path,
                     request.content().readableBytes(),nonce,operationSequence.incrementAndGet()));
+            if(List.of("/encoded/br", "/encoded/gzip", "/encoded/deflate").contains(path)) {
+                EncodedResponseFixture.reply(context,path.substring("/encoded/".length()),nonce);return;
+            }
             if(path.equals("/large-header-final")) {largeHeaders(context,200);return;}
             if(request.method().name().equals("POST") && !path.equals("/action-before-auth"))applicationPosts.incrementAndGet();
             if(path.equals("/application-page")) {reply(context,200,"<link rel='icon' href='data:,'><p>Authenticated</p>",null,false,"text/html");return;}

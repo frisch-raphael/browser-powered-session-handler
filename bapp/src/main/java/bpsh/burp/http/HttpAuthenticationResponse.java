@@ -8,6 +8,12 @@ import java.nio.charset.StandardCharsets;
 final class HttpAuthenticationResponse {
     private HttpAuthenticationResponse() { }
     static bpsh.authentication.http.HttpMessageBody.OwnedBytes wire(bpsh.authentication.http.HttpMessageBody.Allocator allocator,String method, HttpAuthenticationService.Response response) throws java.io.IOException {
+        try (var readable = HttpResponseContent.decode(allocator, method, response)) {
+            return materialize(allocator, method, readable);
+        }
+    }
+    /** Serializes an owned representation with its actual byte length and unchanged binary bytes. */
+    private static bpsh.authentication.http.HttpMessageBody.OwnedBytes materialize(bpsh.authentication.http.HttpMessageBody.Allocator allocator,String method, HttpAuthenticationService.Response response) throws java.io.IOException {
         boolean metadataLength = method.equalsIgnoreCase("HEAD") || response.status() == 304;
         boolean noBody = metadataLength || response.status() == 204;
         var head = new StringBuilder("HTTP/1.1 ").append(response.status()).append(" Response\r\n");

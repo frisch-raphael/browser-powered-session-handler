@@ -23,6 +23,7 @@ Adapts global/Proxy hooks to credential acquisition, tag expansion, automatic in
 - [RequestCapacity](./RequestCapacity.java): Shares callback admission and conservative request-copy reservations.
 - [HttpAuthenticationDirective](./HttpAuthenticationDirective.java): Consumes one BPSP-HTTP-AUTHENT journey selection and validates direct delivery before dispatch.
 - [HttpAuthenticationResponse](./HttpAuthenticationResponse.java): Materializes a bounded, owned response for the originating Burp tool.
+- [HttpResponseContent](./HttpResponseContent.java): Decodes supported content encodings before spoofing into Burp, with bounded output and intact fallback for unsupported or malformed representations.
 - [NativeTagParser](./NativeTagParser.java): Parses only bounded native references/wrappers; token output is data and is never parsed again.
 - [NativeTagResolver](./NativeTagResolver.java): Builds atomic byte-preserving request replacements before any Burp hook commits or records provenance.
 - [SessionRecovery](./SessionRecovery.java): Coordinates attributed, single-use recovery replays with bounded retention and linear-time RE2 matching.

@@ -1094,10 +1094,14 @@ ordinary autosave. Origin normalization and draft validation stay in shared owne
 | Hop-by-hop fields and Connection-nominated fields | Remove; regenerate Host and message framing; remove proxy credentials and Expect; disclose these supported semantic transformations |
 | Redirect | Return the response; never follow it in direct delivery or carry permission to another origin |
 | Complete 401, 403 or 5xx | Return actual response with separate evidence. HTTP-only outcomes have no captured-session replay; separately configured automatic application recovery retains its one-replay policy |
-| Chunked response | Decode transfer framing, preserve entity bytes and end-to-end fields, emit valid length framing; do not decompress content encoding |
+| Chunked response | Decode transfer framing in the transport and emit valid length framing. Browser forwarding preserves content encoding; the Burp spoof boundary decodes supported complete representations as described below. |
 | Response trailers | Unsupported in initial buffered transport; fail with a clear response-compatibility error, preserving uncertain-delivery semantics where relevant |
 | HEAD, 204, 304 | Emit no entity. Preserve permitted HEAD/304 representation length metadata; do not synthesize a body or invalid 204 framing |
 | Oversize, truncated or invalid response | Fail without truncated-success output; abort the socket and do not resend |
+
+Spoofed responses bypass the originating Burp tool's normal network unpacking. In production, an NTLM-tagged JSON response with `Content-Encoding: br` therefore appeared as binary data in Pretty view. At the Burp response materialization boundary, decode complete Brotli, gzip and zlib-deflate representations, including supported stacked encodings in reverse application order. Remove Content-Encoding only after complete successful decoding and recompute Content-Length from the resulting bytes; retain status, content type, duplicate cookies and other response headers. Keep the shared native transport and browser proxy byte-preserving.
+
+Use the pinned pure-Java `org.brotli:dec:0.1.2` decoder, with its MIT notice included in the universal JAR; no native Brotli library or runtime download is needed. Bound every decoded layer to 16 MiB, allow at most four coding layers, and account retained output and final wire copies against the existing shared buffer allocator. Unsupported coding chains, malformed streams, HEAD/204/304 and partial representations keep their original bytes and encoding metadata together. Never return partial decoded content. A size or shared-capacity failure follows the existing response-buffer failure policy and never retries the application request. The authentication lab's independently encoded JSON fixture verifies real Basic/NTLM handshakes plus the spoof boundary; this establishes response bytes and headers, separately from actual Burp UI qualification.
 
 The existing 4 MiB tagged-message ceiling remains separate from the shared 8 MiB
 request-body and 16 MiB response-body limits. The adapter reports which limit was
