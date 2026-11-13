@@ -1,7 +1,6 @@
 package bpsh.browser.runtime;
 
-import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
+import java.nio.ByteBuffer;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -12,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Uses a fake native boundary; these attribution and ownership refusals run on every platform. */
 class WindowsBrowserJobDiagnosticsTest {
-    private static final Pointer JOB=Pointer.createConstant(100),MEMBER=Pointer.createConstant(200);
+    private static final long JOB=100,MEMBER=200;
     private static long deadline(){return System.nanoTime()+TimeUnit.SECONDS.toNanos(2);}
     private static WindowsBrowserJob.Failure failure(WindowsBrowserJob.Operation operation,Executable action) {
         var result=assertThrows(WindowsBrowserJob.Failure.class,action);assertEquals(operation,result.operation);
@@ -136,21 +135,21 @@ class WindowsBrowserJobDiagnosticsTest {
 
     private static final class FakeKernel implements WindowsBrowserJob.Kernel {
         WindowsBrowserJob.Operation fail;int memberCount=1,waitResult,active,errorReads,terminateCalls;boolean included=true;
-        final Deque<Integer> errors=new ArrayDeque<>();final Set<Pointer> closed=new HashSet<>();
-        final List<Integer> accesses=new ArrayList<>();final List<Pointer> waited=new ArrayList<>();
-        @Override public Pointer CreateJobObjectW(Pointer attributes,Pointer name){return JOB;}
-        @Override public boolean SetInformationJobObject(Pointer job,int kind,Pointer information,int bytes){return true;}
-        @Override public boolean AssignProcessToJobObject(Pointer job,Pointer process){return true;}
-        @Override public boolean TerminateJobObject(Pointer job,int exitCode){assertEquals(JOB,job);terminateCalls++;return fail!=TERMINATE;}
-        @Override public boolean QueryInformationJobObject(Pointer job,int kind,Pointer information,int bytes,Pointer returned) {
+        final Deque<Integer> errors=new ArrayDeque<>();final Set<Long> closed=new HashSet<>();
+        final List<Integer> accesses=new ArrayList<>();final List<Long> waited=new ArrayList<>();
+        @Override public long CreateJobObjectW(long attributes,long name){return JOB;}
+        @Override public boolean SetInformationJobObject(long job,int kind,ByteBuffer information,int bytes){return true;}
+        @Override public boolean AssignProcessToJobObject(long job,long process){return true;}
+        @Override public boolean TerminateJobObject(long job,int exitCode){assertEquals(JOB,job);terminateCalls++;return fail!=TERMINATE;}
+        @Override public boolean QueryInformationJobObject(long job,int kind,ByteBuffer information,int bytes,long returned) {
             assertEquals(JOB,job);
-            if(kind==3){if(fail==ENUMERATE_MEMBERS)return false;information.setInt(4,memberCount);if(memberCount==1)information.setLong(8,77);return true;}
-            assertEquals(1,kind);if(fail==OBSERVE_TERMINATION)return false;information.setInt(40,active);return true;
+            if(kind==3){if(fail==ENUMERATE_MEMBERS)return false;information.putInt(4,memberCount);if(memberCount==1)information.putLong(8,77);return true;}
+            assertEquals(1,kind);if(fail==OBSERVE_TERMINATION)return false;information.putInt(40,active);return true;
         }
-        @Override public Pointer OpenProcess(int access,boolean inherit,int pid){assertEquals(77,pid);assertFalse(inherit);accesses.add(access);return fail==OPEN_MEMBER?null:MEMBER;}
-        @Override public boolean IsProcessInJob(Pointer process,Pointer job,IntByReference result){assertEquals(MEMBER,process);assertEquals(JOB,job);result.setValue(included?1:0);return fail!=VERIFY_MEMBER;}
-        @Override public int WaitForSingleObject(Pointer handle,int milliseconds){assertEquals(MEMBER,handle);assertTrue(milliseconds>=0&&milliseconds<=2000);waited.add(handle);return waitResult;}
-        @Override public boolean CloseHandle(Pointer handle){assertTrue(handle.equals(JOB)||handle.equals(MEMBER));closed.add(handle);return !(fail==RELEASE_MEMBER&&handle.equals(MEMBER)||fail==RELEASE_JOB&&handle.equals(JOB));}
+        @Override public long OpenProcess(int access,boolean inherit,int pid){assertEquals(77,pid);assertFalse(inherit);accesses.add(access);return fail==OPEN_MEMBER?0:MEMBER;}
+        @Override public boolean IsProcessInJob(long process,long job,ByteBuffer result){assertEquals(MEMBER,process);assertEquals(JOB,job);result.putInt(0,included?1:0);return fail!=VERIFY_MEMBER;}
+        @Override public int WaitForSingleObject(long handle,int milliseconds){assertEquals(MEMBER,handle);assertTrue(milliseconds>=0&&milliseconds<=2000);waited.add(handle);return waitResult;}
+        @Override public boolean CloseHandle(long handle){assertTrue(handle==JOB||handle==MEMBER);closed.add(handle);return !(fail==RELEASE_MEMBER&&handle==MEMBER||fail==RELEASE_JOB&&handle==JOB);}
         @Override public int GetLastError(){errorReads++;return errors.isEmpty()?5:errors.removeFirst();}
     }
 }

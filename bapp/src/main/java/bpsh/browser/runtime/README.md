@@ -18,6 +18,8 @@ Verifies bundled platform assets and owns extraction, immutable cache publicatio
 - [DriverStartupFailures](./DriverStartupFailures.java): Reports the observed startup component and bounded Java/native failure category without vendor messages or raw causes.
 - [NativeLoadReason](./NativeLoadReason.java): Converts recognized JNA/Windows loader messages and read-only resource-setting flags into fixed native-load reasons, without exposing vendor text.
 - [WindowsBrowserJob](./WindowsBrowserJob.java): Owns the Windows driver and its descendants as one native job, verifies group termination and closes its noninherited handle before profile removal.
+- [WindowsForeignKernel](./WindowsForeignKernel.java): Calls the Windows x64 job APIs through Java 22+ foreign-function access, with captured per-thread native errors and no JNA dispatch DLL.
+- [WindowsJnaKernel](./WindowsJnaKernel.java): Provides the Java 21 compatibility binding behind the same job ownership boundary.
 - [PlaywrightRecorderAdapter](./PlaywrightRecorderAdapter.java): Pins private structured recording commands/events and drops generated source before Java dispatch.
 
 ## Invariants

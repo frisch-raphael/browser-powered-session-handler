@@ -1,11 +1,7 @@
 package bpsh.browser.runtime;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.Platform;
-import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.win32.StdCallLibrary;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -18,8 +14,8 @@ final class WindowsBrowserJob {
     /** Exact JOBOBJECT_BASIC_ACCOUNTING_INFORMATION size and ActiveProcesses offset. */
     private static final int ACCOUNTING_BYTES = 48, ACTIVE_PROCESSES_OFFSET = 40;
     private final Kernel kernel;
-    private final java.util.Map<Long, Pointer> members = new java.util.LinkedHashMap<>();
-    private Pointer handle;
+    private final java.util.Map<Long, Long> members = new java.util.LinkedHashMap<>();
+    private long handle;
 
     /** Closed attribution labels; none contain process, profile or vendor-provided text. */
     enum Operation {
@@ -121,34 +117,41 @@ final class WindowsBrowserJob {
         }
     }
 
-    /** Kernel entry points; this interface is loaded only on Windows. */
-    interface Kernel extends StdCallLibrary {
-        Pointer CreateJobObjectW(Pointer attributes, Pointer name);
-        boolean SetInformationJobObject(Pointer job, int kind, Pointer information, int bytes);
-        boolean AssignProcessToJobObject(Pointer job, Pointer process);
-        boolean TerminateJobObject(Pointer job, int exitCode);
-        boolean QueryInformationJobObject(Pointer job, int kind, Pointer information, int bytes, Pointer returned);
-        Pointer OpenProcess(int access, boolean inherit, int processId);
-        boolean IsProcessInJob(Pointer process, Pointer job, IntByReference included);
-        int WaitForSingleObject(Pointer handle, int milliseconds);
-        boolean CloseHandle(Pointer handle);
+    /** Native boundary with Java-owned buffers and opaque x64 handle values. */
+    interface Kernel {
+        long CreateJobObjectW(long attributes, long name);
+        boolean SetInformationJobObject(long job, int kind, ByteBuffer information, int bytes);
+        boolean AssignProcessToJobObject(long job, long process);
+        boolean TerminateJobObject(long job, int exitCode);
+        boolean QueryInformationJobObject(long job, int kind, ByteBuffer information, int bytes, long returned);
+        long OpenProcess(int access, boolean inherit, int processId);
+        boolean IsProcessInJob(long process, long job, ByteBuffer included);
+        int WaitForSingleObject(long handle, int milliseconds);
+        boolean CloseHandle(long handle);
         int GetLastError();
     }
 
-    /** Defers native library loading until an actual Windows attempt. */
+    /** Defers native linking until a Windows attempt; Java 22+ never loads JNA here. */
     private static final class Binding {
-        static final Kernel KERNEL = Native.load("kernel32", Kernel.class);
+        static final Kernel KERNEL = Runtime.version().feature() >= 22 ? new WindowsForeignKernel() : new WindowsJnaKernel();
     }
 
     /** Initializes required Windows native support before a driver process can be started. */
     static void initialize() throws IOException {
-        if (!Platform.isWindows()) return;
-        if (Native.POINTER_SIZE != 8) throw new Failure(Operation.UNSUPPORTED_PLATFORM, null, null, false);
+        if (!isWindows()) return;
+        if (!System.getProperty("os.arch", "").matches("amd64|x86_64"))
+            throw new Failure(Operation.UNSUPPORTED_PLATFORM, null, null, false);
         java.util.Objects.requireNonNull(Binding.KERNEL);
     }
 
+    /** @return Whether this attempt needs Windows native containment. */
+    private static boolean isWindows() { return System.getProperty("os.name", "").startsWith("Windows"); }
+
+    /** @param bytes Bounded Windows struct size. @return Zeroed little-endian struct storage. */
+    private static ByteBuffer buffer(int bytes) { return ByteBuffer.allocate(bytes).order(ByteOrder.LITTLE_ENDIAN); }
+
     /** @param kernel Native boundary. @param handle Unnamed, attempt-owned job. */
-    WindowsBrowserJob(Kernel kernel, Pointer handle) { this.kernel = kernel; this.handle = handle; }
+    WindowsBrowserJob(Kernel kernel, long handle) { this.kernel = kernel; this.handle = handle; }
 
     /**
      * Assigns the newly started driver before its protocol can launch a browser.
@@ -157,18 +160,19 @@ final class WindowsBrowserJob {
      * @throws IOException If containment cannot be established.
      */
     static WindowsBrowserJob attach(Process process) throws IOException {
-        if (!Platform.isWindows()) return null;
-        if (Native.POINTER_SIZE != 8) throw new Failure(Operation.UNSUPPORTED_PLATFORM, null, null, false);
+        if (!isWindows()) return null;
+        initialize();
         Kernel kernel = Binding.KERNEL;
-        Pointer job = kernel.CreateJobObjectW(null, null);
-        if (job == null) throw error(kernel, Operation.CREATE);
+        long job = kernel.CreateJobObjectW(0, 0);
+        if (job == 0) throw error(kernel, Operation.CREATE);
         boolean assigned = false;
-        try (Memory limits = new Memory(EXTENDED_LIMIT_BYTES)) {
-            limits.clear(); limits.setInt(LIMIT_FLAGS_OFFSET, KILL_ON_CLOSE);
+        try {
+            ByteBuffer limits = buffer(EXTENDED_LIMIT_BYTES);
+            limits.putInt(LIMIT_FLAGS_OFFSET, KILL_ON_CLOSE);
             if (!kernel.SetInformationJobObject(job, 9, limits, EXTENDED_LIMIT_BYTES)) throw error(kernel, Operation.CONFIGURE);
             // AssignProcessToJobObject requires SET_QUOTA and TERMINATE, not access to child processes.
-            Pointer driver = kernel.OpenProcess(0x0100 | 0x0001, false, Math.toIntExact(process.pid()));
-            if (driver == null) throw error(kernel, Operation.OPEN_DRIVER);
+            long driver = kernel.OpenProcess(0x0100 | 0x0001, false, Math.toIntExact(process.pid()));
+            if (driver == 0) throw error(kernel, Operation.OPEN_DRIVER);
             try {
                 if (!kernel.AssignProcessToJobObject(job, driver)) throw error(kernel, Operation.ASSIGN_DRIVER);
                 assigned = true;
@@ -183,13 +187,13 @@ final class WindowsBrowserJob {
      * @throws IOException If termination, accounting, or handle release fails.
      */
     synchronized void close(long deadline) throws IOException {
-        if (handle == null) return;
+        if (handle == 0) return;
         boolean interrupted = Thread.interrupted();
         IOException problem = null;
         try {
             captureMembers();
             if (!kernel.TerminateJobObject(handle, 1)) throw error(kernel, Operation.TERMINATE);
-            for (Pointer member : members.values()) {
+            for (long member : members.values()) {
                 int remaining = (int) Math.max(0, Math.min(Integer.MAX_VALUE,
                         TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())));
                 int outcome = kernel.WaitForSingleObject(member, remaining);
@@ -197,10 +201,10 @@ final class WindowsBrowserJob {
                         outcome == -1 ? Integer.toUnsignedLong(kernel.GetLastError()) : null,
                         Integer.toUnsignedLong(outcome), outcome == 258);
             }
-            try (Memory accounting = new Memory(ACCOUNTING_BYTES)) {
+            {
+                ByteBuffer accounting = buffer(ACCOUNTING_BYTES);
                 while (true) {
-                    accounting.clear();
-                    if (!kernel.QueryInformationJobObject(handle, 1, accounting, ACCOUNTING_BYTES, null)) throw error(kernel, Operation.OBSERVE_TERMINATION);
+                    if (!kernel.QueryInformationJobObject(handle, 1, accounting, ACCOUNTING_BYTES, 0)) throw error(kernel, Operation.OBSERVE_TERMINATION);
                     if (accounting.getInt(ACTIVE_PROCESSES_OFFSET) == 0) break;
                     if (deadline - System.nanoTime() <= 0) throw new Failure(Operation.DRAIN_DEADLINE, null, null, true);
                     try { TimeUnit.MILLISECONDS.sleep(10); } catch (InterruptedException stopped) { interrupted = true; }
@@ -208,10 +212,10 @@ final class WindowsBrowserJob {
             }
         } catch (IOException failure) { problem = failure; }
         finally {
-            for (Pointer member : members.values())
+            for (long member : members.values())
                 if (!kernel.CloseHandle(member) && problem == null) problem = error(kernel, Operation.RELEASE_MEMBER);
             members.clear();
-            Pointer owned = handle; handle = null;
+            long owned = handle; handle = 0;
             if (!kernel.CloseHandle(owned) && problem == null) problem = error(kernel, Operation.RELEASE_JOB);
             if (interrupted) Thread.currentThread().interrupt();
         }
@@ -223,28 +227,28 @@ final class WindowsBrowserJob {
      * @throws IOException If job membership cannot be safely observed.
      */
     synchronized void captureMembers() throws IOException {
-        if (handle == null) return;
+        if (handle == 0) return;
         // The selected Windows runtime is x64. The first two DWORDs precede ULONG_PTR member IDs.
-        try (Memory list = new Memory(128 * 1024)) {
-            list.clear();
-            if (!kernel.QueryInformationJobObject(handle, 3, list, (int) list.size(), null)) throw error(kernel, Operation.ENUMERATE_MEMBERS);
+        {
+            ByteBuffer list = buffer(128 * 1024);
+            if (!kernel.QueryInformationJobObject(handle, 3, list, list.capacity(), 0)) throw error(kernel, Operation.ENUMERATE_MEMBERS);
             int count = list.getInt(4);
-            if (count < 0 || count > (list.size() - 8) / 8) throw new Failure(Operation.MEMBER_BOUND, null, null, false);
+            if (count < 0 || count > (list.capacity() - 8) / 8) throw new Failure(Operation.MEMBER_BOUND, null, null, false);
             for (int index = 0; index < count; index++) {
-                long pid = list.getLong(8L + index * 8L);
+                long pid = list.getLong(8 + index * 8);
                 if (members.containsKey(pid)) continue;
                 // Avoid the additional process-duplication rights requested by the JDK implementation.
-                Pointer process = kernel.OpenProcess(0x00100000 | 0x1000, false, Math.toIntExact(pid));
-                if (process == null) {
+                long process = kernel.OpenProcess(0x00100000 | 0x1000, false, Math.toIntExact(pid));
+                if (process == 0) {
                     int nativeCode = kernel.GetLastError();
                     if (nativeCode == 87) continue; // Member exited before its handle was opened.
                     throw new Failure(Operation.OPEN_MEMBER, Integer.toUnsignedLong(nativeCode), null, false);
                 }
-                var included = new IntByReference();
+                var included = buffer(4);
                 if (!kernel.IsProcessInJob(process, handle, included)) {
                     IOException failure = error(kernel, Operation.VERIFY_MEMBER); kernel.CloseHandle(process); throw failure;
                 }
-                if (included.getValue() != 0) members.put(pid, process);
+                if (included.getInt(0) != 0) members.put(pid, process);
                 else kernel.CloseHandle(process); // A reused PID outside this job is never retained or terminated.
             }
         }
