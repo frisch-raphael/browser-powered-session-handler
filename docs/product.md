@@ -76,12 +76,17 @@ or Save/Discard prompts. Insert tags from the request context menu using a saved
   opened Journey cache inspector; they never enter event logs or saved config.
 - Journey cache also shows HTTP identities and their latest observed result per
   allowed origin, including HTTP-only journeys. Event log reports NTLM handshake
-  stages, server acceptance, connection reuse and actionable failures for every
+  stages, server acceptance and actionable failures for every
   delivery path. Passwords, authentication payloads and raw exceptions stay out
   of both views. Clear cache fences late observation updates.
+  Routine authenticated connection reuse updates cache observations without
+  appending an event for each request or redirect.
 - For mTLS, Journey cache shows only the saved selected certificate's SHA-256
   fingerprint. It does not show origins or the last HTTPS result, and opening
   the inspector does not access certificate middleware, the PIN or private key.
+- Changing HTTP authentication settings retires the previous connection pool
+  automatically. Test login and subsequent automatic requests use the corrected
+  identity without requiring Clear cache.
 - Editing a journey keeps usable cached credentials and their original expiry
   and refresh times, including while an unfinished edit temporarily blocks
   execution. Renaming, reordering or removing captured outputs retains matching

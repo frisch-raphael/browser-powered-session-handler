@@ -328,7 +328,10 @@ because it describes the saved certificate selection.
 
 Event log includes fixed HTTP-authentication stages for browser login, recording,
 HTTP-only tests and direct requests. NTLM reports type 1 negotiation, validated
-type 2 challenge, type 3 response, acceptance and authenticated connection reuse.
+type 2 challenge, type 3 response and acceptance. Routine authenticated connection
+reuse updates the cache's latest observation without appending an event for each
+request, including alternating HTTP 302 and 200 responses. Request annotations
+retain the actual response outcome. Fresh handshakes and failures remain logged.
 Principal failures include rejection, invalid challenge, response construction,
 connection loss, TLS, unreachable server/proxy, timeout, missing secrets, capacity,
 origin and Authorization conflicts, proxy authentication, HTTP 403 and server

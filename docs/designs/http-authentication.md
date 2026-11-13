@@ -303,6 +303,10 @@ changes retire the old pool, reject new acquisitions against that generation,
 and prevent old results from being published as current. Repeated A requests
 reuse A's connections; B uses a separate pool. Multiple concurrent A requests
 may open multiple independently authenticated connections within the limits.
+HTTP configuration edits also advance that generation: protocol, username,
+domain, workstation, enabled state and allowed origins all participate. A
+successful Test login after a repair must not leave automatic handling on an
+older pool; correcting these settings requires no manual cache clear.
 Browser-attempt pools have separate lifetimes from direct-request pools.
 
 For direct Burp requests, resolve the directive and construct the final request

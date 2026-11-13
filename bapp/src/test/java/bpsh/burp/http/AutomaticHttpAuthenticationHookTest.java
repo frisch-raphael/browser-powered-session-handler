@@ -17,6 +17,68 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AutomaticHttpAuthenticationHookTest {
+    @Test void correctingHttpDomainRetiresTheFailedAutomaticPoolWithoutManualCacheClear() throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();
+        try(var lab=IntegrationFixtures.httpAuthentication("NTLM_V2",null);var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime()) {
+            var correct=definition(HttpAuthentication.Protocol.NTLM_V2,"user-a",lab.url("/"));
+            var wrong=new JourneyDefinition(correct.id(),correct.displayName(),correct.alias(),correct.authenticationUrl(),false,List.of(),correct.browser(),null,
+                    correct.injection(),correct.cache(),null,new HttpAuthentication(HttpAuthentication.Protocol.NTLM_V2,"user-a","WRONG","",Set.of(lab.url("/"))),null);
+            CoordinatorFixtures.load(fixture.registry,List.of(wrong));
+            try(var values=new bpsh.journey.SecretStore.Values(null,java.util.Map.of(),"alpha-password".toCharArray())) {
+                fixture.secrets.put(new bpsh.journey.JourneyKey(JourneyDefinition.Scope.PROJECT,correct.id()),values);
+            }
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,runtime);var host=hooks.new Host(fixture,null,identities,lab.url("/"))) {
+                var original=fixture.registry.snapshot().resolve("user-a");var defaults=RequestSettings.Controls.defaults();
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(original,null)),defaults.tools(),10000,30000,60000,null,null)));
+                host.selectedTool=burp.api.montoya.core.ToolType.REPEATER;
+                String raw="GET /whoami HTTP/1.1\r\nHost: "+lab.url("/").getAuthority()+"\r\n\r\n";
+                assertEquals("SPOOF_RESPONSE",host.handler.handleHttpRequestToBeSent(host.request(raw,1,true)).action().name());
+                assertEquals(401,host.spoofResponse.statusCode());assertTrue(lab.observations.isEmpty());
+                try(var edited=fixture.registry.prepareEdit(JourneyDefinition.Scope.PROJECT,List.of(correct),defaults)) {
+                    fixture.registry.replaceLoaded(JourneyDefinition.Scope.PROJECT,edited);
+                }
+                var repaired=fixture.registry.snapshot().resolve("user-a");
+                try(var test=identities.test(repaired,System.nanoTime()+5_000_000_000L,false).get(5,java.util.concurrent.TimeUnit.SECONDS)) {
+                    assertEquals(200,test.status(),"Test login uses the corrected configuration on its fresh scope.");
+                }
+                assertEquals("SPOOF_RESPONSE",host.handler.handleHttpRequestToBeSent(host.request(raw,2,true)).action().name());
+                assertEquals(200,host.spoofResponse.statusCode(),"Automatic requests must use the repaired domain without a manual cache clear.");
+                assertTrue(repaired.identity().generation()>original.identity().generation());
+                assertEquals(2,lab.observations.size());assertEquals(0,fixture.attempts);
+            }
+        }
+    }
+    @ParameterizedTest(name="automatic-parallel-wait-{0}")
+    @EnumSource(value=HttpAuthentication.Protocol.class,names={"NTLM_V1","NTLM_V2"})
+    void waitingAutomaticProxyRequestsAuthenticateParallelRefreshesAfterAConnectionCloses(HttpAuthentication.Protocol protocol) throws Exception {
+        var hooks=new NativeTagPipelineTest().new ProductionHooks();
+        try(var lab=IntegrationFixtures.httpAuthentication(protocol.name(),null);var fixture=new NativeTagPipelineTest.Fixture();var runtime=new HttpTransportRuntime()) {
+            var d=definition(protocol,"user-a",lab.url("/"));CoordinatorFixtures.load(fixture.registry,List.of(d));
+            try(var values=new bpsh.journey.SecretStore.Values(null,java.util.Map.of(),"alpha-password".toCharArray())) {
+                fixture.secrets.put(new bpsh.journey.JourneyKey(JourneyDefinition.Scope.PROJECT,d.id()),values);
+            }
+            try(var identities=new HttpIdentityManager(fixture.registry,fixture.secrets,runtime);var host=hooks.new Host(fixture,null,identities,lab.url("/"));
+                var requests=java.util.concurrent.Executors.newFixedThreadPool(8)) {
+                var defaults=RequestSettings.Controls.defaults();var entry=fixture.registry.snapshot().resolve("user-a");
+                host.controls.publish(host.controls.prepare(new RequestSettings.Controls(true,List.of(rule(entry,8081)),defaults.tools(),10000,30000,60000,null,null)));
+                host.selectedTool=burp.api.montoya.core.ToolType.PROXY;
+                for(int round=0;round<4;round++) {
+                    var results=new java.util.ArrayList<java.util.concurrent.CompletableFuture<burp.api.montoya.http.handler.RequestToBeSentAction>>();
+                    for(int item=0;item<8;item++) {
+                        int id=round*8+item+1;String path=item==0?"/close":"/whoami";
+                        results.add(java.util.concurrent.CompletableFuture.supplyAsync(()-> {
+                            String raw="GET "+path+" HTTP/1.1\r\nHost: "+lab.url("/").getAuthority()+"\r\n\r\n";
+                            var proxy=host.proxy.handleRequestToBeSent((burp.api.montoya.proxy.http.InterceptedRequest)host.request(raw,id,true));
+                            return host.handler.handleHttpRequestToBeSent(host.request(new String(proxy.request().toByteArray().getBytes(),StandardCharsets.ISO_8859_1),1000+id,true));
+                        },requests));
+                    }
+                    for(var result:results)assertEquals("SPOOF_RESPONSE",result.get(15,java.util.concurrent.TimeUnit.SECONDS).action().name(),"Wait for login must not forward a cold parallel request unauthenticated.");
+                }
+                assertEquals(32,lab.observations.size());assertTrue(lab.observations.stream().allMatch(observation->observation.user().equals("user-a")));
+                assertEquals(0,fixture.attempts);assertTrue(host.logs.isEmpty());
+            }
+        }
+    }
     @ParameterizedTest(name="automatic-warm-proxy-{0}")
     @EnumSource(value=HttpAuthentication.Protocol.class,names={"NTLM_V1","NTLM_V2"})
     void automaticProxyRuleUsesThePreviouslyAuthenticatedIdentity(HttpAuthentication.Protocol protocol) throws Exception {

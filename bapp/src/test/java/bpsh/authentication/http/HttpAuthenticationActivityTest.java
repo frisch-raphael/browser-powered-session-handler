@@ -9,6 +9,20 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HttpAuthenticationActivityTest {
+    @Test void routineConnectionReuseUpdatesInspectionWithoutLoggingEveryResponse() {
+        var owner=entry(1,1);var current=new AtomicReference<>(snapshot(owner));var events=new ArrayList<HttpAuthenticationProgress>();
+        try(var activity=new HttpAuthenticationActivity(current::get)) {
+            activity.events((identity,event)->events.add(event));var source=activity.observe(spec(owner));
+            source.accept(progress(HttpAuthenticationProgress.Stage.ACCEPTED,1));
+            for(int i=2;i<=101;i++)source.accept(new HttpAuthenticationProgress(HttpAuthenticationProgress.Stage.CONNECTION_REUSED,
+                    HttpAuthentication.Protocol.NTLM_V2,ORIGIN,Instant.ofEpochSecond(i),i%2==0?302:200));
+            assertEquals(List.of(HttpAuthenticationProgress.Stage.ACCEPTED),events.stream().map(HttpAuthenticationProgress::stage).toList());
+            var latest=activity.snapshot(owner.identity()).getFirst();assertEquals(HttpAuthenticationProgress.Stage.CONNECTION_REUSED,latest.stage());
+            assertEquals(200,latest.httpStatus());assertEquals(Instant.ofEpochSecond(101),latest.time());
+            source.accept(progress(HttpAuthenticationProgress.Stage.REJECTED,102));
+            assertEquals(List.of(HttpAuthenticationProgress.Stage.ACCEPTED,HttpAuthenticationProgress.Stage.REJECTED),events.stream().map(HttpAuthenticationProgress::stage).toList());
+        }
+    }
     @Test void recordingAnUnfinishedJourneyRetainsItsValidatedHttpIdentityAndProgress() {
         var executable=entry(1,1);
         var draft=JourneyDraft.capture(Map.of("url",ORIGIN.toString()),Map.of("httpAuthentication",true),JourneyDefinition.SlotKind.INDEX,"",List.of(),List.of());

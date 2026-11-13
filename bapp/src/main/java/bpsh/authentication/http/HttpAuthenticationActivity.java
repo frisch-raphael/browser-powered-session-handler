@@ -48,6 +48,8 @@ public final class HttpAuthenticationActivity implements AutoCloseable {
             if (progress.origin() != null && !state.settings.allows(progress.origin())) return;
             var previous = state.latest.get(progress.origin());
             if (previous == null || !previous.time().isAfter(progress.time())) state.latest.put(progress.origin(), progress);
+            // Reuse is a per-request fact, including ordinary redirects; inspection keeps it without a lifecycle event.
+            if (progress.stage() == HttpAuthenticationProgress.Stage.CONNECTION_REUSED) return;
             // Serialize event publication with Clear cache so a retired scope cannot append late events.
             try { events.accept(state.entry.identity(), progress); } catch (RuntimeException ignored) { /* Inspection cannot fail an exchange. */ }
         }

@@ -25,6 +25,8 @@ Defines a saved or unfinished journey, scoped identity, secret ownership and the
 
 ## Invariants
 
+Effective authentication configuration includes all HTTP identity settings. Editing them advances the saved generation and retires old HTTP pools even when the password stays unchanged.
+
 JourneyCatalog.java:Snapshot preserves all alias candidates and rejects unavailable or ambiguous selections. JourneySecrets.java validates ownership without JSON or host APIs.
 
 ## Side Effects

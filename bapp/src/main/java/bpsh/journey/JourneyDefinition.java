@@ -284,7 +284,7 @@ public record JourneyDefinition(
     /**
      * Compares fields whose effective changes require a new registry generation.
      *
-     * Includes identity, canonical alias, login/steps/browser/extraction/injection/cache/mTLS.
+     * Includes identity, canonical alias, login/steps/browser/extraction/injection/cache/mTLS/HTTP authentication.
      * Display-name edits, case-only alias spelling and Remember secrets alone are excluded. Secret
      * values are owned separately and must be compared by the registry's SecretStore path.
      *
@@ -298,7 +298,8 @@ public record JourneyDefinition(
                 && steps.equals(other.steps) && Objects.equals(browser, other.browser)
                 && Objects.equals(extraction, other.extraction) && Objects.equals(injection, other.injection)
                 && Objects.equals(cache, other.cache)
-                && Objects.equals(mtls, other.mtls) && Objects.equals(draft, other.draft);
+                && Objects.equals(mtls, other.mtls) && Objects.equals(httpAuthentication, other.httpAuthentication)
+                && Objects.equals(draft, other.draft);
     }
 
     /**
