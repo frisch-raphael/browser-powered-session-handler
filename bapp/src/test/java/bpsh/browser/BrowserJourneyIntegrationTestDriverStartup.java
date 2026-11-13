@@ -16,7 +16,7 @@ public class BrowserJourneyIntegrationTestDriverStartup {
         var builder = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString(),
                 "-Djna.noclasspath=true", "-Djna.nosys=true", "-cp", System.getProperty("bpsh.probeClasspath"), NativeDispatchDeniedProbe.class.getName());
         for (String key : java.util.List.of("JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS")) builder.environment().remove(key);
-        builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+        builder.redirectErrorStream(true);
         Process child = builder.start();
         try {
             assertTrue(child.waitFor(20, TimeUnit.SECONDS), "The isolated native-loading probe must finish");
@@ -31,6 +31,11 @@ public class BrowserJourneyIntegrationTestDriverStartup {
     public static final class NativeDispatchDeniedProbe {
         /** @param args Unused. @throws Exception On an unexpected startup or leaked child process. */
         public static void main(String[] args) throws Exception {
+            java.util.Set<Long> previousChildren;
+            // Windows can report older processes that retain a reused parent PID. Never adopt or stop them.
+            try (var children = ProcessHandle.current().children()) {
+                previousChildren = children.map(ProcessHandle::pid).collect(java.util.stream.Collectors.toSet());
+            }
             try {
                 // A null selector must never be accessed: native support is checked before driver setup.
                 PlaywrightDriverAdapter.open(null, System.nanoTime() + TimeUnit.SECONDS.toNanos(10), () -> false);
@@ -40,7 +45,7 @@ public class BrowserJourneyIntegrationTestDriverStartup {
                 if (!failure.getMessage().contains("NATIVE_SUPPORT/NATIVE_LIBRARY")) throw new AssertionError("Unexpected classification");
             }
             try (var children = ProcessHandle.current().children()) {
-                if (children.findAny().isPresent()) throw new AssertionError("Driver process started before native support was available");
+                if (children.anyMatch(child -> !previousChildren.contains(child.pid()))) throw new AssertionError("Driver process started before native support was available");
             }
             System.out.println("NO_DRIVER_CHILDREN");
         }
