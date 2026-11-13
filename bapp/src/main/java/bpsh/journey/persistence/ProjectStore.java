@@ -61,5 +61,16 @@ public final class ProjectStore {
         } finally { current.ifPresent(JourneyDocument::close); }
     }
 
+    /**
+     * Replaces only this extension's native project entry after an explicit reset confirmation.
+     * Unlike an ordinary save, recovery must not parse the unreadable entry it replaces.
+     * @return Caller-owned empty project with default controls and a fresh revision.
+     */
+    public synchronized JourneyDocument resetNativeProject() {
+        var empty = JourneyDocument.empty(JourneyDocument.DocumentKind.PROJECT);
+        try { storage.setString(NATIVE_PROJECT_KEY, JourneyJson.write(empty)); return empty; }
+        catch (RuntimeException failure) { empty.close(); throw failure; }
+    }
+
     private static ConfigurationException invalid(String path, String reason) { return new ConfigurationException(path + ": " + reason + "."); }
 }

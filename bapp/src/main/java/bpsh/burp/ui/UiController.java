@@ -65,7 +65,7 @@ public final class UiController {
     private final java.util.concurrent.atomic.AtomicBoolean listenerRefreshRunning = new java.util.concurrent.atomic.AtomicBoolean();
     private final Diagnostics diagnostics;
     private final ThreadPoolExecutor io = executor("bpsh-config-io", 1, 32), nativeActions = executor("bpsh-cert-action", 1, 4);
-    private final EnumMap<JourneyDefinition.Scope, String> storageErrors = new EnumMap<>(JourneyDefinition.Scope.class);
+    private final Map<JourneyDefinition.Scope, String> storageErrors = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile boolean closed, initialized;
     private boolean suppress;
     private boolean editorLoading;
@@ -73,6 +73,10 @@ public final class UiController {
     private final JTabbedPane journeyScopes = new JTabbedPane();
     private final JTabbedPane mainTabs = new JTabbedPane();
     private final JTextArea collectionFeedback = feedback("Journey collection status");
+    private final JButton resetProjectStorageButton = new JButton("Reset project storage...") {
+        @Override public JToolTip createToolTip() { return UiTooltips.create(this); }
+    };
+    private boolean projectResetRunning;
     private final CredentialsPanel credentials = new CredentialsPanel();
     private Timer settingsDebounce, automaticDebounce, journeyDebounce, journeyRetry, deviceDebounce;
     private bpsh.authentication.BrowserInstallation browserInstallation;
@@ -292,6 +296,12 @@ public final class UiController {
         journeyScopes.addChangeListener(e -> { if (!suppress) selectScope(journeyScopes.getSelectedIndex()); });
         var sidebarHeader = new JPanel(new BorderLayout(0, 5)); sidebarHeader.add(journeyScopes, BorderLayout.NORTH); sidebarHeader.add(actions, BorderLayout.SOUTH);
         sidebar.add(sidebarHeader, BorderLayout.NORTH); sidebar.add(new JScrollPane(saved), BorderLayout.CENTER);
+        var collectionRecovery = new JPanel(new BorderLayout(0, 6));
+        resetProjectStorageButton.setVisible(false);
+        resetProjectStorageButton.addActionListener(event -> resetProjectStorage());
+        collectionRecovery.add(collectionFeedback, BorderLayout.CENTER); collectionRecovery.add(resetProjectStorageButton, BorderLayout.SOUTH);
+        UiTooltips.set(resetProjectStorageButton, "Delete this extension's journeys and Session handling settings from the current Burp project.", 300);
+        sidebar.add(collectionRecovery, BorderLayout.SOUTH);
         wizardPages.add(WizardPage.SETUP, "Setup", journeyForm()); wizardPages.add(WizardPage.CERTIFICATE, "Client certificate", tlsForm());
         wizardPages.add(WizardPage.HTTP_AUTHENTICATION, "HTTP authentication", scroll(httpAuthentication));
         wizardPages.add(WizardPage.STEPS, "Login steps", steps); wizardPages.add(WizardPage.CAPTURE, "Capture credentials", extractionForm());
@@ -310,7 +320,7 @@ public final class UiController {
         detailSurface.add(eventLog, "events"); detailSurface.add(cacheView, "cache");
         eventDock = new JSplitPane(JSplitPane.VERTICAL_SPLIT, split, detailSurface); eventDock.setResizeWeight(1); eventDock.setBorder(BorderFactory.createEmptyBorder());
         detailSurface.setVisible(false); eventDock.setDividerSize(0);
-        var journeyFooter = new JPanel(new BorderLayout()); journeyFooter.add(status, BorderLayout.CENTER); journeyFooter.add(collectionFeedback, BorderLayout.SOUTH);
+        var journeyFooter = new JPanel(new BorderLayout()); journeyFooter.add(status, BorderLayout.CENTER);
         var journeys = new JPanel(new BorderLayout()); journeys.add(eventDock, BorderLayout.CENTER); journeys.add(journeyFooter, BorderLayout.SOUTH);
         mainTabs.addTab("Journeys", journeys); mainTabs.addTab("Session handling", controlsForm()); mainTabs.addTab("Settings", settingsForm());
         mainTabs.addChangeListener(e -> { if (mainTabs.getSelectedIndex() == 1) refreshProxyListeners(); });
@@ -703,7 +713,7 @@ public final class UiController {
         if (recordingStamp != null && !recordingCurrent(recordingStamp)) discardRecording("The journey changed. Your current steps were kept. Record the login again.");
         if (closed) return;
         var selected = selectedEntries(); int selectionCount = saved.getSelectedIndices().length;
-        status.setVisible(editing != null && selectionCount == 1); collectionFeedback.setVisible(!status.isVisible());
+        status.setVisible(editing != null && selectionCount == 1);
         if (exportSelectedItem != null) exportSelectedItem.setEnabled(canExportSelection(selected));
         if (duplicateSelectedItem != null) duplicateSelectedItem.setEnabled(initialized && !editorLoading && selected.size() == 1
                 && !registry.snapshot().unavailableScopes().contains(selected.getFirst().identity().scope()));
@@ -1251,7 +1261,7 @@ public final class UiController {
     /** Creates and persists a new journey without requiring a runnable configuration. */
     private void createJourney() {
         if (!initialized) return; var scope = (JourneyDefinition.Scope) destination.getSelectedItem();
-        if (registry.snapshot().unavailableScopes().contains(scope)) { message("Resolve the storage error for the selected Project or User collection before creating a journey."); return; }
+        if (registry.snapshot().unavailableScopes().contains(scope)) { refreshJourneyDock(); collectionFeedback.requestFocusInWindow(); return; }
         rememberJourneyStep();
         String newName = "New journey";
         var usedAliases = registry.snapshot().entries().values().stream().map(e -> e.definition().canonicalAlias()).collect(java.util.stream.Collectors.toSet());
@@ -1264,6 +1274,45 @@ public final class UiController {
         suppress = true; try { fields.get("url").setText(""); } finally { suppress = false; }
         dirty = true; editorCards.show(editorSurface, "editor"); selectWizard(WizardPage.SETUP); rememberJourneyStep(); resetScrolls(wizard); refreshJourneyUi();
         save(false);
+    }
+    /** Confirms recovery of unreadable BPSH project data without replacing the Burp project. */
+    private void resetProjectStorage() {
+        var scope = JourneyDefinition.Scope.PROJECT;
+        if (!initialized || closed || projectResetRunning || destination.getSelectedItem() != scope
+                || !registry.snapshot().unavailableScopes().contains(scope)) return;
+        long expected = storage.epoch(scope);
+        String confirmation = "Delete all BPSH journeys, remembered secrets and Session handling settings in this project? Unsaved project journey edits will also be discarded.\n\n"
+                + "User journeys and all other Burp project data will be kept. This cannot be undone.";
+        if (!dialogs.confirmAction(parent(), confirmation, "Reset project storage", "Reset project storage")) return;
+        projectResetRunning = true; refreshJourneyDock();
+        boolean queued = enqueue(io, null, () -> {
+            try {
+                checkEpoch(scope, expected);
+                if (!registry.snapshot().unavailableScopes().contains(scope)) throw new IllegalStateException("Storage changed after the reset was confirmed. Review its current state before trying again.");
+                var prepared = applied.prepare(RequestSettings.Controls.defaults());
+                try (var empty = storage.resetProject()) {
+                    registry.replaceLoaded(scope, empty); coordinator.updateControls(empty.controls()); applied.publish(prepared);
+                }
+                storageErrors.remove(scope); bump(scope); coordinator.configurationChanged();
+                if (httpIdentities != null) httpIdentities.reconcile();
+                refreshChoices();
+                ui(() -> {
+                    journeySteps.keySet().removeIf(key -> key.scope() == scope); lastJourneyByScope.remove(scope);
+                    if (editing != null && editing.scope() == scope) {
+                        discardRecording(null); journeyDebounce.stop(); journeyRetry.stop();
+                        editing = null; editingIdentity = null; selectionEpoch++; editorEpoch++; editVersion++;
+                        editorLoading = false; dirty = false; savePaused = false; afterJourneySave = null; afterSaveOwner = null;
+                        pin.setText(""); steps.clear(); saved.clearSelection();
+                    }
+                    applyControls(applied.snapshot().controls()); refreshJourneyUi();
+                    if (destination.getSelectedItem() == scope) status.setText("Project storage reset. You can create a journey.");
+                });
+            } catch (Exception | LinkageError failure) {
+                storageErrors.put(scope, "Project storage could not be reset. Check that Burp can save extension data, then try again.");
+                report(failure);
+            } finally { ui(() -> { projectResetRunning = false; refreshJourneyUi(); }); }
+        });
+        if (!queued) { projectResetRunning = false; refreshJourneyDock(); }
     }
     /** Flushes edits before copying the selected journey into its own collection. */
     private void duplicateJourney() {
@@ -1921,7 +1970,17 @@ public final class UiController {
 
     /** Keeps journey controls out of empty/batch selections while retaining the chosen detail view. */
     private void refreshJourneyDock() {
-        collectionFeedback.setText(status.isVisible() ? "" : status.getText());
+        var scope = (JourneyDefinition.Scope) destination.getSelectedItem();
+        boolean unavailable = registry.snapshot().unavailableScopes().contains(scope);
+        String explanation = unavailable ? storageErrors.getOrDefault(scope,
+                (scope == JourneyDefinition.Scope.PROJECT ? "Project" : "User") + " journey storage is unavailable. The stored journeys could not be read.") : "";
+        if (unavailable) explanation += scope == JourneyDefinition.Scope.PROJECT
+                ? " Reset project storage below to clear this extension's journeys and settings in the current project."
+                : " Check the file's format and permissions, then reload the extension. Select Project to use separate storage.";
+        collectionFeedback.setText(unavailable ? explanation : status.isVisible() ? "" : status.getText());
+        collectionFeedback.setVisible(unavailable || !status.isVisible());
+        resetProjectStorageButton.setVisible(unavailable && scope == JourneyDefinition.Scope.PROJECT);
+        resetProjectStorageButton.setEnabled(!projectResetRunning);
         boolean open = status.isVisible() && (status.isLogOpen() || status.isCacheOpen());
         if (detailSurface.isVisible() != open) showEventDock(); else refreshCacheView();
     }

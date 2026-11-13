@@ -40,6 +40,11 @@ public final class JourneyStorage implements AutoCloseable {
         return loaded.orElseGet(() -> JourneyDocument.empty(JourneyDocument.DocumentKind.PROJECT));
     }
 
+    /** @return Caller-owned empty project after a confirmed reset; future saves use its new revision. */
+    public JourneyDocument resetProject() {
+        var reset = projects.resetNativeProject(); projectRevision = reset.revision(); return reset;
+    }
+
     /** @return Caller-owned library load and its captured exact-byte version. */
     public UserLibraryStore.Loaded loadLibrary() throws IOException {
         var loaded = library.load(); libraryVersion = loaded.version(); return loaded;

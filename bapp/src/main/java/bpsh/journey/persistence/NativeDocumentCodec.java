@@ -157,7 +157,7 @@ final class NativeDocumentCodec {
                 "attemptTimeoutMs", "cycleTimeoutMs", "maxWaitingRequestsGlobal", "maxWaitingRequestsPerJourney");
         if (n.has("rules") != n.has("rulesVersion") || n.has("rulesVersion")
                 && (!n.get("rulesVersion").isIntegralNumber() || !n.get("rulesVersion").canConvertToInt() || n.get("rulesVersion").intValue() != 1))
-            throw invalid("controls.rulesVersion", "Unsupported Session handling storage format. Use a new Burp project");
+            throw invalid("controls.rulesVersion", "Unsupported Session handling storage format. Reset project storage to create journeys in this project");
         List<RequestSettings.AutomaticRule> rules = new ArrayList<>(); Set<RequestSettings.JourneySelection> identities = new HashSet<>();
         if (n.has("rules")) for (JsonNode rule : array(n.get("rules"), "controls.rules")) {
             String p = "controls.rules[" + rules.size() + "]";
