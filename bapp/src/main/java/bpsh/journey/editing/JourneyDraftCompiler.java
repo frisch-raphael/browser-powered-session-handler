@@ -43,14 +43,17 @@ public final class JourneyDraftCompiler {
         if (!flags.get("formAuthentication") && !flags.get("mtls") && !flags.get("httpAuthentication"))
             throw new ConfigurationException("formAuthentication: choose at least one authentication method.");
         var credentials = draft.credentials();
+        boolean captures = !credentials.isEmpty();
+        if(!captures && !flags.get("httpAuthentication") && !flags.get("mtls"))
+            throw new ConfigurationException("extraction: add a token or cookie capture for a form-login journey.");
         var definitions = steps(draft.steps());
-        ObjectNode j = BrowserSetupCompiler.node(draft); j.put("id", id.toString()); j.put("displayName", text.get("name")); j.put("alias", text.get("alias")); j.put("authenticationUrl", text.get("url").trim()); j.put("rememberSecrets", flags.get("remember"));
+        ObjectNode j = BrowserSetupCompiler.node(draft,captures); j.put("id", id.toString()); j.put("displayName", text.get("name")); j.put("alias", text.get("alias")); j.put("authenticationUrl", text.get("url").trim()); j.put("rememberSecrets", flags.get("remember"));
         var s = j.putArray("steps"); definitions.forEach(step -> s.add(JourneyJson.stepNode(step)));
-        ((ObjectNode) j.get("browser")).put("tokenWaitTimeoutMs", BrowserSetupCompiler.seconds(text, "tokenWait"));
-        if (credentials.isEmpty() && flags.get("httpAuthentication")) j.putNull("extraction");
+        ((ObjectNode) j.get("browser")).put("tokenWaitTimeoutMs", captures ? BrowserSetupCompiler.seconds(text, "tokenWait") : 3000);
+        if (credentials.isEmpty() && (flags.get("httpAuthentication") || flags.get("mtls"))) j.putNull("extraction");
         else j.set("extraction", JourneyDraftCompiler.extractionNode(credentials));
         j.set("injection", JourneyDraftCompiler.injectionNode(credentials));
-        j.putObject("cache").put("maxAgeSeconds", number(text, "maxAge")).put("refreshSkewSeconds", number(text, "skew"));
+        j.putObject("cache").put("maxAgeSeconds", captures ? number(text, "maxAge") : 1800).put("refreshSkewSeconds", captures ? number(text, "skew") : 10);
         var root = JSON.createObjectNode().put("schemaVersion", 2).put("kind", "export").put("revision", UUID.randomUUID().toString()); root.putArray("journeys").add(j); root.putArray("retiredAliases");
         try (var parsed = JourneyJson.read(root.toString(), JourneyDocument.DocumentKind.EXPORT)) { return parsed.journeys().getFirst(); }
     }

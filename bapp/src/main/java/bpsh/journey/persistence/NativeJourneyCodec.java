@@ -72,7 +72,7 @@ final class NativeJourneyCodec {
         JourneyDefinition.Browser browser = parseBrowser(n.get("browser"), !steps.isEmpty() || !(present(n, "mtls") || http != null && http.enabled()));
         if (!browser.formAuthentication() && !present(n, "mtls") && !(http != null && http.enabled()))
             throw invalid("formAuthentication", "choose at least one authentication method");
-        JourneyDefinition.Extraction extraction = http != null && http.enabled() && !present(n, "extraction") ? null : parseExtraction(n.get("extraction"));
+        JourneyDefinition.Extraction extraction = (present(n, "mtls") || http != null && http.enabled()) && !present(n, "extraction") ? null : parseExtraction(n.get("extraction"));
         if (extraction == null && browser.formAuthentication() && !steps.isEmpty()) throw invalid("extraction", "configure a captured credential when using browser steps");
         JourneyDefinition.Injection injection = parseInjection(n.get("injection"), extraction);
         JsonNode c = n.get("cache"); object(c, "cache", "maxAgeSeconds", "refreshSkewSeconds");
@@ -210,7 +210,7 @@ final class NativeJourneyCodec {
             String path = nonblank(text(e, "jsonPath", "extraction"), "extraction.jsonPath");
             validateJsonPath(path);
             extraction = new JourneyDefinition.JsonExtraction(origin(text(e, "responseOrigin", "extraction"), "extraction.responseOrigin", false),
-                    nonempty(text(e, "pathSubstring", "extraction"), "extraction.pathSubstring"), path);
+                    e.has("pathSubstring") ? text(e, "pathSubstring", "extraction") : "", path);
         } else if ("regex".equals(extractionType)) {
             object(e, "extraction", "type", "responseOrigin", "pathSubstring", "startRegex", "endRegex");
             String start = text(e, "startRegex", "extraction"), end = text(e, "endRegex", "extraction");
@@ -219,7 +219,7 @@ final class NativeJourneyCodec {
                 catch (AuthenticationFailure ex) { throw invalid("extraction." + field, ex.problem()); }
             }
             extraction = new JourneyDefinition.RegexExtraction(origin(text(e, "responseOrigin", "extraction"), "extraction.responseOrigin", false),
-                    nonempty(text(e, "pathSubstring", "extraction"), "extraction.pathSubstring"), start, end);
+                    e.has("pathSubstring") ? text(e, "pathSubstring", "extraction") : "", start, end);
         } else if (RequestSettings.ExtractionType.COOKIE.matches(extractionType)) {
             object(e, "extraction", "type", "originUrl", "name", "domain", "path");
             extraction = new JourneyDefinition.CookieExtraction(httpUri(text(e, "originUrl", "extraction"), "extraction.originUrl"),

@@ -466,7 +466,8 @@
             },
             "pathSubstring": {
               "type": "string",
-              "minLength": 1
+              "default": "",
+              "description": "Optional response URL path filter. Empty or omitted matches every path on the configured origin."
             },
             "jsonPath": {
               "type": "string",
@@ -477,7 +478,6 @@
           "required": [
             "type",
             "responseOrigin",
-            "pathSubstring",
             "jsonPath"
           ],
           "additionalProperties": false
@@ -563,7 +563,8 @@
                           },
                           "pathSubstring": {
                             "type": "string",
-                            "minLength": 1
+                            "default": "",
+                            "description": "Optional response URL path filter. Empty or omitted matches every path on the configured origin."
                           },
                           "jsonPath": {
                             "type": "string",
@@ -574,7 +575,6 @@
                         "required": [
                           "type",
                           "responseOrigin",
-                          "pathSubstring",
                           "jsonPath"
                         ],
                         "additionalProperties": false
@@ -641,7 +641,8 @@
                           },
                           "pathSubstring": {
                             "type": "string",
-                            "minLength": 1
+                            "default": "",
+                            "description": "Optional response URL path filter. Empty or omitted matches every path on the configured origin."
                           },
                           "startRegex": {
                             "type": "string",
@@ -659,7 +660,6 @@
                         "required": [
                           "type",
                           "responseOrigin",
-                          "pathSubstring",
                           "startRegex",
                           "endRegex"
                         ],
@@ -696,7 +696,8 @@
             },
             "pathSubstring": {
               "type": "string",
-              "minLength": 1
+              "default": "",
+              "description": "Optional response URL path filter. Empty or omitted matches every path on the configured origin."
             },
             "startRegex": {
               "type": "string",
@@ -714,7 +715,6 @@
           "required": [
             "type",
             "responseOrigin",
-            "pathSubstring",
             "startRegex",
             "endRegex"
           ],
@@ -1293,9 +1293,6 @@
             ]
           },
           "then": {
-            "required": [
-              "httpAuthentication"
-            ],
             "anyOf": [
               {
                 "properties": {
@@ -1319,6 +1316,36 @@
                 },
                 "required": [
                   "browser"
+                ]
+              }
+            ],
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "httpAuthentication"
+                    ],
+                    "properties": {
+                      "httpAuthentication": {
+                        "properties": {
+                          "enabled": {
+                            "const": true
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "mtls"
+                    ],
+                    "properties": {
+                      "mtls": {
+                        "type": "object"
+                      }
+                    }
+                  }
                 ]
               }
             ]

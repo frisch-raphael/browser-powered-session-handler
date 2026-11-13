@@ -34,10 +34,11 @@ public final class HttpAuthenticationDelivery {
         JourneyCatalog.Entry entry;
         try { entry = registry.snapshot().resolve(directive.alias()); }
         catch (IllegalStateException unavailable) { throw configuration("The HTTP authentication journey is missing or ambiguous.", "Choose one available saved journey alias."); }
-        if (!entry.definition().httpAuthenticationEnabled()) throw configuration("HTTP authentication is not enabled for this journey.", "Enable HTTP authentication and save the journey.");
+        if (entry.definition().draft()!=null) throw configuration("This journey has incomplete settings.","Complete the journey settings and save before using request authentication.");
+        if (!entry.definition().transportAuthenticationEnabled()) throw configuration("Request authentication is not enabled for this journey.", "Enable HTTP authentication or a client certificate and save the journey.");
         admission.bind(List.of(entry.identity().key()));
         var selection = httpIdentities.select(entry);
-        try (var captures = resolver.resolve(directive.request(), null, false)) {
+        try (var captures = resolver.resolve(entry.definition().httpAuthenticationEnabled() ? directive.request() : directive.applicationAuthorizationRequest(), null, false)) {
             NativeTagResolver.Resolved resolved;
             try { resolved = captures.future().get(Math.max(1,deadline-System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS); }
             catch(java.util.concurrent.TimeoutException timeout) { throw new AuthenticationFailure(AuthenticationFailure.Phase.QUEUE,
@@ -103,7 +104,7 @@ public final class HttpAuthenticationDelivery {
             }
             try(response;var wire=HttpAuthenticationResponse.wire(httpIdentities.bodies(),request.method(),response)) {
             var notes = original.annotations();
-            String observation = switch(response.authentication().status()) {
+            String observation = !entry.definition().httpAuthenticationEnabled() ? "Request sent with this journey's client-certificate settings. Server response kept." : switch(response.authentication().status()) {
                 case ACCEPTED -> "The server accepted " + switch (response.authentication().protocol()) { case BASIC -> "Basic"; case NTLM_V1 -> "NTLMv1"; case NTLM_V2 -> "NTLMv2"; } + " HTTP authentication. Server response kept.";
                 case REJECTED -> "The server rejected HTTP authentication. Server response kept.";
                 case UNCONFIRMED -> "The server response was kept; HTTP authentication could not be confirmed.";

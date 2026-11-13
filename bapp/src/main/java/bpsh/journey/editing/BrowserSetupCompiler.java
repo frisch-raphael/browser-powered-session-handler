@@ -19,13 +19,15 @@ public final class BrowserSetupCompiler {
     public static BrowserSetup compile(JourneyDraft draft) { return JourneyJson.readSetup(node(draft)); }
 
     /** Builds shared setup fields for both full-journey and recording compilation. */
-    static ObjectNode node(JourneyDraft draft) {
+    static ObjectNode node(JourneyDraft draft) { return node(draft,true); }
+    /** Direct transport identities do not depend on an unused browser navigation timeout. */
+    static ObjectNode node(JourneyDraft draft, boolean usesBrowser) {
         var text = draft.text(); var flags = draft.flags();
         var node = JSON.createObjectNode().put("authenticationUrl", text.get("url").trim());
         var browser = node.putObject("browser").put("headless", flags.get("headless"))
                 .put("formAuthentication", flags.get("formAuthentication"))
                 .put("ignoreHttpsErrors", flags.get("ignoreHttpsErrors"))
-                .put("navigationTimeoutMs", seconds(text, "navTimeout"));
+                .put("navigationTimeoutMs", usesBrowser ? seconds(text, "navTimeout") : 30000);
         if (!text.get("proxy").isBlank()) browser.putObject("proxy").put("url", text.get("proxy").trim());
         if (flags.get("mtls")) {
             var mtls = node.putObject("mtls").put("modulePath", text.get("module").trim())

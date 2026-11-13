@@ -510,9 +510,9 @@ class UxControlMatrixTest {
     }
 
     @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({
-            "json_path,origin,invalid", "json_path,path,''", "json_path,selector,broken[",
+            "json_path,origin,invalid", "json_path,selector,broken[",
             "cookie,origin,invalid", "cookie,selector,bad name", "cookie,selector,''",
-            "regex,origin,invalid", "regex,path,''", "regex,startRegex,[", "regex,endRegex,[",
+            "regex,origin,invalid", "regex,startRegex,[", "regex,endRegex,[",
             "json_path,destination,bad name", "json_path,destination,Cookie"})
     void testRevealsTheExactCaptureOrInjectionFieldInTheSecondCredential(String type, String field, String invalid) throws Exception {
         var h = harness(); try (var editor = h.new Editor(JourneyRegistryTest.fixture(JourneyDocument.DocumentKind.PROJECT, false, false))) {
@@ -556,10 +556,12 @@ class UxControlMatrixTest {
     @Test void credentialCreationLimitAndRemovalHaveHonestButtonStates() throws Exception {
         var h = harness(); h.edt(() -> {
             var panel = new CredentialsPanel(); panel.setDefinition(CombinedCredentialsTest.JSON); var add = find(panel, "Add token or cookie");
-            List<?> rows = h.member(panel, "rows"); assertFalse(((JButton) h.member(rows.getFirst(), "remove")).isEnabled());
+            List<?> rows = h.member(panel, "rows"); assertTrue(((JButton) h.member(rows.getFirst(), "remove")).isEnabled());
             for (int i = 1; i < 16; i++) add.doClick(); assertEquals(16, panel.snapshot().size()); assertFalse(add.isEnabled());
             add.doClick(); assertEquals(16, panel.snapshot().size());
             ((JButton) h.member(rows.getLast(), "remove")).doClick(); assertEquals(15, panel.snapshot().size()); assertTrue(add.isEnabled());
+            while(!rows.isEmpty())((JButton)h.member(rows.getLast(),"remove")).doClick(0);
+            assertTrue(panel.snapshot().isEmpty());assertTrue(add.isEnabled());add.doClick(0);assertEquals(1,panel.snapshot().size());
         });
     }
 

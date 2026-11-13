@@ -26,6 +26,40 @@ class HttpIdentityManagerTest {
                         null,JourneyDefinition.Injection.perToken(List.of()),new JourneyDefinition.Cache(1800,10),null,
                         new HttpAuthentication(HttpAuthentication.Protocol.NTLM_V2,"user-a","LAB","",Set.of(ORIGIN)),null));
     }
+    private static JourneyCatalog.Entry certificateEntry() {
+        var base=entry();var d=base.definition();
+        var mtls=new JourneyDefinition.Mtls("fixture-module",new JourneyDefinition.Slot(JourneyDefinition.SlotKind.INDEX,0),"12".repeat(32),List.of(ORIGIN),null);
+        return new JourneyCatalog.Entry(base.identity(),new JourneyDefinition(d.id(),d.displayName(),d.alias(),ORIGIN,false,List.of(),
+                new JourneyDefinition.Browser(true,null,30000,3000,false,false),null,d.injection(),d.cache(),mtls,null,null));
+    }
+    @Test void certificateOnlyTestsUseTheSharedTransportWithoutAReusableToken() throws Exception {
+        var entry=certificateEntry();var scope=new Fake();scope.response.complete(new HttpAuthenticationService.Response(200,List.of(),
+                bpsh.support.IntegrationFixtures.httpBody(new byte[0]),new HttpAuthenticationEvidence(null,HttpAuthenticationEvidence.Status.UNCONFIRMED)));
+        var setup=new AtomicReference<HttpTransportFactory.ScopeSpec>();
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->snapshot(entry),secrets,factory((spec,values,recovery,end)->{setup.set(spec);return scope;}));
+            var response=manager.test(entry,deadline(),false).get(5,TimeUnit.SECONDS)) {
+            assertEquals(200,response.status());assertEquals(1,scope.requests.get());assertNull(setup.get().setup().httpAuthentication());
+            assertEquals(entry.definition().mtls(),setup.get().setup().mtls());assertEquals(HttpTransportFactory.Purpose.TEST,setup.get().purpose());
+        }
+    }
+    @Test void certificateOnlyDeliveryRejectsAnUnrelatedOriginBeforeDispatch() throws Exception {
+        var entry=certificateEntry();var scope=new Fake();
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->snapshot(entry),secrets,factory((spec,values,recovery,end)->scope))) {
+            var outside=new HttpAuthenticationService.Request(URI.create("https://unrelated.test"),"GET",List.of(),bpsh.support.IntegrationFixtures.httpBody(new byte[0]));
+            assertThrows(java.util.concurrent.ExecutionException.class,()->deliver(manager,entry,outside,deadline()).get(5,TimeUnit.SECONDS));
+            assertEquals(0,scope.requests.get());
+        }
+    }
+    @Test void anUnvalidatedCertificateDraftCannotOpenTransport() throws Exception {
+        var original=certificateEntry();var d=original.definition();var raw=bpsh.journey.JourneyDraft.capture(Map.of("url","not a URL"),
+                Map.of("mtls",true,"formAuthentication",false),JourneyDefinition.SlotKind.INDEX,"",List.of(),List.of());
+        var entry=new JourneyCatalog.Entry(original.identity(),new JourneyDefinition(d.id(),d.displayName(),d.alias(),d.authenticationUrl(),false,List.of(),
+                d.browser(),null,d.injection(),d.cache(),d.mtls(),null,raw));
+        var opened=new AtomicInteger();var scope=new Fake();scope.response.complete(response());
+        try(var secrets=new SecretStore();var manager=new HttpIdentityManager(()->snapshot(entry),secrets,factory((spec,values,recovery,end)->{opened.incrementAndGet();return scope;}))) {
+            assertThrows(java.util.concurrent.ExecutionException.class,()->manager.test(entry,deadline(),false).get(5,TimeUnit.SECONDS));assertEquals(0,opened.get());
+        }
+    }
     private static JourneyCatalog.Snapshot snapshot(JourneyCatalog.Entry entry) {
         return new JourneyCatalog.Snapshot(Map.of(entry.identity().key(),entry),Map.of("user-a",List.of(entry.identity().key())),Set.of());
     }

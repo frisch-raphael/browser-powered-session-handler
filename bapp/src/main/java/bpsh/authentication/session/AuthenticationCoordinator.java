@@ -344,9 +344,9 @@ public final class AuthenticationCoordinator implements AutoCloseable {
                 Map<JourneyDefinition.Identity, State> needed = new LinkedHashMap<>();
                 for (var entry : entries) {
                     if (!registry.snapshot().isCurrent(entry.identity())) throw stale();
-                    if (entry.definition().httpOnly()) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
-                            AuthenticationFailure.Cause.CONFIGURATION, "This HTTP-only journey has no captured token or cookie.",
-                            "Use BPSP-HTTP-AUTHENT: <@" + entry.definition().alias() + "/> to authenticate the request as this user.").forJourney(entry.identity());
+                    if (entry.definition().transportOnly()) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
+                            AuthenticationFailure.Cause.CONFIGURATION, "This journey authenticates requests without a captured token or cookie.",
+                            "Use BPSP-HTTP-AUTHENT: <@" + entry.definition().alias() + "/> to apply this journey's authentication to the request.").forJourney(entry.identity());
                     if (entry.definition().draft() != null) throw new AuthenticationFailure(AuthenticationFailure.Phase.SETUP,
                             AuthenticationFailure.Cause.CONFIGURATION, "This journey has incomplete or invalid settings.",
                             "Review the journey settings, then test login.").forJourney(entry.identity());

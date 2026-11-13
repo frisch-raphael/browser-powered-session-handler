@@ -35,3 +35,7 @@ Reads packaged resources, writes private caches/locks/temp files and starts the 
 ## Verification
 
 From the repository root: `.\bapp\gradlew.bat -p bapp check verifyNativeDocumentation --offline`. Browser/native integration uses explicit tasks in [the build guide](../../../../../../README.md).
+
+Origin-only response capture uses the bounded Network response stream so an unrelated large page, script or download still reaches the browser. Collection stops per oversized response at 1 MiB while other token responses remain observable. Explicit path-filtered responses keep response-stage Fetch interception; service-worker responses share passive bounded collection. Neither mode reads a whole unbounded response into Java.
+
+Passive collection starts broad streams at request observation. If Chromium has already completed a small response, collection may retrieve it only after observing a positive decoded byte count within the limit and completion of an uncached, non-range response. The returned UTF-8 or base64 body is independently bounded before extraction; a header alone never authorizes retrieval. One context shares a 4 MiB collected-payload budget and 128 response records across its target sessions, with 1 MiB per response. Old unfinished collection is retired to admit newer candidates; ordinary response delivery continues. Retirement is identity-checked so a reentrant protocol reply cannot resurrect an evicted buffer. Temporary decoding/result copies remain individually bounded.

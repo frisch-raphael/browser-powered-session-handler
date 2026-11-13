@@ -80,7 +80,7 @@ Use the existing native tests and [Java authentication lab](../../test/authentic
 
 Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, so unresolved tag text is never sent to the server. The extension does not replay the unchanged request when background login finishes.
 
-Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized explicitly path-filtered network responses are aborted. Origin-only and service-worker capture stop collecting each oversized response while ordinary browser delivery continues. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 
 ## URL/listener routing ownership
 

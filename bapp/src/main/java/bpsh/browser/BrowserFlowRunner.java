@@ -160,6 +160,7 @@ public final class BrowserFlowRunner {
         });
         try (var responses = BoundedTokenResponses.install(context, new BoundedTokenResponses.Capture() {
             @Override public boolean matches(String url) { return extractor.matchesResponse(url); }
+            @Override public boolean passive(String url) { return extractor.observesResponsePassively(url); }
             @Override public boolean complete() { return extractor.hasToken(); }
             @Override public void declaredLength(String value) throws AuthenticationFailure { TokenExtractor.checkDeclaredLength(value); }
             @Override public void response(String url, byte[] body, boolean success) { extractor.considerResponse(url, body, success); }

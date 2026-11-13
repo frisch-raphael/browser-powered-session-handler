@@ -16,6 +16,7 @@ final class CredentialsPanel extends JPanel {
     private Runnable changed = () -> {};
     private boolean loading;
     private boolean nameLayoutPending;
+    private final JLabel emptyHelp = new JLabel("No token or cookie capture. HTTP and client-certificate authentication can be used without one.");
     private final JLabel namingHelp = new JLabel("Name each credential to choose it individually in requests.");
 
 
@@ -29,7 +30,7 @@ final class CredentialsPanel extends JPanel {
             activate(target); SwingUtilities.invokeLater(() -> { target.scrollRectToVisible(new Rectangle(0, 0, target.getWidth(), target.getHeight())); (rows.size() > 1 && target.name.getText().isBlank() ? target.name : target.origin).requestFocusInWindow(); });
             notifyChanged();
         });
-        namingHelp.setVisible(false); toolbar.add(add); toolbar.add(namingHelp); add(toolbar, BorderLayout.NORTH); add(content, BorderLayout.CENTER);
+        namingHelp.setVisible(false); toolbar.add(add); toolbar.add(namingHelp); add(toolbar, BorderLayout.NORTH); add(content, BorderLayout.CENTER); add(InlineValidation.wrap(emptyHelp), BorderLayout.SOUTH);
     }
     void setChangeListener(Runnable listener) { changed = listener; }
     List<JourneyDraft.CredentialInput> snapshot() { return rows.stream().map(Row::snapshot).toList(); }
@@ -40,7 +41,7 @@ final class CredentialsPanel extends JPanel {
     }
     /** @param message Validated field path. @param guidance Sanitized correction. @param focus Whether an explicit action may scroll/focus the field. */
     void showInvalid(String message, String guidance, boolean focus) {
-        if (rows.isEmpty()) return;
+        if (rows.isEmpty()) { InlineValidation.show(emptyHelp,guidance); if(focus)InlineValidation.focus(add); return; }
         int index = 0;
         var match = java.util.regex.Pattern.compile("tokens\\[(\\d+)\\]").matcher(message);
         if (match.find()) index = Math.min(rows.size() - 1, Integer.parseInt(match.group(1)));
@@ -106,7 +107,7 @@ final class CredentialsPanel extends JPanel {
     /** Restores raw selector text without validating incomplete extraction or destinations. */
     void setInputs(List<JourneyDraft.CredentialInput> inputs) {
         loading = true;
-        try { rows.clear(); content.removeAll(); inputs.forEach(this::addRow); }
+        try { InlineValidation.clear(emptyHelp); rows.clear(); content.removeAll(); inputs.forEach(this::addRow); }
         finally { loading = false; }
         refresh();
     }
@@ -121,7 +122,7 @@ final class CredentialsPanel extends JPanel {
     void setDefinition(JourneyDefinition.Extraction definition, JourneyDefinition.Injection injection) {
         loading = true;
         try {
-            rows.clear(); content.removeAll();
+            InlineValidation.clear(emptyHelp); rows.clear(); content.removeAll();
             if (definition instanceof JourneyDefinition.CombinedExtraction combined) {
                 for (var token : combined.tokens()) addSelector(token.name(), token.selector(), injection, false);
             } else addSelector("", definition, injection, true);
@@ -140,11 +141,12 @@ final class CredentialsPanel extends JPanel {
     private static String empty(String value) { return value == null ? "" : value; }
     private void addRow(JourneyDraft.CredentialInput input) { if (rows.size() >= 16) return; var row = new Row(input); rows.add(row); content.add(row); refresh(); }
     private void refresh() {
-        namingHelp.setVisible(rows.size() > 1);
+        namingHelp.setVisible(rows.size() > 1); emptyHelp.setVisible(rows.isEmpty());
+        if(!rows.isEmpty())InlineValidation.clear(emptyHelp);
         refreshNameErrors();
         for (var row : rows) {
             row.nameEditable |= rows.size() > 1;
-            row.nameLine.setVisible(row.nameEditable); row.remove.setEnabled(rows.size() > 1);
+            row.nameLine.setVisible(row.nameEditable); row.remove.setEnabled(true);
             row.summary();
             row.body.invalidate();
             row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
@@ -191,7 +193,7 @@ final class CredentialsPanel extends JPanel {
             });
             var capture = new JPanel(); capture.setLayout(new BoxLayout(capture, BoxLayout.Y_AXIS)); body.add(paddedGroup(capture, "Capture from browser", 0));
             capture.add(line(new JLabel("Source"), type, "")); capture.add(line(originLabel, origin, ""));
-            pathLine = line(new JLabel("Path contains"), path, "Match part of the response URL path, excluding its query string."); capture.add(pathLine);
+            pathLine = line(new JLabel("Path contains (optional)"), path, "Leave blank to capture from any response path on this origin. Enter part of a path to narrow the match; query strings are ignored."); capture.add(pathLine);
             selectorLine = line(selectorLabel, selector, ""); capture.add(selectorLine);
             startLine = line(new JLabel("Start regex"), startRegex, "RE2 expression before the token. For <token>example</token>, start <token> and end </token> capture example. Boundaries are excluded."); capture.add(startLine);
             endLine = line(new JLabel("End regex"), endRegex, "RE2 expression after the token. Capture ends before the next match; the first complete pair wins. Boundaries are excluded."); capture.add(endLine);

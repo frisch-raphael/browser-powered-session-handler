@@ -5,6 +5,7 @@ import lab.auth.LoginFlows;
 import bpsh.request.RequestSettings;
 import bpsh.journey.editing.JourneyWorkspace;
 import bpsh.authentication.credentials.AuthenticationResult;
+import bpsh.authentication.credentials.TokenExtractor;
 import bpsh.burp.http.NativeTagResolver;
 import bpsh.burp.http.SessionRecovery;
 import bpsh.journey.AuthStep;
@@ -239,7 +240,13 @@ public class BrowserJourneyIntegrationTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"small", "exact", "chunked-large", "gzip-small", "gzip-large"})
-    public void tokenResponseStreamingEnforcesDecodedLimit(String kind) throws Exception {
+    public void tokenResponseStreamingEnforcesDecodedLimit(String kind) throws Exception { tokenResponseLimit(kind,false); }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"small", "exact", "chunked-large", "gzip-small", "gzip-large"})
+    public void originOnlyTokenCaptureKeepsTheDecodedResponseLimit(String kind) throws Exception { tokenResponseLimit(kind,true); }
+
+    private void tokenResponseLimit(String kind,boolean originOnly) throws Exception {
         try (var origin = IntegrationFixtures.http(); var values = SecretStore.Values.empty()) {
             origin.route("/token", exchange -> {
                 String json = "{\"access_token\":\"bounded-token\",\"padding\":\"";
@@ -255,11 +262,56 @@ public class BrowserJourneyIntegrationTest {
                 try (var output = exchange.getResponseBody()) { output.write(body); } catch (java.io.IOException ignored) { /* oversized responses are aborted */ }
             }).start();
             var journey = IntegrationFixtures.journey(origin.url("/token"), List.of());
+            if(originOnly)journey=IntegrationFixtures.configured(journey,journey.authenticationUrl(),journey.browser(),
+                    new JourneyDefinition.JsonExtraction(TokenExtractor.origin(origin.url("/")),"","access_token"),null);
+            var selected=journey;
             if (kind.endsWith("large")) {
-                var error = assertThrows(AuthenticationFailure.class, () -> run(journey, values));
+                var error = assertThrows(AuthenticationFailure.class, () -> run(selected, values));
                 assertTrue(error.getMessage().contains("extraction limit"), error.getMessage());
-            } else assertEquals("bounded-token", run(journey, values).token());
+            } else assertEquals("bounded-token", run(selected, values).token());
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"script,json_path","document,json_path","binary,json_path","script,regex","document,regex","binary,regex"})
+    public void originOnlyCaptureDoesNotBlockLargePageAssetsBeforeTheToken(String resource,String kind) throws Exception {
+        try(var origin=IntegrationFixtures.http();var values=SecretStore.Values.empty()) {
+            String padding="x".repeat((1<<20)+17);
+            String fetch="fetch('/token')";
+            origin.route("/login",exchange->IntegrationFixtures.respond(exchange,200,"text/html",switch(resource) {
+                case "script" -> "<script src='/large.js'></script>";
+                case "document" -> "<!--"+padding+"--><script>"+fetch+"</script>";
+                default -> "<script>fetch('/large.bin').then(r=>r.arrayBuffer()).then(b=>{if(b.byteLength=="+padding.length()+")"+fetch+"})</script>";
+            }));
+            origin.route("/large.js",exchange->IntegrationFixtures.respond(exchange,200,"application/javascript","/*"+padding+"*/"+fetch));
+            origin.route("/large.bin",exchange->IntegrationFixtures.respond(exchange,200,"application/octet-stream",padding));
+            origin.route("/token",exchange->IntegrationFixtures.respond(exchange,200,"application/json","{\"access_token\":\"origin-only-token\"}"));origin.start();
+            var base=IntegrationFixtures.journey(origin,List.of());var responseOrigin=TokenExtractor.origin(origin.url("/"));
+            JourneyDefinition.Extraction capture=kind.equals("json_path")?new JourneyDefinition.JsonExtraction(responseOrigin,"","access_token"):
+                    new JourneyDefinition.RegexExtraction(responseOrigin,"","access_token\":\"","\"");
+            var selected=IntegrationFixtures.configured(base,base.authenticationUrl(),new JourneyDefinition.Browser(true,null,10000,5000),capture,null);
+            assertEquals("origin-only-token",run(selected,values).token());
+        }
+    }
+    @Test public void originOnlyCaptureStillObservesATokenBehindFourUnfinishedResponses() throws Exception {
+        var release=new java.util.concurrent.CountDownLatch(1);var held=new AtomicInteger();var tokenWhileHeld=new java.util.concurrent.atomic.AtomicBoolean();
+        try(var origin=IntegrationFixtures.http();var values=SecretStore.Values.empty()) {
+            origin.route("/login",exchange->IntegrationFixtures.respond(exchange,200,"text/html",
+                    "<script>Promise.all([0,1,2,3].map(i=>fetch('/held?i='+i))).then(()=>fetch('/token'))</script>"));
+            origin.route("/held",exchange->{
+                exchange.getResponseHeaders().set("Content-Type","text/plain");exchange.sendResponseHeaders(200,0);
+                try(var output=exchange.getResponseBody()) {
+                    held.incrementAndGet();output.write("waiting".getBytes(java.nio.charset.StandardCharsets.UTF_8));output.flush();
+                    try{release.await(15,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
+                }finally{held.decrementAndGet();exchange.close();}
+            });
+            origin.route("/token",exchange->{tokenWhileHeld.set(held.get()==4);IntegrationFixtures.respond(exchange,200,"application/json","{\"access_token\":\"concurrent-token\"}");});origin.start();
+            var base=IntegrationFixtures.journey(origin,List.of());
+            var selected=IntegrationFixtures.configured(base,base.authenticationUrl(),new JourneyDefinition.Browser(true,null,10000,5000),
+                    new JourneyDefinition.JsonExtraction(TokenExtractor.origin(origin.url("/")),"","access_token"),null);
+            try {assertEquals("concurrent-token",run(selected,values).token());}
+            finally {release.countDown();assertTrue(tokenWhileHeld.get(),"The token must arrive while all four unrelated responses are unfinished");}
+        }finally{release.countDown();}
     }
 
     public @Test void explicitControlsNestedCrossOriginFramesAndPopupReplayProduceVerifiedOutput() throws Exception {

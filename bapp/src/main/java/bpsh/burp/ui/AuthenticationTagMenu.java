@@ -35,8 +35,8 @@ public final class AuthenticationTagMenu implements ContextMenuItemsProvider {
         var root = new JMenu("Add authentication"); var snapshot = registry.snapshot();
         snapshot.entries().values().stream().filter(e -> snapshot.isCurrent(e.identity())).sorted(java.util.Comparator.comparing(e -> e.definition().canonicalAlias())).forEach(entry -> {
             var journey = new JMenu(entry.definition().alias()); root.add(journey);
-            if (entry.definition().httpAuthenticationEnabled()) {
-                var http = new JMenuItem("Authenticate HTTP as this user"); journey.add(http);
+            if (entry.definition().transportAuthenticationEnabled()) {
+                var http = new JMenuItem(entry.definition().httpAuthenticationEnabled() ? "Authenticate HTTP as this user" : "Use this client certificate"); journey.add(http);
                 http.addActionListener(action -> {
                     if (!registry.snapshot().isCurrent(entry.identity())) { report.accept("The journey changed. Reopen the authentication menu."); return; }
                     var request = editor.requestResponse().request();

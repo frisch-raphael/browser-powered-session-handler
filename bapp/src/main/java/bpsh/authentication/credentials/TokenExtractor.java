@@ -70,6 +70,14 @@ public final class TokenExtractor {
         catch (RuntimeException ex) { return false; }
     }
 
+    /** Broad origin-only selectors observe responses without intercepting ordinary page delivery. */
+    public boolean observesResponsePassively(String url) {
+        if (!parts.isEmpty()) return parts.stream().anyMatch(p -> p.observesResponsePassively(url));
+        String path = definition instanceof JourneyDefinition.JsonExtraction json ? json.pathSubstring()
+                : definition instanceof JourneyDefinition.RegexExtraction regex ? regex.pathSubstring() : null;
+        return path != null && path.isEmpty() && matchesResponse(url);
+    }
+
     /** Retains the JSON-only helper used by existing integrations. */
     public boolean matchesJson(String url) {
         if (!parts.isEmpty()) return parts.stream().anyMatch(p -> p.matchesJson(url));

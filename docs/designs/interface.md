@@ -148,7 +148,7 @@ Reload selected only restores a saved journey into its editor.
    Field guidance explains selectors, seconds, URL modes, option values and popup
    names even after typing. Popup references use native choices and retain missing
    references as invalid drafts for correction.
-4. Capture credentials: one or several JSON-response/regex/cookie sources, added with plus. Multiple
+4. Capture credentials: zero or several JSON-response/regex/cookie sources, added with plus. The last row can be removed. HTTP/client-certificate-only journeys can run without a captured credential; an empty state explains this. Form journeys requiring application credentials still report missing capture inline. Multiple
    sources require unique user-defined token names.
    Credential-name tooltips explain the 1-64 ASCII character format and case-insensitive
    uniqueness. Validate names on leaving the field, then update shown errors as names
@@ -157,7 +157,7 @@ Reload selected only restores a saved journey into its editor.
    Each source shows only its applicable fields, captions and explanations. Source changes clear irrelevant
    selectors. JSON path help gives a short dotted-key/array-index example; cookie
    help describes capture and replacement of the same named cookie. Regex sources use the
-   same response-origin/path filters as JSON and expose Start regex and End regex.
+   same response-origin/path filters as JSON and expose Start regex and End regex. Response origin is required; Path contains is optional. Blank matches all response paths on that exact origin, while a supplied path narrows the match.
    Each response-token row owns its automatic-injection destination and shows a
    destination-name field only for Header or Cookie. Captured-cookie rows explain
    that automatic injection replaces their original cookie names.
@@ -459,7 +459,7 @@ Step failure navigation uses stable step UUIDs and the exact journey generation,
 
 Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
 
-Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized explicitly path-filtered network responses are aborted. Origin-only and service-worker capture stop collecting each oversized response while ordinary browser delivery continues. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 
 Settings keeps the selected authentication policy explanation visible below its selector. It states whether a request waits or is sent unchanged, when background credentials take effect, and that valid cached credentials are added immediately. Tooltips and accessible descriptions use the same selected-policy explanation.
 
@@ -509,3 +509,7 @@ Show the observed failure and say that Burp was asked to drop the request, witho
 claiming delivery was prevented. No internal stop header, ticket or extra global
 credential pass is used. Global-owned request failures retain native global drop
 handling. See the [routing design](session-handling-by-url-and-proxy-port.md#proxy-failure-policy-native-drop-is-best-effort).
+
+Token-free HTTP or client-certificate tests use the existing shared request transport and report the actual HTTP outcome, without launching a capture journey or creating a cached token. Client-certificate-only tests require a permitted HTTPS destination and retain application Authorization. Success copy describes a request made with configured certificate settings, not proof that the server required the certificate. Known failures remain inline at the HTTP authentication or client-certificate group. Capture-wait and credential-cache input are unused in this mode and do not block it.
+
+Origin-only response capture observes bounded response streams without interrupting ordinary browser delivery. A large matching page or asset may fail capture for that response, but must not prevent a later valid token response or disable collection for other responses. The 1 MiB decoded capture limit still applies.

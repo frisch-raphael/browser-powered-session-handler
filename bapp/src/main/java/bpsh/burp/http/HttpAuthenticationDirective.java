@@ -10,9 +10,16 @@ import java.util.Locale;
 /** Consumes the HTTP identity directive and every old Authorization header before resolving capture tags. */
 final class HttpAuthenticationDirective {
     static final String HEADER="BPSP-HTTP-AUTHENT";
-    record Selection(String alias,byte[] request) {
-        Selection {request=request.clone();}
+    record Selection(String alias,byte[] request,byte[] applicationHeaders,int bodyOffset) {
+        Selection {request=request.clone();applicationHeaders=applicationHeaders.clone();}
         @Override public byte[] request() {return request.clone();}
+        @Override public byte[] applicationHeaders() {return applicationHeaders.clone();}
+        /** Restores application Authorization for certificate-only requests without retaining a second body. */
+        byte[] applicationAuthorizationRequest() {
+            byte[] result=new byte[applicationHeaders.length+request.length-bodyOffset];
+            System.arraycopy(applicationHeaders,0,result,0,applicationHeaders.length);
+            System.arraycopy(request,bodyOffset,result,applicationHeaders.length,request.length-bodyOffset);return result;
+        }
         @Override public String toString() {return "HttpAuthenticationDirective[redacted]";}
     }
     private HttpAuthenticationDirective() { }
@@ -35,6 +42,7 @@ final class HttpAuthenticationDirective {
         String[] lines=head.split("\r\n",-1);
         String directive=null;
         ArrayList<String> retained=new ArrayList<>();retained.add(lines[0]);
+        ArrayList<String> application=new ArrayList<>();application.add(lines[0]);
         for(int i=1;i<lines.length;i++) {
             int colon=lines[i].indexOf(':');
             if(colon<0)continue;
@@ -67,14 +75,15 @@ final class HttpAuthenticationDirective {
                 contentLength=Long.parseLong(value);
             }
             if(name.equals("transfer-encoding") || name.equals("upgrade"))throw invalid("Tagged HTTP authentication does not support transfer-encoded requests or protocol upgrades.");
-            if(!name.equals("authorization") && !name.equals(HEADER.toLowerCase(Locale.ROOT)))retained.add(line);
+            if(!name.equals(HEADER.toLowerCase(Locale.ROOT))) {application.add(line);if(!name.equals("authorization"))retained.add(line);}
         }
         int bodyBytes=raw.length-end-4;
         if(hosts!=1 || contentLength>=0 && contentLength!=bodyBytes || contentLength<0 && bodyBytes>0)
             throw invalid("Correct the tagged request's Host and Content-Length headers before authenticating.");
         byte[] prefix=(String.join("\r\n",retained)+"\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
         ByteArrayOutputStream stripped=new ByteArrayOutputStream();stripped.writeBytes(prefix);stripped.writeBytes(Arrays.copyOfRange(raw,end+4,raw.length));
-        return new Selection(reference.alias(),stripped.toByteArray());
+        byte[] applicationPrefix=(String.join("\r\n",application)+"\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
+        return new Selection(reference.alias(),stripped.toByteArray(),applicationPrefix,prefix.length);
     }
     private static AuthenticationFailure invalid(String message) {return NativeTagParser.syntax(message);}
 }

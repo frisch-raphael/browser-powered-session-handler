@@ -54,6 +54,11 @@ public record JourneyDefinition(
     /** HTTP-only identities deliberately have no reusable captured application credential. */
     public boolean httpAuthenticationEnabled() { return httpAuthentication != null && httpAuthentication.enabled(); }
     public boolean httpOnly() { return httpAuthenticationEnabled() && extraction == null; }
+    /** A transport identity authenticates requests without producing a transferable application credential. */
+    public boolean transportOnly() { return transportAuthenticationEnabled() && extraction == null; }
+    /** Whether requests can use an explicitly configured HTTP identity or client certificate. */
+    public boolean transportAuthenticationEnabled() { return httpAuthenticationEnabled() || mtls != null; }
+
 
     /**
      * Names the managed ownership boundary used with UUIDs for isolation.
@@ -157,7 +162,7 @@ public record JourneyDefinition(
      * Selects a JSON response using an exact origin, encoded path substring and limited JSON path.
      *
      * @param responseOrigin Canonical HTTP(S) origin; no wildcard or path.
-     * @param pathSubstring Nonempty case-sensitive match against encoded response path, excluding query/fragment.
+     * @param pathSubstring Optional case-sensitive match; empty selects all paths. Match against encoded response path, excluding query/fragment.
      * @param jsonPath Validated dotted-key/numeric-index selector, not a general JSONPath expression.
      */
     public record JsonExtraction(URI responseOrigin, String pathSubstring, String jsonPath) implements Extraction {}

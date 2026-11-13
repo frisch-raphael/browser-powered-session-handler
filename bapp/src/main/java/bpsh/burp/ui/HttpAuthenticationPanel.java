@@ -28,7 +28,7 @@ final class HttpAuthenticationPanel extends JPanel {
         protocol.setName("httpProtocol");addRow("Authentication type",protocol);
         for(String key:java.util.List.of("httpUsername","httpDomain","httpWorkstation","httpOrigins")) {
             JTextField field=UiTooltips.textField(36);field.setName(key);fields.put(key,field);
-            String label=switch(key) {case "httpUsername"->"Username";case "httpDomain"->"Domain (NTLM)";case "httpWorkstation"->"Workstation (optional)";default->"Allowed origins";};
+            String label=switch(key) {case "httpUsername"->"Username";case "httpDomain"->"NTLM domain (optional)";case "httpWorkstation"->"Workstation (optional)";default->"Allowed origins";};
             if(key.equals("httpOrigins")) {
                 String guidance="Exact server addresses, separated by commas, for example https://app.example, https://login.example:8443. No paths. Filled from the Login URL when enabled; review before saving. Credentials are sent only to these addresses.";
                 UiTooltips.set(field,guidance,340);

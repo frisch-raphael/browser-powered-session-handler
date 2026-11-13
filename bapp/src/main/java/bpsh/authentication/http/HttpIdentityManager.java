@@ -71,7 +71,7 @@ public final class HttpIdentityManager implements AutoCloseable {
         synchronized(this) {
             reconcile();
             var entry=selection.entry();
-            if(!current(selection) || !entry.definition().httpAuthenticationEnabled()) {
+            if(!current(selection) || entry.definition().draft()!=null || !entry.definition().transportAuthenticationEnabled()) {
                 result.completeExceptionally(new IOException("This HTTP identity is no longer current."));return result;
             }
             scope=fresh?null:scopes.get(entry.identity());
@@ -137,6 +137,11 @@ public final class HttpIdentityManager implements AutoCloseable {
                             synchronized(HttpIdentityManager.this) {
                                 if(selected.retired || !current(selection)) {response.completeExceptionally(new IOException("This HTTP identity is no longer current."));close();return response;}
                                 try {
+                                    var definition=selection.entry().definition();
+                                    if(!definition.httpAuthenticationEnabled() && (definition.mtls()==null ||
+                                            !definition.mtls().origins().contains(bpsh.journey.JourneyOrigins.authenticationOrigin(request.uri())))) {
+                                        response.completeExceptionally(new IOException("The destination is outside this journey's client-certificate origins."));close();return response;
+                                    }
                                     var operation=admitted.exchange(request);
                                     response.whenComplete((value,failure)->{if(failure!=null)operation.cancel(true);});
                                     operation.whenComplete((value,failure)->{

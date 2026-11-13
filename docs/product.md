@@ -102,7 +102,7 @@ references and explicit encoding choices without reading token values.
 Setup groups form-based, PKCS#11 client-certificate and HTTP authentication as
 independent methods. Form-based authentication controls Login steps and is on for
 new journeys. Disabled login steps remain saved and do not execute. Capture
-credentials stays available; Test & use requires at least one enabled method.
+credentials stays available; HTTP and client-certificate authentication can run with no captured token or cookie. Remove all capture rows for that mode. A transport-only test uses the configured request authentication and reports its server response without creating a token cache. Test & use requires at least one enabled method.
 
 Preserve Burp's native theme, controls, fonts, keyboard conventions and dialog
 parenting. Simplify duplicate checkbox labels: the checkbox owns its label and
@@ -139,7 +139,7 @@ session succeeds. Explicit tags retain their independent request-wide policy.
 
 Automatic requests use the project Automatic handling policy in Settings. **Wait for login** (the default) waits within the configured request deadline. **Send immediately** adds valid cached credentials immediately. When credentials are missing or expired, it sends the original automatic request unchanged and starts or joins background login without retaining an HTTP waiter. The original request may be unauthenticated; successful login supplies credentials to later requests. Explicit BPSH tags always wait for resolution, failed resolution requests a native drop. Proxy drops are best effort as described below. The extension does not replay the unchanged request when background login finishes.
 
-Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized network responses are aborted; service-worker response capture stops at the same decoded limit. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
+Token response capture streams matching Chromium response bodies with a 1 MiB decoded limit before extraction. Oversized explicitly path-filtered network responses are aborted. Origin-only capture and service-worker capture stop collecting each oversized response at the same decoded limit while ordinary browser delivery continues; unrelated page assets must not be blocked by broad capture. Responses within the limit retain their status and headers (with transport encoding headers adjusted for the decoded body).
 
 ## Request and native-resource bounds
 
@@ -214,3 +214,5 @@ The [routing design](designs/session-handling-by-url-and-proxy-port.md) records 
 tested host/version and the current qualification scope. Global-owned requests
 retain their existing native drop behavior. Successful requests continue once;
 a drop failure does not initiate another authentication attempt or resend.
+
+Response token capture requires an exact origin and a JSON selector or text boundaries. Its URL path filter is optional: blank matches any response path on that origin, while a supplied filter narrows matching. Cookie capture accepts an origin-only Capture URL when the cookie is applicable there; exact cookie domain and path filters are optional. Transport-only journeys do not require capture-wait or credential-cache settings. A client-certificate-only request retains any existing application Authorization header; selecting Basic/NTLM continues to replace that header with the selected identity.

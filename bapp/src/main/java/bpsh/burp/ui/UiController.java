@@ -433,7 +433,7 @@ public final class UiController {
         row(certificateSettings, "", disclosure("Advanced settings", certificateAdvanced, certificateAdvancedToggle));
         row(certificateFields, "", certificateSettings);
 
-        row(panel, "", certificateFields); return scroll(panel);
+        row(panel, "", InlineValidation.wrap(certificateFields)); return scroll(panel);
     }
 
     /**
@@ -471,7 +471,7 @@ public final class UiController {
         if (!readyEditor()) return;
         if (dirty || editingIdentity == null) { save(false, this::copyReferences); return; }
         var entry = currentEditorEntry(); if (entry == null) return;
-        if (entry.definition().httpOnly()) { copyHttpReference(entry); return; }
+        if (entry.definition().transportOnly()) { copyHttpReference(entry); return; }
         if (!validateCredentialNames()) return;
         try {
             var menu = referenceMenu(entry);
@@ -481,8 +481,8 @@ public final class UiController {
     /** @param entry Exact saved owner. @return Named credential and explicit encoding choices, containing references only. */
     private JPopupMenu referenceMenu(JourneyCatalog.Entry entry) {
         var menu = new JPopupMenu();
-        if (entry.definition().httpAuthenticationEnabled()) {
-            var http = new JMenuItem("HTTP authentication header"); menu.add(http);
+        if (entry.definition().transportAuthenticationEnabled()) {
+            var http = new JMenuItem(entry.definition().httpAuthenticationEnabled() ? "HTTP authentication header" : "Client-certificate authentication header"); menu.add(http);
             http.addActionListener(event -> copyHttpReference(entry));
             if (!AuthenticationTagMenu.hasCredentialCapture(entry.definition())) return menu;
             menu.addSeparator();
@@ -748,7 +748,7 @@ public final class UiController {
             tokenAvailable = current.usableToken();
             String message = current.phase() == AuthenticationCoordinator.Phase.PAUSED ? "Automatic recovery paused: " + entry.definition().displayName() : active ? switch (current.phase()) { case QUEUED -> "Waiting to sign in..."; case BACKOFF -> "Waiting to retry..."; default -> current.setupStage() == null ? "Signing in..." : current.setupStage().description(); }
                     : current.failure() != null ? current.failure().problem() : current.usableToken() ? current.acceptedUse() ? "Request returned 2xx; protected access unverified" : "Credentials captured; protected access unverified" : "Not authenticated";
-            if(entry.definition().httpOnly() && !active) message = httpTestResults.getOrDefault(entry.identity(), "HTTP authentication has not been tested.");
+            if(entry.definition().transportOnly() && !active) message = httpTestResults.getOrDefault(entry.identity(), entry.definition().httpAuthenticationEnabled() ? "HTTP authentication has not been tested." : "The client-certificate request has not been tested.");
             if (current.waitingRequests() > 0) message += " · " + current.waitingRequests() + (current.waitingRequests() == 1 ? " request waiting" : " requests waiting");
             String detail = !active && current.failure() != null ? current.failure().getMessage() + (current.usableToken() ? " Previously cached credentials are still available." : "") : "";
             if (current.phase() == AuthenticationCoordinator.Phase.PAUSED) status.clear();
@@ -761,13 +761,13 @@ public final class UiController {
         testButton.setVisible(methodSelected);
         cancelButton.setVisible(active); cancelButton.setEnabled(currentEditorEntry() != null && active); testButton.setEnabled(canTest);
         testButton.setText(active ? "Login running..." : "Test login"); copyReferenceButton.setEnabled(ready && !stale);
-        boolean httpOnly = entry != null && entry.definition().httpOnly();
+        boolean transportOnly = entry != null && entry.definition().transportOnly();
         boolean httpEnabled = entry != null && entry.definition().httpAuthenticationEnabled();
-        copyReferenceButton.setText(httpOnly ? "Copy HTTP authentication header" : "Copy BPSH tag");
-        copyReferenceButton.setToolTipText(httpOnly ? "Copy the custom header that applies this journey's HTTP authentication to a Burp request."
+        copyReferenceButton.setText(transportOnly ? httpEnabled ? "Copy HTTP authentication header" : "Copy authentication header" : "Copy BPSH tag");
+        UiTooltips.set(copyReferenceButton, transportOnly ? "Copy the custom header that applies this journey's HTTP authentication or client certificate to a Burp request."
                 : httpEnabled ? "Choose an HTTP authentication header or a captured token or cookie tag to copy."
-                : "Paste into a Burp request. The extension substitutes a valid token when the request is sent.");
-        copyReferenceHelp.setText(httpOnly ? "Paste the copied header into a Burp request."
+                : "Paste into a Burp request. The extension substitutes a valid token when the request is sent.", 360);
+        copyReferenceHelp.setText(transportOnly ? "Paste the copied header into a Burp request."
                 : httpEnabled ? "Paste the header or tag into a request, or right-click in the request and choose Add authentication."
                 : "Paste a BPSH tag into a request, or right-click in the request and choose Add authentication.");
         httpAuthentication.setJourneyAlias(draftAlias);
@@ -777,7 +777,7 @@ public final class UiController {
         if (reloadSelectedItem != null) reloadSelectedItem.setEnabled(ready && editingIdentity != null);
         retryButton.setVisible(methodSelected && recovery && !active && !reviewCertificate.isVisible()); retryButton.setEnabled(canTest);
         reviewCertificate.setEnabled(currentEditorEntry() != null);
-        clearTokenButton.setEnabled(currentEditorEntry() != null && (tokenAvailable || entry.definition().httpAuthentication() != null));
+        clearTokenButton.setEnabled(currentEditorEntry() != null && (tokenAvailable || entry.definition().transportAuthenticationEnabled()));
         int eventCount = eventLog.refresh(editing, entry == null ? null : entry.definition().alias()); status.logCount(editing != null, eventCount);
         status.cacheAvailable(currentEditorEntry() != null); refreshJourneyDock();
     }
@@ -823,7 +823,7 @@ public final class UiController {
     /** Marks local editor changes without validating unfinished fields; it never performs file/native work on the EDT. */
     private void edited() {
         if (!suppress && !closed && (recordingRequested || recordingDialog != null)) discardRecording("The journey changed. Your current steps were kept. Record the login again.");
-        if (!suppress && !closed) { pendingPinFocus = null; clearCertificateForChangedDevice(); editorEpoch++; editVersion++; dirty = true; if (!savePaused && journeyDebounce != null) journeyDebounce.restart(); }
+        if (!suppress && !closed) { InlineValidation.clear(certificateFields); pendingPinFocus = null; clearCertificateForChangedDevice(); editorEpoch++; editVersion++; dirty = true; if (!savePaused && journeyDebounce != null) journeyDebounce.restart(); }
         refreshModes(); refreshJourneyUi();
     }
     /** A failed listing or a placeholder fingerprint is never a selected certificate. */
@@ -1275,6 +1275,7 @@ public final class UiController {
         dirty = true; editorCards.show(editorSurface, "editor"); selectWizard(WizardPage.SETUP); rememberJourneyStep(); resetScrolls(wizard); refreshJourneyUi();
         save(false);
     }
+
     /** Confirms recovery of unreadable BPSH project data without replacing the Burp project. */
     private void resetProjectStorage() {
         var scope = JourneyDefinition.Scope.PROJECT;
@@ -1520,7 +1521,7 @@ public final class UiController {
                 }); return;
             }
         }
-        if (entry.definition().httpOnly()) { testHttpIdentity(entry, explicit, epoch); return; }
+        if (entry.definition().transportOnly()) { testHttpIdentity(entry, explicit, epoch); return; }
         var ticket = coordinator.test(entry, explicit); ui(() -> {
             if (!registry.snapshot().isCurrent(entry.identity())) return;
             refreshJourneyUi();
@@ -1559,13 +1560,16 @@ public final class UiController {
         httpIdentities.test(entry, deadline, explicit).whenComplete((response, error) -> {
             httpTests.remove(entry.identity());
             var failure = error instanceof AuthenticationFailure safe ? safe : error != null && error.getCause() instanceof AuthenticationFailure safe ? safe : null;
-            boolean accepted = error == null && response.status() >= 200 && response.status() < 400 && response.authentication().status() == bpsh.authentication.http.HttpAuthenticationEvidence.Status.ACCEPTED;
+            boolean http = entry.definition().httpAuthenticationEnabled();
+            boolean accepted = error == null && response != null && response.status() >= 200 && response.status() < 400
+                    && (!http || response.authentication().status() == bpsh.authentication.http.HttpAuthenticationEvidence.Status.ACCEPTED);
             boolean cancelled = failure != null && failure.reason() == AuthenticationFailure.Cause.CANCELLED;
-            String message = cancelled ? "HTTP authentication test cancelled." : accepted ? "HTTP authentication succeeded — " + protocolName(response.authentication().protocol()) + "."
+            String message = cancelled ? "HTTP authentication test cancelled." : accepted ? http ? "HTTP authentication succeeded — " + protocolName(response.authentication().protocol()) + "."
+                    : "The HTTPS request completed with the configured client-certificate settings (HTTP " + response.status() + ")."
                     : failure != null ? failure.getMessage()
-                    : response != null && response.status() == 401 ? "The server rejected HTTP authentication (HTTP 401). Check the authentication type, username, domain and password."
-                    : response != null && response.status() == 403 ? "The server denied access (HTTP 403). Check this account's permissions."
-                    : "The server did not confirm HTTP authentication. Check the authentication type, account and allowed origins.";
+                    : response != null && response.status() == 401 ? http ? "The server rejected HTTP authentication (HTTP 401). Check the authentication type, username, domain and password." : "The server rejected the client-certificate request (HTTP 401). Check the selected certificate and its access permissions."
+                    : response != null && response.status() == 403 ? http ? "The server denied access (HTTP 403). Check this account's permissions." : "The server denied the client-certificate request (HTTP 403). Check this certificate's permissions."
+                    : http ? "The server did not confirm HTTP authentication. Check the authentication type, account and allowed origins." : "The client-certificate request did not succeed. Check the HTTPS URL, certificate and trusted CA settings.";
             if(response!=null)response.close();
             httpTestResults.put(entry.identity(),message);
             coordinator.events().append(entry.identity().key(), Instant.now(), accepted || cancelled ? JourneyEventLog.Level.INFO : JourneyEventLog.Level.ERROR, message, null);
@@ -1576,11 +1580,11 @@ public final class UiController {
                 if(!accepted) {
                     status.error(message);
                     if(failure != null && failure.input() != null)revealTestFailure(entry,failure);
-                    else showInvalidField("httpAuthentication:",message,true);
+                    else showInvalidField(http ? "httpAuthentication:" : "mtls:",message,true);
                     return;
                 }
-                dialogs.loginResult(parent(), "HTTP authentication succeeded",
-                        "Journey: " + entry.definition().displayName() + "\n\n" + message + "\n\nNo application cookie or token was requested. Tagged requests will authenticate as this saved user.", false);
+                dialogs.loginResult(parent(), http ? "HTTP authentication succeeded" : "Client-certificate request succeeded",
+                        "Journey: " + entry.definition().displayName() + "\n\n" + message + "\n\nNo application cookie or token was requested. Tagged requests will use this journey's " + (http ? "HTTP identity." : "client-certificate settings."), false);
             });
         });
     }
@@ -2039,6 +2043,10 @@ public final class UiController {
             if (focus) selectWizard(WizardPage.SETUP);
             InlineValidation.show(checks.get("formAuthentication"), "Choose at least one authentication method.");
             if (focus) InlineValidation.focus(checks.get("formAuthentication")); return;
+        }
+        if(message.startsWith("mtls:")) {
+            InlineValidation.show(certificateFields,guidance);
+            if(focus) {selectWizard(WizardPage.CERTIFICATE);InlineValidation.focus(chooseCertificateButton.isEnabled()?chooseCertificateButton:fields.get("module"));}return;
         }
         if(message.startsWith("httpAuthentication") || message.startsWith("secrets.httpPassword")) {
             if(focus)selectWizard(WizardPage.HTTP_AUTHENTICATION);httpAuthentication.showInvalid(message,guidance,focus);return;

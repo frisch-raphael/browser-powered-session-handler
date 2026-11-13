@@ -12,6 +12,14 @@ class HttpAuthenticationDirectiveTest {
         assertEquals("user-a",selected.alias());
         assertEquals("POST /x HTTP/1.1\r\nHost: example.test\r\nCookie: session=<@browser/>\r\nContent-Length: 3\r\n\r\n\u0000\u00ffx",new String(selected.request(),StandardCharsets.ISO_8859_1));
     }
+    @Test void certificateVariantPreservesApplicationAuthorizationAndBinaryBodyButRemovesTheDirective() throws Exception {
+        String original="POST /x HTTP/1.1\r\nHost: example.test\r\nBPSP-HTTP-AUTHENT: <@certificate/>\r\nAuthorization: Bearer app\r\nContent-Length: 3\r\n\r\n\u0000\u00ffx";
+        var selected=HttpAuthenticationDirective.consume(original.getBytes(StandardCharsets.ISO_8859_1));
+        String expected="POST /x HTTP/1.1\r\nHost: example.test\r\nAuthorization: Bearer app\r\nContent-Length: 3\r\n\r\n\u0000\u00ffx";
+        assertArrayEquals(expected.getBytes(StandardCharsets.ISO_8859_1),selected.applicationAuthorizationRequest());
+        var changed=selected.applicationAuthorizationRequest();changed[0]=0;
+        assertArrayEquals(expected.getBytes(StandardCharsets.ISO_8859_1),selected.applicationAuthorizationRequest());
+    }
     @Test void rejectsAmbiguousOrUnsupportedDirectivesInsteadOfSendingThemUpstream() {
         for(String headers:java.util.List.of("BPSP-HTTP-AUTHENT: <@a/>\r\nBPSP-HTTP-AUTHENT: <@b/>",
                 "BPSP-HTTP-AUTHENT: <@a/><@b/>","BPSP-HTTP-AUTHENT: <@a token=\"x\"/>",
